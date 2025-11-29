@@ -1,1111 +1,1016 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
-import 'dart:ui';
+// Flutter & Dart
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:math';
+
+// Additional packages
+import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
-import 'playlist_page.dart';
-import 'package:quark/database.dart';
-// import 'package:smtc_windows/smtc_windows.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:math' as math;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
-import 'yMusic.dart';
-import 'ymPlaylistPage.dart';
 
-// Temp folder at this app is a Local/quark/quarkaudio or .local/quark/quarkaudio for linux
+// Local files
+import 'database.dart';
+import 'playlist_page.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  Database.init();
-  // await SMTCWindows.initialize();
-  runApp(const MyApp());
+// TODO: ! ADD LOGGER
+// TODO: ADD LAST PLAYLIST
+// TODO: REMOVE SETSTATE FROM BUILD METHODS
+
+
+void main() async {
+  runApp(const quark());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class quark extends StatelessWidget {
+  const quark({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'QUARK',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.white),
-      ),
+      home: const MainPage(),
       debugShowCheckedModeBanner: false,
-      home: const MyHomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key});
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-  String? selectedFolderPath;
-  List<String> files = [];
-  List<String> selectedFiles = [];
-  String lastSong = '';
-  List userPlaylists = [];
-  bool reloginNeed = false;
-  final TextEditingController _tokenController = TextEditingController();
-
-  void navigateToPlaylist() {
-    if (selectedFiles.isNotEmpty) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder:
-              (context) =>
-                  PlaylistPage(songs: selectedFiles, lastSong: lastSong),
-        ),
-      );
-    }
-  }
-
-  void navigateToYMPlaylistPage(
-    List<String> songs,
-    List ymTrackInfo,
-    String uid,
-    String token,
-  ) async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder:
-            (context) => ymPlaylistPage(
-              songs: songs,
-              ymTracksInfo: ymTrackInfo,
-              ymToken: token,
-              ymUid: uid,
-            ),
-      ),
-    );
-  }
-
-  Future<void> pickFolder() async {
-    try {
-      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-      if (selectedDirectory != null) {
-        setState(() {
-          selectedFolderPath = selectedDirectory;
-          files = [];
-          selectedFiles = [];
-        });
-        await getFilesFromDirectory(selectedDirectory);
-        navigateToPlaylist();
-      }
-    } catch (e) {
-      print('An error occurred while retrieving the file folder: $e');
-    }
-  }
-
-  Future<void> getFilesFromDirectory(String directoryPath) async {
+class Files {
+  Future<List<Track>> getFilesFromDirectory(String directoryPath) async {
     try {
       final dir = Directory(directoryPath);
-      final List<String> fileNames = [];
+      final List<Track> fileNames = [];
 
       await for (final entity in dir.list()) {
         if (entity is File) {
           if (entity.path.toLowerCase().endsWith('.mp3') ||
               entity.path.toLowerCase().endsWith('.wav') ||
               entity.path.toLowerCase().endsWith('.flac') ||
+              entity.path.toLowerCase().endsWith('.dsf') ||
               entity.path.toLowerCase().endsWith('.aac') ||
+              entity.path.toLowerCase().endsWith('.ogg') ||
+              entity.path.toLowerCase().endsWith('.alac') ||
+              entity.path.toLowerCase().endsWith('.pcm') ||
               entity.path.toLowerCase().endsWith('.m4a')) {
-            fileNames.add(entity.path);
+
+            try {
+              final tagsFromFile = readMetadata(
+                File(entity.path),
+                getImage: true,
+              );
+
+              String trackName = tagsFromFile.title ??= 'Unknown';
+              var artists = [
+                {'name': tagsFromFile.artist ??= 'Unknown'},
+              ];
+              Uint8List? cover = tagsFromFile.pictures.isNotEmpty
+                  ? tagsFromFile.pictures.first.bytes
+                  : null;
+
+              Track track = Track({
+                'title': trackName,
+                // TODO: Create a field in the track object for the local, Yandex, or Spotify source
+                'id': 'iddoesntexists',
+                'artists': artists,
+                'albums': [],
+                'coverUri':
+                    'raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png',
+              });
+
+              track.filepath = entity.path;
+              track.coverByted = cover;
+
+              fileNames.add(track);
+            } catch (e) {
+              String trackName = path.basename(path.normalize(entity.path));
+              var artists = [
+                {'name': 'Unknown'},
+              ];
+              Uint8List? cover = null;
+
+              Track track = Track({
+                'title': trackName,
+                'id': 'iddoesntexists',
+                'artists': artists,
+                'albums': [],
+                'coverUri':
+                    'raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png',
+              });
+
+              track.filepath = entity.path;
+              track.coverByted = cover;
+
+              fileNames.add(track);
+            }
           }
         }
       }
 
-      setState(() {
-        files = fileNames.map((path) => path.split('/').last).toList();
-        selectedFiles = fileNames;
-      });
-    } catch (e) {
-      print(
-        'An error occurred while retrieving the selected multiple file: $e',
-      );
+      return fileNames;
+    } catch (e) {}
+    return [];
+  }
+}
+
+class MainPage extends StatefulWidget {
+  const MainPage({super.key});
+
+  @override
+  State<MainPage> createState() => _MainPageState();
+}
+
+class _MainPageState extends State<MainPage> {
+  bool loginView = false;
+  bool playlistView = false;
+  bool inited = false;
+  YandexMusic yandexMusic = YandexMusic(token: '');
+  List<Playlist2> userPlaylists = [];
+
+  Future<void> pickFolder() async {
+    try {
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      if (selectedDirectory != null) {
+        List<Track> result = await Files().getFilesFromDirectory(
+          selectedDirectory,
+        );
+        if (result.isNotEmpty) {
+          playlistRoute(PlayerPlaylist(0, 0, "Local", result));
+        }
+      }
+    } catch (e) {}
+  }
+
+  void closeLogin([bool? openPlaylists]) {
+    setState(() {
+      loginView = false;
+      playlistView = true;
+    });
+  }
+
+  void closePlaylist([bool? openPlaylists]) async {
+    setState(() {
+      playlistView = false;
+    });
+  }
+
+  void playlistRoute(PlayerPlaylist playlist) async {
+    await Database.setValue('last_playlist', playlist);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            PlaylistPage(playlist: playlist, yandexMusic: yandexMusic),
+      ),
+    );
+  }
+
+  void playlistRestore() async { // TODO: finish
+    PlayerPlaylist? lastPlaylist = await Database.getValue('last_playlist');
+    String? token = await Database.getValue('yandex_music_token');
+    if (lastPlaylist == null) {
+      return;
+    } else {
+      bool inited = await checkYmInit();
+
+      if (!inited) {
+        yandexMusic = YandexMusic(token: token ?? '');
+      }
+      playlistRoute(lastPlaylist);
     }
   }
 
-  Future<void> restorePlaylist() async {
+  Future<bool> checkYmInit() async {
     try {
-      final dynamic lastPlaylist = await Database.getValue('lastPlaylist');
-      final dynamic lastSong2 = await Database.getValue('lastPlaylistTrack');
+      await yandexMusic.account.getAccountID();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 
-      if (lastPlaylist != null && lastPlaylist is List<dynamic>) {
-        setState(() {
-          selectedFiles = List<String>.from(lastPlaylist);
-          restorePlaylistButtonText = 'Restore playlist';
-        });
-
-        if (lastSong2 != null) {
-          setState(() {
-            lastSong = lastSong2;
-          });
+  void precacheTracks() async {
+    Future.delayed(Duration(milliseconds: 50), () async {
+      var cacheDirectory = await getApplicationCacheDirectory();
+      if (userPlaylists.isNotEmpty) {
+        for (Playlist2 playlist in userPlaylists) {
+          if (playlist.tracks.isNotEmpty) {
+            try {
+              var track = await yandexMusic.tracks.download(
+                playlist.tracks[0].trackID,
+              );
+              var file = File(
+                '${cacheDirectory.path}/cisum_xednay_krauq${playlist.tracks[0].trackID}.flac',
+              );
+              bool exist = await file.exists();
+              if (!exist) {
+                file.writeAsBytes(track);
+              }
+            } on YandexMusicException {}
+          }
         }
+      }
+    });
+  }
 
-        navigateToPlaylist();
+  void ymUpdate() async {
+    try {
+      String? token = await Database.getValue('yandex_music_token');
+      if (token != null) {
+        yandexMusic = YandexMusic(token: token);
+        await yandexMusic.init();
+        inited = true;
+
+        if (userPlaylists.isEmpty) {
+          yandexMusic.usertracks.getPlaylistsWithLikes().then((playlists) {
+            setState(() {
+              userPlaylists = playlists;
+
+              playlistView = true;
+            });
+          });
+        } else {
+          setState(() {
+            playlistView = true;
+          });
+          precacheTracks();
+        }
+        precacheTracks();
       } else {
         setState(() {
-          restorePlaylistButtonText =
-              'Ooops... Your previous playlist is empty.';
+          loginView = true;
         });
       }
-    } catch (e) {
-      setState(() {
-        restorePlaylistButtonText = 'Ooops... Your previous playlist is empty.';
-      });
-      print('Error: $e');
-    }
-  }
-
-  Future<void> loadYMPlaylist(List tracks, String uid, String token) async {
-    print('-------------------------------');
-    print(tracks);
-    print('aaaaa');
-    List<String> fileMap = [];
-    // getApplicationSupportDirectory().then((direc) {print(direc);});
-    // getApplicationDocumentsDirectory().then((direc) {print(direc);});
-    getApplicationCacheDirectory().then((direc) {
-      print(direc);
-    });
-    getApplicationCacheDirectory().then((directory) {
-      String tempDir = directory.path;
-      for (var track in tracks) {
-        fileMap.add('${tempDir}/quarkaudiotemptrack${track['id']}.mp3');
+    } on YandexMusicException catch (e) {
+      switch (e.type) {
+        case YandexMusicException.unauthorized:
+          setState(() {
+            loginView = true;
+          });
+        default:
+          return;
       }
-    });
-
-    hideYMInterface().then((_) {
-      navigateToYMPlaylistPage(fileMap, tracks, uid, token);
-    });
-
-    // Map track = {
-    //   'available': true,
-    //   'downloading': false,
-    //   'filepath': '....',
-    //   'ymusic': true,
-    //   'coverart': Uint8List(0),
-    //   'title': '',
-    //   'artists': [],
-    //   'ymTrackId': '',
-    //   'ymPlaylistKind': '',
-    //   'ymPlaylistUid': '',
-
-    // };
-
-    // YandexMusicAPI.getPlaylists(uid, token).then(
-    //   (playlists) async {
-    //     String tempDir = r'C:\Users\zenar56\Documents\Quark';
-
-    //     List trackIds = [];
-    //     playlists.removeAt(0);
-    //     try {
-    //     getTemporaryDirectory().then((temp) async {
-    //             for (var playlist in playlists) {
-    //       YandexMusicAPI.getPlaylistFromKind(uid, token, playlist['kind']).then((playlist2) {
-    //         for (var track in playlist2) {
-    //           YandexMusicAPI.getTrackDownloadLink(track['id'], token, uid).then((downloadLink) async {
-    //           var a = await YandexMusicAPI.downloadTrack('${tempDir}/quarkaudiotemptrack${track['id']}.mp3', downloadLink);
-    //           print('download ${track['id']}');
-    //           });
-    //         }
-    //       });
-    //     }
-    //     });
-
-    //     YandexMusicAPI.getLikedSongs(token, uid).then((songs) async {
-    //     for (var track in songs) {
-    //           YandexMusicAPI.getTrackDownloadLink(track['id'], token, uid).then((downloadLink) async {
-    //           var a = await YandexMusicAPI.downloadTrack('${tempDir}/quarkaudiotemptrack${track['id']}.mp3', downloadLink);
-    //           print('download ${track['id']}');
-
-    //           });
-    //         }
-    //     });
-    //     } catch (e) {print(e);}
-
-    //   }
-
-    // );
-  }
-
-  void showYMInterface() {
-    YandexMusicAPI.downloadFirstTracksFromAllUsersPlaylistsIntoTempFolder(
-      userPlaylists[0]['accountToken'],
-      userPlaylists[0]['accountUuid'].toString(),
-    ).then((onValue) {
-      print(onValue);
-    });
-    getYMInterfaceOverlayEntry = OverlayEntry(
-      builder:
-          (context) => Positioned(
-            child: SlideTransition(
-              position: getYMInterfaceOffsetAnimation,
-              child: Center(
-                child: Material(
-                  color: Colors.transparent,
-                  child: GestureDetector(
-                    onHorizontalDragEnd: (details) {
-                      if (details.primaryVelocity!.abs() > 500) {
-                        if (details.primaryVelocity! < -500 ||
-                            details.primaryVelocity! > 500) {
-                          hideYMInterface();
-                        }
-                      }
-                    },
-
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.all(Radius.circular(15)),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
-                        child: Container(
-                          width: math.min(
-                            MediaQuery.of(context).size.width * 0.92,
-                            1040,
-                          ),
-                          height: math.min(
-                            MediaQuery.of(context).size.height * 0.92,
-                            1036,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                              width: 1,
-                            ),
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(20),
-                            ),
-                            gradient: LinearGradient(
-                              begin: Alignment.topRight,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withOpacity(0.15),
-                                Colors.white.withOpacity(0.05),
-                              ],
-                            ),
-                          ),
-                          child: SingleChildScrollView(
-                            padding: EdgeInsets.all(36.0),
-                            child: Wrap(
-                              spacing: 16.0,
-                              runSpacing: 16.0,
-                              alignment: WrapAlignment.center,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              direction: Axis.horizontal,
-                              children: List.generate(userPlaylists.length, (
-                                index,
-                              ) {
-                                return InkWell(
-                                  onHover: (value) {},
-                                  onTap: () async {
-                                    List trackList = [];
-                                    if (index != 0) {
-                                      trackList =
-                                          await YandexMusicAPI.getPlaylistFromKind(
-                                            userPlaylists[index]['accountUuid']
-                                                .toString(),
-                                            userPlaylists[index]['accountToken'],
-                                            userPlaylists[index]['kind'],
-                                          );
-                                    } else {
-                                      trackList =
-                                          await YandexMusicAPI.getLikedSongs(
-                                            userPlaylists[index]['accountToken'],
-                                            userPlaylists[index]['accountUuid']
-                                                .toString(),
-                                          );
-                                    }
-
-                                    hideYMInterface();
-                                    loadYMPlaylist(
-                                      trackList,
-                                      userPlaylists[index]['accountUuid']
-                                          .toString(),
-                                      userPlaylists[index]['accountToken'],
-                                    );
-                                  },
-                                  child: Container(
-                                    width: 310,
-                                    height: 310,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.all(
-                                        Radius.circular(15),
-                                      ),
-                                      image: DecorationImage(
-                                        image: NetworkImage(
-                                          userPlaylists[index]['picture'],
-                                        ),
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                    child: Stack(
-                                      children: [
-                                        Positioned(
-                                          bottom: 0,
-                                          left: 0,
-                                          right: 0,
-                                          child: Container(
-                                            padding: EdgeInsets.all(16),
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
-                                                begin: Alignment.bottomCenter,
-                                                end: Alignment.topCenter,
-                                                colors: [
-                                                  Colors.black.withOpacity(0.8),
-                                                  Colors.black.withOpacity(0.4),
-                                                  Colors.transparent,
-                                                ],
-                                              ),
-                                              borderRadius: BorderRadius.only(
-                                                bottomLeft: Radius.circular(15),
-                                                bottomRight: Radius.circular(
-                                                  15,
-                                                ),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              userPlaylists[index]['title'],
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 24,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-    );
-
-    Overlay.of(context).insert(getYMInterfaceOverlayEntry!);
-    getYMInterfaceAnimationController.forward();
-  }
-
-  Future<void> hideYMInterface() {
-    return getYMInterfaceAnimationController.reverse().then((_) {
-      getYMInterfaceOverlayEntry?.remove();
-      getYMInterfaceOverlayEntry = null;
-    });
-  }
-
-  void showYMLoginWebview() {
-    if (Platform.isLinux) {
-      getYMLoginOverlayEntry = OverlayEntry(
-        builder:
-            (context) => Positioned(
-              child: SlideTransition(
-                position: getYMTokenOffsetAnimation,
-                child: Center(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: GestureDetector(
-                      onHorizontalDragEnd: (details) {
-                        if (details.primaryVelocity!.abs() > 500) {
-                          if (details.primaryVelocity! < -500 ||
-                              details.primaryVelocity! > 500) {
-                            hideYMLoginWebview();
-                          }
-                        }
-                      },
-
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(15),
-                        ),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
-                          child: Container(
-                            width: 400,
-                            height: 520,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.2),
-                                width: 1,
-                              ),
-                              borderRadius: const BorderRadius.all(
-                                Radius.circular(20),
-                              ),
-                              gradient: LinearGradient(
-                                begin: Alignment.topRight,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white.withOpacity(0.15),
-                                  Colors.white.withOpacity(0.05),
-                                ],
-                              ),
-                            ),
-                            child: Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(25),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      "Native connection of Yandex Music through a browser window is currently unavailable.",
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    SizedBox(height: 20),
-                                    Text(
-                                      "So you can manually enter the Yandex Music access token.",
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-
-                                    SizedBox(height: 70),
-
-                                    TextField(
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                      ),
-                                      controller: _tokenController,
-                                      decoration: InputDecoration(
-                                        hintText: 'Enter token here',
-                                        hintStyle: TextStyle(
-                                          color: Colors.white.withOpacity(0.7),
-                                          fontSize: 16,
-                                        ),
-                                        prefixIcon: Icon(
-                                          Icons.key,
-                                          color: Colors.white.withOpacity(0.8),
-                                        ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: Colors.white.withOpacity(
-                                              0.3,
-                                            ),
-                                            width: 1,
-                                          ),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: Colors.white.withOpacity(
-                                              0.3,
-                                            ),
-                                            width: 1,
-                                          ),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: Colors.white.withOpacity(
-                                              0.3,
-                                            ),
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        filled: false,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 12,
-                                        ),
-                                      ),
-                                    ),
-
-                                    SizedBox(height: 15),
-
-                                    ClipRRect(
-                                      borderRadius: const BorderRadius.all(
-                                        Radius.circular(15),
-                                      ),
-                                      child: BackdropFilter(
-                                        filter: ImageFilter.blur(
-                                          sigmaX: 175,
-                                          sigmaY: 175,
-                                        ),
-                                        child: Container(
-                                          height: 45,
-                                          width: 250,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(
-                                              0.2,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withOpacity(
-                                                0.2,
-                                              ),
-                                              width: 1,
-                                            ),
-                                            borderRadius:
-                                                const BorderRadius.all(
-                                                  Radius.circular(20),
-                                                ),
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topRight,
-                                              end: Alignment.bottomRight,
-                                              colors: [
-                                                Colors.white.withOpacity(0.15),
-                                                Colors.white.withOpacity(0.05),
-                                              ],
-                                            ),
-                                          ),
-                                          child: InkWell(
-                                            borderRadius: BorderRadius.all(
-                                              Radius.circular(10),
-                                            ),
-                                            onTap: () {
-                                              print(
-                                                _tokenController.value.text,
-                                              );
-                                              try {
-                                                String token =
-                                                    _tokenController.value.text;
-                                                if (token.length > 3) {
-                                                  print(token);
-                                                  YandexMusicAPI.getAccountDetails(
-                                                    token,
-                                                  ).then((data) {
-                                                    if (data.containsKey(
-                                                      'error',
-                                                    )) {
-                                                      print(data);
-                                                      _tokenController
-                                                          .value = TextEditingValue(
-                                                        text:
-                                                            'error! invalid token!',
-                                                      );
-                                                    } else {
-                                                      print('else');
-                                                      Database.setValue(
-                                                        "ymtoken",
-                                                        token,
-                                                      );
-                                                      int ymuid =
-                                                          data['result']['account']['uid'];
-                                                      print(ymuid);
-                                                      print(ymuid.toString());
-
-                                                      String defaultEmail =
-                                                          data['result']['defaultEmail'];
-                                                      // var hostname = data['invocationInfo']['hostname'];
-                                                      // var activeSubscriptions = data['result']['masterhub']['activeSubscriptions'];
-                                                      // var availableSubscriptions = data['result']['masterhub']['availableSubscriptions'];
-                                                      var hadAnySubscription = data['result']['subscription']['hadAnySubscription'];
-                                                      print(hadAnySubscription);
-                                                      // var canStartTrial = data['result']['subscription']['canStartTrial'];
-
-                                                      Database.setValue(
-                                                        "ymuid",
-                                                        ymuid.toString(),
-                                                      );
-                                                      Database.setValue(
-                                                        "ymemail",
-                                                        defaultEmail.toString(),
-                                                      );
-
-                                                      YandexMusicAPI.getPlaylists(
-                                                        ymuid.toString(),
-                                                        token,
-                                                      ).then((playlists) {
-                                                        userPlaylists =
-                                                            playlists;
-                                                        getYMTokenAnimationController
-                                                            .reverse();
-                                                        showYMInterface();
-                                                      });
-                                                    }
-                                                  });
-                                                }
-                                              } catch (ex) {}
-                                            },
-                                            child: Center(
-                                              child: Text(
-                                                'Submit',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    SizedBox(height: 75),
-                                    Text(
-                                      "Read about how to obtain a token on our GitHub.",
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-      );
-    } else {
-      getYMLoginOverlayEntry = OverlayEntry(
-        builder:
-            (context) => Positioned(
-              child: SlideTransition(
-                position: getYMTokenOffsetAnimation,
-                child: Center(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: GestureDetector(
-                      onHorizontalDragEnd: (details) {
-                        if (details.primaryVelocity!.abs() > 500) {
-                          if (details.primaryVelocity! < -500 ||
-                              details.primaryVelocity! > 500) {
-                            hideYMLoginWebview();
-                          }
-                        }
-                      },
-
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(15),
-                        ),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
-                          child: Container(
-                            width: 400,
-                            height: 650,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.2),
-                                width: 1,
-                              ),
-                              borderRadius: const BorderRadius.all(
-                                Radius.circular(20),
-                              ),
-                              gradient: LinearGradient(
-                                begin: Alignment.topRight,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white.withOpacity(0.15),
-                                  Colors.white.withOpacity(0.05),
-                                ],
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Expanded(
-                                  child: InAppWebView(
-                                    initialUrlRequest: URLRequest(
-                                      url: WebUri(
-                                        'https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d',
-                                      ),
-                                    ),
-                                    initialSettings: InAppWebViewSettings(
-                                      javaScriptEnabled: true,
-                                    ),
-                                    onWebViewCreated: (controller) {
-                                      webViewController = controller;
-                                    },
-                                    onLoadStop: (controller, url) async {
-                                      if (url.toString().contains(
-                                        'access_token',
-                                      )) {
-                                        try {
-                                          String token = url
-                                              .toString()
-                                              .split('#')[1]
-                                              .split('&')[0]
-                                              .replaceAll('access_token=', '');
-                                          if (token.length > 3) {
-                                            print(token);
-                                            YandexMusicAPI.getAccountDetails(
-                                              token,
-                                            ).then((data) {
-                                              if (data.containsKey('error')) {
-                                              } else {
-
-                                                int ymuid =
-                                                    data['result']['account']['uid'];
-                                                print(ymuid);
-                                                print(ymuid.toString());
-
-                                                String defaultEmail =
-                                                    data['result']['defaultEmail'];
-                                                // var hostname = data['invocationInfo']['hostname'];
-                                                var activeSubscriptions = data['result']['masterhub']['activeSubscriptions'];
-                                                // var availableSubscriptions = data['result']['masterhub']['availableSubscriptions'];
-                                                var hadAnySubscription = data['result']['subscription']['hadAnySubscription'];
-                                                print(hadAnySubscription);
-                                                // var canStartTrial = data['result']['subscription']['canStartTrial'];
-                                                print(data);
-
-                                                // if (activeSubscriptions.isEmpty && !reloginNeed && data['result']['subscription']['familyAutoRenewable']) {
-                                                //   reloginNeed = true;
-                                                //   controller.loadUrl(urlRequest: URLRequest(url: WebUri('https://quarkaudio.github.io/no-plus-subscription-on-yandex-music-page/')));
-                                                // } else if (reloginNeed) {
-                                                //   reloginNeed = false;
-                                                // } else {  
-                                                //   print('LOGINED!');
-                                                Database.setValue(
-                                                    "ymtoken",
-                                                    token,
-                                                );
-                                                Database.setValue(
-                                                  "ymuid",
-                                                  ymuid.toString(),
-                                                );
-                                                Database.setValue(
-                                                  "ymemail",
-                                                  defaultEmail.toString(),
-                                                );
-
-                                                YandexMusicAPI.getPlaylists(
-                                                  ymuid.toString(),
-                                                  token,
-                                                ).then((playlists) {
-                                                  userPlaylists = playlists;
-                                                  getYMTokenAnimationController
-                                                      .reverse();
-                                                  showYMInterface();
-                                                });
-                                                
-
-                                              }
-                                            });
-                                          }
-                                        } catch (ex) {}
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-      );
     }
-
-    Overlay.of(context).insert(getYMLoginOverlayEntry!);
-    getYMTokenAnimationController.forward();
-  }
-
-  void hideYMLoginWebview() {
-    getYMTokenAnimationController.reverse().then((_) {
-      getYMLoginOverlayEntry?.remove();
-      getYMLoginOverlayEntry = null;
-    });
   }
 
   @override
   void initState() {
     super.initState();
-    getYMTokenAnimationController = AnimationController(
-      duration: Duration(milliseconds: (650).round()),
-      vsync: this,
-    );
+    Database.init();
+    Future.delayed(Duration(milliseconds: 50), () async {
+      try {
+        String? token = await Database.getValue('yandex_music_token');
+        if (token != null) {
+          yandexMusic = YandexMusic(token: token);
 
-    getYMTokenOffsetAnimation = Tween<Offset>(
-      begin: const Offset(0, 1.0),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: getYMTokenAnimationController,
-        curve: Curves.ease,
-      ),
-    );
-    getYMInterfaceAnimationController = AnimationController(
-      duration: Duration(milliseconds: (650).round()),
-      vsync: this,
-    );
-
-    getYMInterfaceOffsetAnimation = Tween<Offset>(
-      begin: const Offset(0, -1.0),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: getYMInterfaceAnimationController,
-        curve: Curves.ease,
-      ),
-    );
+          await yandexMusic.init();
+          inited = true;
+        }
+      } on YandexMusicException {
+        inited = false;
+      }
+    });
   }
-
-  String restorePlaylistButtonText = 'Restore playlist';
-  InAppWebViewController? webViewController;
-
-  late AnimationController getYMTokenAnimationController;
-  late Animation<Offset> getYMTokenOffsetAnimation;
-  OverlayEntry? getYMLoginOverlayEntry;
-
-  late AnimationController getYMInterfaceAnimationController;
-  late Animation<Offset> getYMInterfaceOffsetAnimation;
-  OverlayEntry? getYMInterfaceOverlayEntry;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Center(
-        child: Container(
-          // MAIN CONTAINER THAT CONTAINS MAIN PAGE
-          height: MediaQuery.of(context).size.height,
-          width: MediaQuery.of(context).size.width,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color.fromRGBO(24, 24, 26, 1),
-                Color.fromRGBO(18, 18, 20, 1),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            color: Color.fromRGBO(40, 40, 40, 1),
-          ),
-          child: ClipRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
-              child: Container(
-                color: Colors.transparent,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset('assets/play.png', width: 150, height: 150),
-                    SizedBox(height: 25),
-                    SizedBox(
-                      width: 400,
-                      child: Text(
-                        'QUARK',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    SizedBox(height: 30),
-                    SizedBox(
-                      width: 400,
-                      child: Text(
-                        'Select a file or folder, or drag files from the file manager into the application window to add songs to the playlist.',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    SizedBox(height: 30),
-
-                    ClipRRect(
-                      borderRadius: const BorderRadius.all(Radius.circular(15)),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 175, sigmaY: 175),
-                        child: Container(
-                          height: 45,
-                          width: 350,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                              width: 1,
-                            ),
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(20),
-                            ),
-                            gradient: LinearGradient(
-                              begin: Alignment.topRight,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withOpacity(0.15),
-                                Colors.white.withOpacity(0.05),
-                              ],
-                            ),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.all(Radius.circular(20)),
-                            child: InkWell(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                              onTap: restorePlaylist,
-                              child: Center(
-                                child: Text(
-                                  restorePlaylistButtonText,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 15),
-                    ClipRRect(
-                      borderRadius: const BorderRadius.all(Radius.circular(15)),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 175, sigmaY: 175),
-                        child: Container(
-                          height: 45,
-                          width: 350,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                              width: 1,
-                            ),
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(20),
-                            ),
-                            gradient: LinearGradient(
-                              begin: Alignment.topRight,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withOpacity(0.15),
-                                Colors.white.withOpacity(0.05),
-                              ],
-                            ),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                              onTap: pickFolder,
-                              child: Center(
-                                child: Text(
-                                  'Add folder',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(height: 15),
-
-                    ClipRRect(
-                      borderRadius: const BorderRadius.all(Radius.circular(15)),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 175, sigmaY: 175),
-                        child: Container(
-                          height: 45,
-                          width: 350,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                              width: 1,
-                            ),
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(20),
-                            ),
-                            gradient: LinearGradient(
-                              begin: Alignment.topRight,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withOpacity(0.15),
-                                Colors.white.withOpacity(0.05),
-                              ],
-                            ),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.all(Radius.circular(20)),
-                            child: InkWell(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                              onTap: () {
-                                Database.getValue("ymuid").then((uid) {
-                                  Database.getValue("ymtoken").then((token) {
-                                    if (uid != null && token != null) {
-                                      YandexMusicAPI.getPlaylists(
-                                        uid,
-                                        token,
-                                      ).then((playlists) {
-                                        userPlaylists = playlists;
-                                        showYMInterface();
-                                      });
-                                    } else {
-                                      showYMLoginWebview();
-                                      }
-                                  });
-                                });
-                              },
-                              child: Center(
-                                child: Text(
-                                  'Yandex Music',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+    final size = MediaQuery.of(context).size;
+    return Material(
+      child: Stack(
+        children: [
+          Center(
+            child: Container(
+              width: size.width,
+              height: size.height,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color.fromRGBO(24, 24, 26, 1),
+                    Color.fromRGBO(18, 18, 20, 1),
                   ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Image.asset('assets/icon512.png', height: 150, width: 150),
+                  const SizedBox(height: 15),
+                  const Text(
+                    'quark: where sound begins',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      decoration: TextDecoration.none,
+                      fontFamily: 'noto',
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+                  const SizedBox(
+                    width: 400,
+                    child: Text(
+                      'Select the folder with tracks. \nYou can also link your streaming account to use it.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+
+                        fontSize: 16,
+                        decoration: TextDecoration.none,
+                        fontWeight: FontWeight.normal,
+                        fontFamily: 'noto',
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 25),
+                  // button(() async {playlistRestore();}, 'Restore playlist'),
+                  // SizedBox(height: 12.5),
+                  button(() async {
+                    await pickFolder();
+                  }, 'Add folder'),
+                  const SizedBox(height: 12.5),
+                  button(() async {
+                    if (inited) {
+                      if (userPlaylists.isEmpty) {
+                        yandexMusic.usertracks.getPlaylistsWithLikes().then((
+                          playlists,
+                        ) {
+                          setState(() {
+                            userPlaylists = playlists;
+
+                            playlistView = true;
+                          });
+                        });
+                      } else {
+                        setState(() {
+                          playlistView = true;
+                        });
+                        precacheTracks();
+                      }
+                    } else {
+                      ymUpdate();
+                    }
+                  }, 'Yandex Music'),
+                  // SizedBox(height: 12.5),
+                  // button(() {}, 'Spotify'),
+                ],
               ),
             ),
           ),
+
+          AnimatedSwitcher(
+            duration: Duration(milliseconds: 300),
+            child: loginView
+                ? Container(
+                    key: ValueKey('login'),
+                    color: Colors.black.withOpacity(0.99),
+                    child: Stack(
+                      children: [
+                        yandexLogin(context, closeLogin),
+                        Positioned(
+                          right: 0,
+                          child: IconButton(
+                            onPressed: () => setState(() => loginView = false),
+                            icon: Icon(Icons.close, color: Colors.white70),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : SizedBox.shrink(key: ValueKey('empty')),
+          ),
+
+          AnimatedSwitcher(
+            duration: Duration(milliseconds: 300),
+            child: playlistView
+                ? GestureDetector(
+                    onTap: () => setState(() => playlistView = false),
+                    child: Container(
+                      key: ValueKey('playlist'),
+                      color: Colors.black.withOpacity(0.99),
+                      child: Stack(
+                        children: [
+                          GestureDetector(
+                            onTap: () {},
+                            child: YandexPlaylists(
+                              closeView: closePlaylist,
+                              yandexMusic: yandexMusic,
+                              playlists: userPlaylists,
+                              playlistRouter: playlistRoute,
+                            ),
+                          ),
+                          // Positioned(
+                          //   right: 30,
+                          //   child: IconButton(
+                          //     onPressed: () => ymUpdate(),
+                          //     icon: Icon(
+                          //       Icons.refresh,
+                          //       color: Colors.white70,
+                          //     ),
+                          //   ),
+                          // ),
+                          Positioned(
+                            right: 0,
+                            child: IconButton(
+                              onPressed: () =>
+                                  setState(() => playlistView = false),
+                              icon: Icon(Icons.close, color: Colors.white70),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : SizedBox.shrink(key: ValueKey('empty')),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Material button(Function() onTap, String text) {
+  return Material(
+    color: Colors.transparent,
+    borderRadius: BorderRadius.circular(15),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        height: 45,
+        width: 350,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: Color.fromARGB(6, 255, 255, 255),
+          border: Border.all(width: 1, color: Colors.white.withAlpha(50)),
+        ),
+        child: Center(
+          child: Text(
+            text,
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+//
+//
+//
+//
+// YANDEX WIDGETS
+//
+//
+//
+//
+
+Widget yandexLogin(BuildContext context, Function() closeView) {
+  final Uri loginUrl = Uri.parse(
+    'https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d',
+  );
+
+  InAppWebViewController? webViewController;
+
+  YandexMusic yandexMusic = YandexMusic(token: '');
+
+  final TextEditingController _tokenController = TextEditingController();
+
+  final size = MediaQuery.of(context).size;
+
+  Future<void> _launchUrl() async {
+    if (!await launchUrl(loginUrl)) {
+      throw Exception('Could not launch $loginUrl');
+    }
+  }
+
+  if (Platform.isLinux) {
+    return Center(
+      child: Container(
+        alignment: AlignmentDirectional.center,
+        width: min(480, size.width - 50),
+        height: min(382, size.height - 50),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.all(Radius.circular(15)),
+          color: Color.fromARGB(30, 255, 255, 255),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+
+            const Text(
+              'We apologize, but webview is currently unavailable for logging in on Linux.',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            const SizedBox(
+              width: 420,
+              child: Text(
+                'Enter the token received via the quarkaudio.ru website \nor manually copied from the',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w100,
+                ),
+
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 15),
+            SizedBox(
+              width: 420,
+              child: InkWell(
+                onTap: _launchUrl,
+                child: Text(
+                  'Yandex Music web Page',
+                  style: TextStyle(
+                    color: Color.fromARGB(255, 184, 203, 255),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w100,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+            const SizedBox(height: 15),
+            SizedBox(
+              width: 400,
+              child: TextField(
+                style: TextStyle(
+                  color: Colors.white.withAlpha(220),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                ),
+                controller: _tokenController,
+                decoration: InputDecoration(
+                  hintText: 'Enter token here',
+                  hintStyle: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 16,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.key,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  filled: false,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            button(() async {
+              String token = _tokenController.text;
+              yandexMusic = YandexMusic(token: token);
+              try {
+                await yandexMusic.init();
+              } on YandexMusicException {
+                _tokenController.text = 'Authorization error. Invalid token.';
+              }
+
+              String email = await yandexMusic.account.getEmail();
+              String displayName = await yandexMusic.account.getDisplayName();
+              String fullName = await yandexMusic.account.getFullName();
+              String login = await yandexMusic.account.getLogin();
+
+              Database.setValue('yandex_music_token', token);
+              Database.setValue('yandex_music_uid', yandexMusic.accountID);
+              Database.setValue('yandex_music_email', email);
+              Database.setValue('yandex_music_displayname', displayName);
+              Database.setValue('yandex_music_fullname', fullName);
+              Database.setValue('yandex_music_login', login);
+              closeView();
+            }, 'Continue'),
+            const SizedBox(height: 20),
+            Text(
+              'Read about how to obtain a token on our website',
+              style: TextStyle(color: Colors.white.withAlpha(200)),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  return Center(
+    child: Container(
+      alignment: AlignmentDirectional.center,
+      width: min(390, size.width - 50),
+      height: min(650, size.height - 50),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(15)),
+        color: Color.fromARGB(30, 255, 255, 255),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: InAppWebView(
+              initialUrlRequest: URLRequest(
+                url: WebUri(
+                  'https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d',
+                ),
+              ),
+              initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
+              onWebViewCreated: (controller) {
+                webViewController = controller;
+              },
+              onLoadStop: (controller, url) async {
+                if (url.toString().contains('access_token')) {
+                  try {
+                    String token = url
+                        .toString()
+                        .split('#')[1]
+                        .split('&')[0]
+                        .replaceAll('access_token=', '');
+                    if (token.length > 3) {
+                      yandexMusic = YandexMusic(token: token);
+                      try {
+                        await yandexMusic.init();
+                      } on YandexMusicException {
+                        _tokenController.text =
+                            'Authorization error. Invalid token.';
+                      }
+
+                      String email = await yandexMusic.account.getEmail();
+                      String displayName = await yandexMusic.account
+                          .getDisplayName();
+                      String fullName = await yandexMusic.account.getFullName();
+                      String login = await yandexMusic.account.getLogin();
+
+                      Database.setValue('yandex_music_token', token);
+                      Database.setValue(
+                        'yandex_music_uid',
+                        yandexMusic.accountID,
+                      );
+                      Database.setValue('yandex_music_email', email);
+                      Database.setValue(
+                        'yandex_music_displayname',
+                        displayName,
+                      );
+                      Database.setValue('yandex_music_fullname', fullName);
+                      Database.setValue('yandex_music_login', login);
+                      closeView();
+                    }
+                  } catch (ex) {}
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class YandexPlaylists extends StatefulWidget {
+  final Function() closeView;
+  final YandexMusic yandexMusic;
+  final List<Playlist2> playlists;
+  final Function(PlayerPlaylist playlist) playlistRouter;
+
+  const YandexPlaylists({
+    required this.closeView,
+    required this.yandexMusic,
+    required this.playlistRouter,
+    required this.playlists,
+  });
+
+  @override
+  State<YandexPlaylists> createState() => _YandexPlaylistsState();
+}
+
+class _YandexPlaylistsState extends State<YandexPlaylists> {
+  bool enabled = true;
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return Center(
+      child: Container(
+        alignment: AlignmentDirectional.center,
+        width: min(size.width * 0.92, 1040),
+        height: min(size.height * 0.92, 1036),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.all(Radius.circular(15)),
+          color: Color.fromARGB(30, 255, 255, 255),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(36.0),
+                child: Wrap(
+                  spacing: 16.0,
+                  runSpacing: 16.0,
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  direction: Axis.horizontal,
+                  children: List.generate(widget.playlists.length, (index) {
+                    return Container(
+                      width: 310,
+                      height: 310,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.all(Radius.circular(15)),
+                        image: DecorationImage(
+                          image: CachedNetworkImageProvider(
+                            '${widget.yandexMusic.playlists.getPlaylistCoverArtUrl(widget.playlists[index].cover ?? {"type": "pic", "uri": "raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png", "custom": true})}',
+                          ),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      child: Material(
+                        clipBehavior: Clip.antiAlias,
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(15),
+
+                        child: InkWell(
+                          onTap: () async {
+                            if (!enabled) {
+                              return;
+                            }
+
+                            final trackIds = widget.playlists[index].tracks
+                                .map((track) => track.trackID)
+                                .toList();
+                            if (trackIds.isEmpty) {
+                              return;
+                            }
+                            enabled = false;
+                            final playlistTracks = await widget
+                                .yandexMusic
+                                .tracks
+                                .getTracks(trackIds);
+                            var cacheDirectory =
+                                await getApplicationCacheDirectory();
+                            playlistTracks.forEach(
+                              (track) => track.filepath =
+                                  '${cacheDirectory.path}/cisum_xednay_krauq${track.id}.flac',
+                            );
+                            playlistTracks.removeWhere(
+                              (track) => track.available == false,
+                            );
+
+                            await widget.closeView();
+
+                            widget.playlistRouter(
+                              PlayerPlaylist(
+                                widget.playlists[index].ownerUid,
+                                widget.playlists[index].kind,
+                                widget.playlists[index].title,
+                                playlistTracks,
+                              ),
+                            );
+                          },
+
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.bottomCenter,
+                                      end: Alignment.topCenter,
+                                      colors: [
+                                        Colors.black.withOpacity(0.8),
+                                        Colors.black.withOpacity(0.4),
+                                        Colors.transparent,
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.only(
+                                      bottomLeft: Radius.circular(15),
+                                      bottomRight: Radius.circular(15),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    widget.playlists[index].title,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: IconButton(
+                                  onPressed: () {},
+                                  icon: Transform.rotate(
+                                    angle: 40 * (3.14159 / 180),
+                                    child: Icon(
+                                      Icons.push_pin_rounded,
+                                      color: Color.fromRGBO(
+                                        255,
+                                        255,
+                                        255,
+                                        0.500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Widget yandexPlaylists(
+  BuildContext context,
+  Function() closeView,
+  YandexMusic yandexMusic,
+  List<Playlist2> playlists,
+  Function(PlayerPlaylist playlist) playlistRouter,
+) {
+  final size = MediaQuery.of(context).size;
+
+  bool enabled = true;
+
+  return Center(
+    child: Container(
+      alignment: AlignmentDirectional.center,
+      width: min(size.width * 0.92, 1040),
+      height: min(size.height * 0.92, 1036),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(15)),
+        color: Color.fromARGB(30, 255, 255, 255),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(36.0),
+              child: Wrap(
+                spacing: 16.0,
+                runSpacing: 16.0,
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                direction: Axis.horizontal,
+                children: List.generate(playlists.length, (index) {
+                  return Container(
+                    width: 310,
+                    height: 310,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.all(Radius.circular(15)),
+                      image: DecorationImage(
+                        image: CachedNetworkImageProvider(
+                          '${yandexMusic.playlists.getPlaylistCoverArtUrl(playlists[index].cover ?? {"type": "pic", "uri": "raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png", "custom": true})}',
+                        ),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    child: Material(
+                      clipBehavior: Clip.antiAlias,
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(15),
+
+                      child: InkWell(
+                        onTap: () async {
+                          if (!enabled) {
+                            return;
+                          }
+
+                          final trackIds = playlists[index].tracks
+                              .map((track) => track.trackID)
+                              .toList();
+                          if (trackIds.isEmpty) {
+                            return;
+                          }
+                          enabled = false;
+                          final playlistTracks = await yandexMusic.tracks
+                              .getTracks(trackIds);
+                          var cacheDirectory =
+                              await getApplicationCacheDirectory();
+                          playlistTracks.forEach(
+                            (track) => track.filepath =
+                                '${cacheDirectory.path}/cisum_xednay_krauq${track.id}.flac',
+                          );
+                          playlistTracks.removeWhere(
+                            (track) => track.available == false,
+                          );
+
+                          playlistRouter(
+                            PlayerPlaylist(
+                              playlists[index].ownerUid,
+                              playlists[index].kind,
+                              playlists[index].title,
+                              playlistTracks,
+                            ),
+                          );
+                        },
+
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                padding: EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      Colors.black.withOpacity(0.8),
+                                      Colors.black.withOpacity(0.4),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.only(
+                                    bottomLeft: Radius.circular(15),
+                                    bottomRight: Radius.circular(15),
+                                  ),
+                                ),
+                                child: Text(
+                                  playlists[index].title,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: IconButton(
+                                onPressed: () {},
+                                icon: Transform.rotate(
+                                  angle: 40 * (3.14159 / 180),
+                                  child: Icon(
+                                    Icons.push_pin_rounded,
+                                    color: Color.fromRGBO(255, 255, 255, 0.500),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

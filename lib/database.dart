@@ -25,32 +25,18 @@ class Database {
   }
 
   static Future<void> init() async {
-    final directory = await getApplicationDocumentsDirectory();
+    final directory = await getApplicationCacheDirectory();
     Hive.init(directory.path);
     await _ensureInitialized();
   }
 
   static Future<bool> setValue<T>(String key, T value) async {
     final box = await _ensureInitialized();
-
-    switch (T) {
-      case String:
-      case int:
-      case double:
-      case bool:
-      case const (List<String>):
-      case const (List<Map<String, dynamic>>):
-      case const (List<Map<dynamic, dynamic>>):
-        try {
-          await box.put(key, value);
-          return true;
-        } catch (e) {
-          return false;
-        }
-      default:
-        throw ArgumentError(
-          'An error has occured. Type $T is not supported by database',
-        );
+    try {
+      await box.put(key, value);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -100,6 +86,4 @@ class Database {
     print(path);
     return path;
   }
-
-  
 }

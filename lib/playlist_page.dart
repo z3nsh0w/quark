@@ -1,185 +1,334 @@
-import 'dart:convert';
-import 'dart:math';
-import 'package:flutter/material.dart';
-import 'dart:ui';
-import 'package:audioplayers/audioplayers.dart';
-import 'dart:typed_data';
+// Flutter packages
 import 'dart:io';
+import 'dart:ui';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'dart:async';
+
+// Additional packages
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:yandex_music/yandex_music.dart';
 import 'package:interactive_slider/interactive_slider.dart';
-import 'package:audio_metadata_reader/audio_metadata_reader.dart';
-import 'package:http/http.dart' as http;
-// import 'package:smtc_windows/smtc_windows.dart';
-import 'package:quark/database.dart';
-import 'package:dio/dio.dart';
-import 'package:path/path.dart' as path;
-import 'package:file_picker/file_picker.dart';
-import 'package:logging/logging.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:smtc_windows/smtc_windows.dart';
+import 'package:smtc_windows/src/rust/frb_generated.dart';
 
-// some classes
+// Local components&modules
+import 'database.dart';
+import 'player_widget.dart';
+import 'playlist_widget.dart';
+import 'audio_control.dart';
+import 'main.dart' show Files;
 
-class PathManager {
-  static String getFileName(String filePath) {
-    return path.basename(path.normalize(filePath));
+// TODO: Database & Settings
+// Database settings variables:
+//   volume
+//   last playlist (online as offline)
+//   turn on/off state indicator
+//   album art as background
+//   turn on/off window manager
+//   accent colors (if adwaita theme)
+//   known tracks database
+//   variable transparent
+//   variable distance between widgets
+
+// TODO: LOGGING
+
+// TODO: ADVANCED SETTINGS MENU
+
+// A standalone player running in the background, independent of the stream UI
+class Player {
+  final double startVolume;
+  final trackNotifier = ValueNotifier<Track>(Track({}));
+  final playedNotifier = ValueNotifier<Duration>(Duration());
+  final durationNotifier = ValueNotifier<Duration>(Duration());
+
+  List<Track> playlist;
+  Track nowPlayingTrack;
+
+  Player({
+    required this.startVolume,
+    required this.playlist,
+    required this.nowPlayingTrack,
+  });
+
+  final player = AudioPlayer();
+  bool isPlaying = false;
+  bool isRepeat = false;
+  StreamSubscription? _onCompleteSubscription;
+  StreamSubscription? _onDurationChanged;
+  StreamSubscription? _onPlayedChanged;
+
+  Future<void> init() async {
+    await player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
+    trackNotifier.value = nowPlayingTrack;
+    setupListeners();
   }
 
-  static Future<bool> checkfileExists(String filePath) async {
-    try {
-      return await File(filePath).exists();
-    } catch (e) {
-      return false;
-    }
-  }
+  Future<void> setupListeners() async {
+    _onCompleteSubscription?.cancel();
+    _onDurationChanged?.cancel();
+    _onPlayedChanged?.cancel();
+    _onCompleteSubscription = player.onPlayerComplete.listen((event) {
+      playNext();
+    });
 
-  static String getnormalizePath(String filePath) {
-    return path.normalize(filePath);
-  }
-}
+    _onDurationChanged = player.onDurationChanged.listen((event) async {
+      durationNotifier.value = event;
+    });
 
-class FileTags {
-  static Future<Map<String, dynamic>> getTagsFromFile(String filePath) async {
-    try {
-      final track = File(filePath);
-
-      final tagsFromFile = readMetadata(track, getImage: true);
-
-      if (tagsFromFile == null) {
-        return {
-          'trackName': PathManager.getFileName(filePath),
-          'trackArtistNames': ['Unknown'],
-          'albumArt': Uint8List(0),
-        };
-      }
-
-      return {
-        'trackName':
-            tagsFromFile?.title?.trim() ?? PathManager.getFileName(filePath),
-        'trackArtistNames':
-            tagsFromFile?.artist?.trim().isNotEmpty == true
-                ? tagsFromFile!.artist!
-                    .split(',')
-                    .map((e) => e.trim())
-                    .where((e) => e.isNotEmpty)
-                    .toList()
-                : ['Unknown'],
-        'albumName': tagsFromFile.album?.trim() ?? 'Unknown',
-        'albumArtistName': tagsFromFile.album?.trim() ?? 'Unknown',
-        'trackNumber': tagsFromFile.trackNumber ?? 0,
-        'albumLength': tagsFromFile.trackTotal ?? 0,
-        'year': tagsFromFile.year ?? 0,
-        'genre': tagsFromFile.genres ?? 'Unknown',
-        'discNumber': tagsFromFile.discNumber,
-        'authorName': 'metadata.authorName',
-        'writerName': 'metadata.writerName',
-        'mimeType': 'metadata.mimeType',
-        'trackDuration': 0,
-        'bitrate': 0,
-        'albumArt':
-            tagsFromFile.pictures.isNotEmpty
-                ? tagsFromFile.pictures.first.bytes ?? Uint8List(0)
-                : Uint8List(0),
-        'albumArtPNG': tagsFromFile.pictures.first.pictureType,
-      };
-    } catch (e) {
-      return {
-        'trackName': PathManager.getFileName(filePath),
-        'trackArtistNames': ['Unknown'],
-        'albumArt': Uint8List(0),
-      };
-    }
-  }
-
-  static Future<List<Map<String, dynamic>>> getAllTracksMetadata(
-    List<String> filePaths,
-  ) async {
-    final List<Map<String, dynamic>> results = [];
-    for (final file in filePaths) {
-      final tags = await getTagsFromFile(PathManager.getnormalizePath(file));
-      results.add(tags);
-    }
-    return results;
-  }
-}
-
-class RecognizerService {
-  static void saveRecognizedData(
-    filename,
-    coverArtUint8,
-    artistName,
-    trackName,
-  ) {
-    Database.getValue('recognizedTracks').then((recognizedTracksList) {
-      List<Map<String, dynamic>> tracksList = [];
-
-      if (recognizedTracksList != null) {
-        for (var track in recognizedTracksList) {
-          final convertedTrack = track.cast<String, dynamic>();
-          tracksList.add(convertedTrack);
-        }
-      }
-
-      Map<String, dynamic> addToList = {
-        'filename': filename,
-        'coverArt': coverArtUint8,
-        'artistName': artistName,
-        'trackName': trackName,
-      };
-
-      tracksList.add(addToList);
-
-      Database.setValue('recognizedTracks', tracksList);
+    _onPlayedChanged = player.onPositionChanged.listen((event) async {
+      playedNotifier.value = event;
     });
   }
 
-  static Future<Map<String, dynamic>> recognizeMetadata(
-    String track,
-    String apiURL,
-  ) async {
-    var filename = PathManager.getFileName(track);
-    var query = 'FILENAME:$filename'; // Make a request in free format
-    try {
-      final response = await http.get(
-        Uri.parse(
-          'http://$apiURL/get_metadata?data=$query',
-        ), // Make a request in free format
-      );
+  Future<Duration> getPosition() async {
+    Duration? position = await player.getCurrentPosition();
+    return position ?? Duration();
+  }
 
-      var jsonResponseFromAPI =
-          jsonDecode(response.body) as Map<String, dynamic>;
+  Future<Duration> getTrackDuration() async {
+    Duration? duration = await player.getDuration();
+    return duration ?? Duration();
+  }
 
-      var trackname = jsonResponseFromAPI['title'];
-      var artist = jsonResponseFromAPI['artists'][0]['name'];
-      var coverarturl = jsonResponseFromAPI['cover_art_url'];
+  Future<void> eventListener() async {
+    player.onPlayerComplete.listen((onData) {
+      playNext();
+    });
+  }
 
-      Map<String, dynamic> trackData = {
-        'trackname': '$trackname',
-        'artist': '$artist',
-        'coverarturl': '$coverarturl',
-      };
-      return Future.value(trackData);
-    } catch (e) {
-      return Future.value({}); // If we don't find anything, we rest.
+  Future<void> playNext() async {
+    int nowIndex = playlist.indexWhere((t) => t == nowPlayingTrack);
+    int nextIndex = isRepeat
+        ? nowIndex
+        : playlist.length - 1 != nowIndex
+        ? nowIndex + 1
+        : 0;
+    nowPlayingTrack = playlist[nextIndex];
+    trackNotifier.value = nowPlayingTrack;
+    await player.stop();
+    await _playIsPlaying();
+  }
+
+  Future<void> _playIsPlaying() async {
+    await player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
+    if (isPlaying) {
+      await player.play(DeviceFileSource(nowPlayingTrack.filepath));
     }
   }
 
-  static Future<Uint8List> urlImageToUint8List(String imageUrl) async {
+  Future<void> playPrevious() async {
+    int nowIndex = playlist.indexWhere((t) => t == nowPlayingTrack);
+    int nextIndex = nowIndex == 0
+        ? playlist.length - 1
+        : nowIndex > 0
+        ? nowIndex - 1
+        : 0;
+    nowPlayingTrack = playlist[nextIndex];
+    trackNotifier.value = nowPlayingTrack;
+    await player.stop();
+    await _playIsPlaying();
+  }
+
+  Future<void> playPause(bool play) async {
+    isPlaying = play ? true : false;
+    play ? await player.resume() : await player.pause();
+  }
+
+  Future<void> setVolume(double volume) async {
+    await player.setVolume(volume);
+  }
+
+  Future<void> seek(Duration seek) async {
+    await player.seek(seek);
+  }
+
+  Future<void> updatePlaylist(List<Track> newPlaylist) async {
+    playlist = newPlaylist;
+  }
+
+  Future<void> playNetTrack(String link, Track track) async {
+    nowPlayingTrack = track;
+    trackNotifier.value = nowPlayingTrack;
+    await player.stop();
+    await player.setSource(UrlSource(link));
+    if (isPlaying) {
+      await player.play(UrlSource(link));
+    }
+  }
+
+  Future<void> playCustom(Track track) async {
+    nowPlayingTrack = track;
+    trackNotifier.value = nowPlayingTrack;
+    await player.stop();
+    await player.setSource(DeviceFileSource(track.filepath));
+    await _playIsPlaying();
+  }
+}
+
+// A complementary class to the main player, created for network playback of tracks. (SPOTIFY may be added)
+class NetPlayer {
+  final Player player;
+  final YandexMusic yandexMusic;
+
+  NetPlayer({required this.player, required this.yandexMusic});
+
+  Future<void> playYandex(Track track) async {
     try {
-      final response = await http.get(Uri.parse(imageUrl));
-      if (response.statusCode == 200) {
-        return response.bodyBytes;
-      } else {
-        throw Exception('Failed to load image: ${response.statusCode}');
-      }
-    } catch (e) {
-      return Uint8List(0);
+      String link = await yandexMusic.tracks.getDownloadLink(track.id);
+      await player.playNetTrack(link, track);
+    } catch (e) {}
+  }
+}
+
+// A collection of native media notifications for controlling the player from outside
+class NativeControl {
+  late final control;
+
+  Function(bool) onPlay;
+  Function(bool) onPause;
+  Function() onNext;
+  Function() onPrevious;
+  Function() onSeek;
+
+  NativeControl({
+    required this.onPlay,
+    required this.onPause,
+    required this.onNext,
+    required this.onPrevious,
+    required this.onSeek,
+  });
+
+  Future<void> init() async {
+    if (Platform.isWindows) {
+      try {
+        await RustLib.init();
+        control = SMTCWindows(
+          metadata: MusicMetadata(
+            title: 'Unknown',
+            album: 'Unknown',
+            albumArtist: 'Unknown',
+            artist: 'Unknown',
+          ),
+          config: const SMTCConfig(
+            fastForwardEnabled: true,
+            nextEnabled: true,
+            pauseEnabled: true,
+            playEnabled: true,
+            rewindEnabled: true,
+            prevEnabled: true,
+            stopEnabled: true,
+          ),
+        );
+      } catch (e) {}
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          control.buttonPressStream.listen((event) {
+            switch (event) {
+              case PressedButton.play:
+                onPlay(true);
+                break;
+              case PressedButton.pause:
+                onPause(false);
+                break;
+              case PressedButton.next:
+                onNext();
+                break;
+              case PressedButton.previous:
+                onPrevious();
+                break;
+              case PressedButton.stop:
+                control.disableSmtc();
+                break;
+              default:
+                break;
+            }
+          });
+        } catch (e) {
+          debugPrint("Error: $e");
+        }
+      });
+    } else {
+      try {
+        control = await AudioService.init(
+          builder: () => MyAudioHandler(
+            onPlay: () => onPlay(true),
+            onPause: () => onPause(false),
+            onNext: () => onNext(),
+            onPrevious: () => onPrevious(),
+            onSeek: (position) => onSeek(),
+          ),
+          config: AudioServiceConfig(
+            androidNotificationChannelId: 'quark.quarkaudio.app.channel.audio',
+            androidNotificationChannelName: 'Audio playback',
+            androidNotificationOngoing: true,
+          ),
+        );
+      } catch (e) {}
+    }
+  }
+
+  Future<void> setPlaybackStatus(bool status) async {
+    if (Platform.isWindows) {
+      status
+          ? await control.setPlaybackStatus(PlaybackStatus.playing)
+          : await control.setPlaybackStatus(PlaybackStatus.paused);
+    }
+  }
+
+  Future<void> updateData(Track track) async {
+    if (Platform.isWindows) {
+      try {
+        await control.updateMetadata(
+          MusicMetadata(
+            title: track.title,
+            album: 'Unknown',
+            albumArtist: track.artists.isNotEmpty
+                ? track.artists[0].title
+                : 'Unknown',
+            artist: track.artists.isNotEmpty
+                ? track.artists[0].title
+                : 'Unknown',
+            thumbnail: 'https://${track.coverUri.replaceAll('%%', '300x300')}',
+          ),
+        );
+      } catch (e) {}
+    } else {
+      try {
+        Duration duration = Duration.zero;
+        await (control as MyAudioHandler).setPlayback(
+          track.title,
+          track.artists.isNotEmpty
+              ? track.artists
+                    .map((artist) => artist.title ?? 'Unknown')
+                    .join(', ')
+              : "Unknown artist",
+          track.albums.isNotEmpty
+              ? track.albums
+                    .map((album) => album.title ?? 'Unknown album')
+                    .join(', ')
+              : "Unknown album",
+          duration,
+          'https://${track.coverUri.replaceAll('%%', '300x300')}',
+          track.id,
+        );
+      } catch (e) {}
     }
   }
 }
 
 class PlaylistPage extends StatefulWidget {
-  final List<String> songs;
-  final String lastSong;
-  const PlaylistPage({super.key, required this.songs, required this.lastSong});
+  final PlayerPlaylist playlist;
+  final YandexMusic yandexMusic;
+
+  const PlaylistPage({
+    super.key,
+    required this.playlist,
+    required this.yandexMusic,
+  });
 
   @override
   State<PlaylistPage> createState() => _PlaylistPageState();
@@ -187,1894 +336,240 @@ class PlaylistPage extends StatefulWidget {
 
 class _PlaylistPageState extends State<PlaylistPage>
     with TickerProviderStateMixin {
-  void _showPlaylistOverlay() {
-    if (isPlaylistAnimating) {
-      setState(() {
-        playerPadding = 0.0;
-      });
-      return;
-    }
-    if (isPlaylistOpened) {
-      playlistAnimationController.reverse().then((_) {
-        playlistOverlayEntry?.remove();
-        playlistOverlayEntry = null;
-      });
-      if (mounted) {
-        setState(() {
-          isPlaylistOpened = false;
-          playerPadding = 0.0;
-        });
-      }
-      return;
-    }
+  String trackArtistNames = 'Unknown';
+  String trackAlbumNames = 'Unknown';
+  String currentPosition = '0:00';
+  String totalSongDuration = '0:00';
+  String playlistName = 'Playlist';
 
-    if (isPlaylistOpened == false) {
-      if (mounted) {
-        setState(() {
-          isPlaylistOpened = true;
-          if (MediaQuery.of(context).size.width > 800) {
-            playerPadding = 400.0;
-          }
-        });
-      }
+  double volume = 0.7;
+  double songProgress = 0.0;
+  double transitionSpeed = 1;
+  double playerSpeed = 1;
+  double playerPadding = 0.0;
 
-      playlistOverlayEntry = OverlayEntry(
-        builder:
-            (context) => Positioned(
-              left: 0,
-              child: SlideTransition(
-                position: playlistOffsetAnimation,
-                child: Material(
-                  color: Colors.transparent,
-                  child: GestureDetector(
-                    onHorizontalDragEnd: (details) {
-                      if (details.primaryVelocity!.abs() > 500) {
-                        if (details.primaryVelocity! < -500 ||
-                            details.primaryVelocity! > 500) {
-                          _hidePlaylistOverlay();
-                        }
-                      }
-                    },
+  bool isSliderActive = true;
+  bool isPlaying = false;
+  bool isLiked = false;
+  bool isPlaylistOpened = false;
+  bool isShuffleEnable = false;
+  bool isRepeatEnable = false;
+  bool searchEnable = false;
+  bool stateIndicatorState = true;
+  bool playlistDownloaded = false;
 
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topRight: Radius.circular(20),
-                        bottomRight: Radius.circular(20),
-                      ),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
-                        child: Container(
-                          width: 400,
-                          height: MediaQuery.of(context).size.height,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                              width: 1,
-                            ),
-                            borderRadius: const BorderRadius.only(
-                              topRight: Radius.circular(20),
-                              bottomRight: Radius.circular(20),
-                            ),
-                            gradient: LinearGradient(
-                              begin: Alignment.topRight,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withOpacity(0.15),
-                                Colors.white.withOpacity(0.05),
-                              ],
-                            ),
-                          ),
-                          child: Stack(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(top: 50),
-                                child: FutureBuilder(
-                                  future: FileTags.getAllTracksMetadata(songs),
-                                  builder: (context, snapshot) {
-                                    final tracks = snapshot.data ?? [];
+  late List<Track> currentPlaylist;
+  late Track nowPlayingTrack;
+  late NetPlayer netPlayer;
+  late Player player2;
+  late NativeControl nativeControl;
+  List<String> likedTracks = [];
 
-                                    return ListView.builder(
-                                      itemCount: tracks.length,
-                                      itemBuilder: (context, index) {
-                                        var name = tracks[index]['trackName'];
-                                        var artist =
-                                            tracks[index]['trackArtistNames'][0];
-                                        var nowTrack = songs[index];
-                                        return ListTile(
-                                          title: Row(
-                                            children: [
-                                              Container(
-                                                height: 55,
-                                                width: 55,
-                                                decoration: BoxDecoration(
-                                                  image: DecorationImage(
-                                                    image: MemoryImage(
-                                                      tracks[index]['albumArt'],
-                                                    ),
-                                                    fit: BoxFit.cover,
-                                                    colorFilter:
-                                                        ColorFilter.mode(
-                                                          Colors.black
-                                                              .withOpacity(0),
-                                                          BlendMode.darken,
-                                                        ),
-                                                  ),
+  Color popupIconsColor = Colors.white.withAlpha(
+    170,
+  ); // TODO: MAKE ACCENT COLORS AS SETTINGS
+  Color popupTextColor = Colors.white.withAlpha(220);
+  Color albumArtShadowColor = Color.fromARGB(255, 21, 21, 21);
 
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color:
-                                                          const Color.fromARGB(
-                                                            255,
-                                                            21,
-                                                            21,
-                                                            21,
-                                                          ),
-                                                      blurRadius: 10,
-                                                      offset: Offset(5, 10),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
+  int operation = 0;
 
-                                              SizedBox(width: 10),
-
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      '$name',
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      '$artist',
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        color: Colors.grey,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-
-                                              ValueListenableBuilder<int>(
-                                                valueListenable:
-                                                    nowPlayingIndexNotifier,
-                                                builder: (
-                                                  context,
-                                                  currentIndex,
-                                                  child,
-                                                ) {
-                                                  return AnimatedOpacity(
-                                                    opacity:
-                                                        (currentIndex == index)
-                                                            ? 1.0
-                                                            : 0.0,
-                                                    duration: Duration(
-                                                      milliseconds:
-                                                          (650 * transitionSpeed)
-                                                              .round(),
-                                                    ),
-                                                    curve: Curves.easeInOut,
-                                                    child: Icon(
-                                                      Icons.play_arrow_sharp,
-                                                      color: Colors.grey,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                          onTap: () {
-                                            FileTags.getAllTracksMetadata(
-                                              songs,
-                                            );
-                                            if (mounted) {
-                                              setState(() {
-                                                if (nowPlayingIndex != index &&
-                                                    index > 0) {
-                                                  nowPlayingIndex = index - 1;
-                                                  nowPlayingIndexNotifier
-                                                      .value = index - 1;
-
-                                                  steps(nextStep: true);
-                                                } else if (index == 0) {
-                                                  nowPlayingIndexNotifier
-                                                      .value = index;
-
-                                                  nowPlayingIndex = index;
-                                                  steps(replayStep: true);
-                                                }
-                                              });
-                                            }
-                                          },
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-
-                              Positioned(
-                                top: 10,
-                                right: 10,
-                                child: IconButton(
-                                  icon: Icon(
-                                    Icons.close,
-                                    color: Colors.white.withOpacity(0.8),
-                                  ),
-                                  onPressed: _hidePlaylistOverlay,
-                                ),
-                              ),
-                              Positioned(
-                                top: 15,
-                                left: 150,
-                                child: Text(
-                                  'Playlist',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-      );
-
-      Overlay.of(context).insert(playlistOverlayEntry!);
-      playlistAnimationController.forward();
-    }
-  }
-
-  void _hidePlaylistOverlay() {
-    playlistAnimationController.reverse().then((_) {
-      playlistOverlayEntry?.remove();
-      playlistOverlayEntry = null;
-    });
-    setState(() {
-      playerPadding = 0.0;
-    });
-    if (isPlaylistOpened) {
-      if (mounted) {
-        setState(() {
-          isPlaylistOpened = false;
-          isPlaylistAnimating = false;
-        });
-      }
-    }
-  }
-
-  void _showWarningMetadataOverlay() {
-    warningMetadataOverlayEntry = OverlayEntry(
-      builder:
-          (context) => Positioned(
-            right: 15,
-            top: 15,
-            child: SlideTransition(
-              position: warningMetadataOffsetAnimation,
-              child: Material(
-                color: Colors.transparent,
-                child: GestureDetector(
-                  onHorizontalDragEnd: (details) {
-                    if (details.primaryVelocity!.abs() > 500) {
-                      if (details.primaryVelocity! < -500 ||
-                          details.primaryVelocity! > 500) {
-                        _hideWarningMetadataOverlay();
-                      }
-                    }
-                  },
-
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.all(Radius.circular(15)),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
-                      child: Container(
-                        width: 350,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                            width: 1,
-                          ),
-                          borderRadius: const BorderRadius.all(
-                            Radius.circular(20),
-                          ),
-                          gradient: LinearGradient(
-                            begin: Alignment.topRight,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.white.withOpacity(0.15),
-                              Colors.white.withOpacity(0.05),
-                            ],
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.only(left: 15, top: 15),
-                              child: Text(
-                                'Is that correct metadata?',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: 10),
-
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                InkWell(
-                                  onTap: () {
-                                    RecognizerService.saveRecognizedData(
-                                      songs[nowPlayingIndex],
-                                      coverArtData,
-                                      trackArtistNames.toString(),
-                                      trackName,
-                                    );
-
-                                    _hideWarningMetadataOverlay();
-                                  },
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(10),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.done, color: Colors.green),
-                                      Text(
-                                        'Accept',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                SizedBox(width: 30),
-                                InkWell(
-                                  onTap: () {
-                                    _hideWarningMetadataOverlay();
-                                    trackName = songs[nowPlayingIndex];
-                                    trackArtistNames = ['Unknown'];
-                                    coverArtData = Uint8List(0);
-                                  },
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(10),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.close,
-                                        color: const Color.fromARGB(
-                                          172,
-                                          146,
-                                          43,
-                                          36,
-                                        ),
-                                      ),
-                                      Text(
-                                        'Decline',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-    );
-
-    Overlay.of(context).insert(warningMetadataOverlayEntry!);
-    warningMetadataAnimationController.forward();
-  }
-
-  void _hideWarningMetadataOverlay() {
-    warningMetadataAnimationController.reverse().then((_) {
-      warningMetadataOverlayEntry?.remove();
-      warningMetadataOverlayEntry = null;
-    });
-  }
-
-  void _showSettingsOverlay() {
-    settingsOverlayEntry = OverlayEntry(
-      builder:
-          (context) => StatefulBuilder(
-            builder: (BuildContext context, StateSetter setOverlayState) {
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: GestureDetector(
-                      onTap: _hideSettingsOverlay,
-                      child: Container(color: Colors.black.withOpacity(0.05)),
-                    ),
-                  ),
-
-                  Positioned(
-                    child: SlideTransition(
-                      position: settingsOffsetAnimation,
-                      child: Center(
-                        child: Material(
-                          color: Colors.transparent,
-
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(15),
-                            ),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(
-                                sigmaX: 175,
-                                sigmaY: 175,
-                              ),
-                              child: Container(
-                                width: min(
-                                  MediaQuery.of(context).size.width * 0.92,
-                                  600,
-                                ),
-                                height: min(
-                                  MediaQuery.of(context).size.height * 0.92,
-                                  715,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.2),
-                                    width: 1,
-                                  ),
-                                  borderRadius: const BorderRadius.all(
-                                    Radius.circular(20),
-                                  ),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topRight,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Colors.white.withOpacity(0.15),
-                                      Colors.white.withOpacity(0.05),
-                                    ],
-                                  ),
-                                ),
-                                child: Stack(
-                                  children: [
-                                    Positioned(
-                                      top: 675,
-                                      left: 290,
-                                      child: Text(
-                                        "made by Penises DG. No rights reserved.",
-                                        style: TextStyle(
-                                          color: Colors.grey[500],
-                                        ),
-                                      ),
-                                    ),
-                                    SingleChildScrollView(
-                                      scrollDirection: Axis.vertical,
-                                      child: Column(
-                                        children: [
-                                          SizedBox(height: 15),
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.center,
-                                            children: [
-                                              Container(
-                                                height: 45,
-                                                width: 150,
-
-                                                decoration: BoxDecoration(
-                                                  borderRadius:
-                                                      BorderRadius.all(
-                                                        Radius.circular(10),
-                                                      ),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    SizedBox(width: 35),
-                                                    Icon(
-                                                      Icons.interests,
-                                                      color: Colors.grey[300],
-                                                    ),
-                                                    SizedBox(width: 10),
-                                                    Text(
-                                                      'Main',
-                                                      style: TextStyle(
-                                                        color: Colors.grey[300],
-                                                        fontSize: 18,
-                                                        fontWeight:
-                                                            FontWeight.w100,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                              SizedBox(width: 50),
-                                              Container(
-                                                height: 45,
-                                                width: 150,
-                                                decoration: BoxDecoration(
-                                                  // color: themeColor,
-                                                  borderRadius:
-                                                      BorderRadius.all(
-                                                        Radius.circular(10),
-                                                      ),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    SizedBox(width: 35),
-                                                    Icon(
-                                                      Icons.cloud_sync_sharp,
-                                                      color: Colors.grey[300],
-                                                    ),
-                                                    SizedBox(width: 10),
-                                                    Text(
-                                                      'Server',
-                                                      style: TextStyle(
-                                                        color: Colors.grey[300],
-                                                        fontSize: 18,
-                                                        fontWeight:
-                                                            FontWeight.w100,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-
-                                              IconButton(
-                                                onPressed: _hideSettingsOverlay,
-                                                icon: Icon(
-                                                  Icons.close,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          SizedBox(height: 25),
-                                          Row(
-                                            children: [
-                                              SizedBox(width: 50),
-                                              Text(
-                                                'Playlist',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 18,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          SizedBox(height: 5),
-                                          Column(
-                                            children: [
-                                              Padding(
-                                                padding:
-                                                    EdgeInsetsGeometry.only(
-                                                      left: 10,
-                                                      right: 10,
-                                                    ),
-                                                child: Container(
-                                                  width: 500,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    // color: themeColor,
-                                                    border: Border.all(
-                                                      width: 0.2,
-                                                      color: Colors.grey,
-                                                    ),
-
-                                                    borderRadius:
-                                                        BorderRadius.only(
-                                                          topLeft:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                          topRight:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                        ),
-                                                  ),
-                                                  child: InkWell(
-                                                    onTap: () {},
-                                                    child: Row(
-                                                      children: [
-                                                        SizedBox(width: 15),
-                                                        Text(
-                                                          'Add songs',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(height: 5),
-                                              Padding(
-                                                padding:
-                                                    EdgeInsetsGeometry.only(
-                                                      left: 10,
-                                                      right: 10,
-                                                    ),
-                                                child: Container(
-                                                  width: 500,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    // color: themeColor,
-                                                    border: Border.all(
-                                                      width: 0.2,
-                                                      color: Colors.grey,
-                                                    ),
-                                                  ),
-                                                  child: InkWell(
-                                                    onTap: () {
-                                                      addFolderToSongs();
-                                                      // var oldlist = widget.songs;
-
-                                                      // setState(() {
-                                                      //   widget.songs = oldlist
-                                                      // });
-
-                                                      Database.setValue(
-                                                        'lastPlaylist',
-                                                        songs,
-                                                      ); // After initializing the playlist, we add it to the table as the last one
-                                                    },
-                                                    child: Row(
-                                                      children: [
-                                                        SizedBox(width: 15),
-                                                        Text(
-                                                          'Add Folder',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(height: 5),
-                                              Padding(
-                                                padding:
-                                                    EdgeInsetsGeometry.only(
-                                                      left: 10,
-                                                      right: 10,
-                                                    ),
-                                                child: Container(
-                                                  width: 500,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    // color: themeColor,
-                                                    border: Border.all(
-                                                      width: 0.2,
-                                                      color: Colors.grey,
-                                                    ),
-
-                                                    borderRadius:
-                                                        BorderRadius.only(
-                                                          bottomLeft:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                          bottomRight:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                        ),
-                                                  ),
-                                                  child: InkWell(
-                                                    onTap: () {
-                                                      // player.stop();
-                                                      // _hidePlaylistOverlay();
-                                                      // _hideWarningMetadataOverlay();
-                                                      // _hideSettingsOverlay();
-
-                                                      Navigator.pop(context);
-                                                    },
-                                                    child: Row(
-                                                      children: [
-                                                        SizedBox(width: 15),
-                                                        Text(
-                                                          'Clear',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-
-                                          SizedBox(height: 25),
-                                          Row(
-                                            children: [
-                                              SizedBox(width: 50),
-                                              Text(
-                                                'UI',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 18,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          SizedBox(height: 5),
-                                          Column(
-                                            children: [
-                                              Padding(
-                                                padding:
-                                                    EdgeInsetsGeometry.only(
-                                                      left: 10,
-                                                      right: 10,
-                                                    ),
-                                                child: Container(
-                                                  width: 500,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    // color: themeColor,
-                                                    border: Border.all(
-                                                      width: 0.2,
-                                                      color: Colors.grey,
-                                                    ),
-
-                                                    borderRadius:
-                                                        BorderRadius.only(
-                                                          topLeft:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                          topRight:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                        ),
-                                                  ),
-                                                  child: Row(
-                                                    children: [
-                                                      SizedBox(width: 15),
-                                                      Expanded(
-                                                        child: Text(
-                                                          'White theme (beta ;d)',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      Padding(
-                                                        padding:
-                                                            EdgeInsetsGeometry.only(
-                                                              right: 15,
-                                                            ),
-                                                        child: Switch(
-                                                          value: isWhiteTheme,
-                                                          onChanged: (
-                                                            bool value,
-                                                          ) {
-                                                            if (mounted) {
-                                                              setState(() {
-                                                                isWhiteTheme =
-                                                                    value;
-                                                              });
-                                                              setOverlayState(
-                                                                () {
-                                                                  isWhiteTheme =
-                                                                      value;
-                                                                },
-                                                              );
-
-                                                              if (isWhiteTheme &&
-                                                                  mounted) {
-                                                                setState(() {
-                                                                  themeColor =
-                                                                      Color.fromARGB(
-                                                                        255,
-                                                                        197,
-                                                                        197,
-                                                                        197,
-                                                                      );
-                                                                  backgroundGradientColor =
-                                                                      Color.fromRGBO(
-                                                                        68,
-                                                                        67,
-                                                                        67,
-                                                                        1,
-                                                                      );
-                                                                  backgroundSecondGradientColor =
-                                                                      Color.fromRGBO(
-                                                                        201,
-                                                                        201,
-                                                                        201,
-                                                                        1,
-                                                                      );
-                                                                  albumArtShadowColor =
-                                                                      Color.fromARGB(
-                                                                        255,
-                                                                        66,
-                                                                        66,
-                                                                        66,
-                                                                      );
-                                                                  alternativeThemeColor =
-                                                                      Color.fromARGB(
-                                                                        255,
-                                                                        34,
-                                                                        34,
-                                                                        34,
-                                                                      );
-                                                                  Database.setValue(
-                                                                    "isWhiteTheme",
-                                                                    true,
-                                                                  );
-                                                                });
-                                                              }
-
-                                                              if (!isWhiteTheme &&
-                                                                  mounted) {
-                                                                themeColor =
-                                                                    Color.fromARGB(
-                                                                      255,
-                                                                      34,
-                                                                      34,
-                                                                      34,
-                                                                    );
-                                                                backgroundGradientColor =
-                                                                    Color.fromRGBO(
-                                                                      24,
-                                                                      24,
-                                                                      26,
-                                                                      1,
-                                                                    );
-                                                                backgroundSecondGradientColor =
-                                                                    Color.fromRGBO(
-                                                                      18,
-                                                                      18,
-                                                                      20,
-                                                                      1,
-                                                                    );
-                                                                albumArtShadowColor =
-                                                                    Color.fromARGB(
-                                                                      255,
-                                                                      21,
-                                                                      21,
-                                                                      21,
-                                                                    );
-                                                                alternativeThemeColor =
-                                                                    Color.fromARGB(
-                                                                      255,
-                                                                      197,
-                                                                      197,
-                                                                      197,
-                                                                    );
-                                                                Database.setValue(
-                                                                  "isWhiteTheme",
-                                                                  false,
-                                                                );
-                                                              }
-                                                            }
-
-                                                            // if (isWhiteTheme) {
-                                                            // setState(() {
-                                                            //   themeColor = const Color.fromARGB(255, 220, 220, 220);
-                                                            // });
-                                                            // setOverlayState(() {
-                                                            //   themeColor = const Color.fromARGB(255, 220, 220, 220);
-                                                            // });
-                                                            // }
-                                                          },
-                                                          activeColor:
-                                                              const Color.fromARGB(
-                                                                255,
-                                                                34,
-                                                                34,
-                                                                34,
-                                                              ),
-                                                          activeTrackColor:
-                                                              Colors.grey[300],
-                                                          inactiveThumbColor:
-                                                              Colors.grey[300],
-                                                          inactiveTrackColor:
-                                                              const Color.fromARGB(
-                                                                255,
-                                                                34,
-                                                                34,
-                                                                34,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(height: 5),
-                                              Padding(
-                                                padding:
-                                                    EdgeInsetsGeometry.only(
-                                                      left: 10,
-                                                      right: 10,
-                                                    ),
-                                                child: Container(
-                                                  width: 500,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    // color: themeColor,
-                                                    border: Border.all(
-                                                      width: 0.2,
-                                                      color: Colors.grey,
-                                                    ),
-                                                  ),
-                                                  child: Row(
-                                                    children: [
-                                                      SizedBox(width: 15),
-                                                      Expanded(
-                                                        child: Text(
-                                                          'Album art as background',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ),
-
-                                                      Padding(
-                                                        padding:
-                                                            EdgeInsetsGeometry.only(
-                                                              right: 15,
-                                                            ),
-
-                                                        child: Switch(
-                                                          value:
-                                                              isBackgroudArtEnable,
-                                                          onChanged: (
-                                                            bool value,
-                                                          ) {
-                                                            if (mounted) {
-                                                              setState(() {
-                                                                isBackgroudArtEnable =
-                                                                    value;
-                                                              });
-                                                              setOverlayState(() {
-                                                                isBackgroudArtEnable =
-                                                                    value;
-                                                              });
-                                                            }
-
-                                                            if (!value) {
-                                                              coverArtData =
-                                                                  Uint8List(0);
-                                                              Database.setValue(
-                                                                "isBackgroudArtEnable",
-                                                                false,
-                                                              );
-                                                            } else {
-                                                              FileTags.getTagsFromFile(
-                                                                songs[nowPlayingIndex],
-                                                              ).then((value) {
-                                                                if (mounted) {
-                                                                  setState(() {
-                                                                    coverArtData =
-                                                                        value['albumArt'];
-                                                                  });
-                                                                }
-                                                              });
-                                                              Database.setValue(
-                                                                "isBackgroudArtEnable",
-                                                                true,
-                                                              );
-                                                            }
-                                                          },
-                                                          activeColor:
-                                                              const Color.fromARGB(
-                                                                255,
-                                                                34,
-                                                                34,
-                                                                34,
-                                                              ),
-                                                          activeTrackColor:
-                                                              Colors.grey[300],
-                                                          inactiveThumbColor:
-                                                              Colors.grey[300],
-                                                          inactiveTrackColor:
-                                                              const Color.fromARGB(
-                                                                255,
-                                                                34,
-                                                                34,
-                                                                34,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                              // SizedBox(height: 5),
-                                              // Container(
-                                              //   width: 500,
-                                              //   height: 50,
-                                              //   decoration: BoxDecoration(
-                                              //     // color: themeColor,
-                                              //     border: Border.all(
-                                              //       width: 0.2,
-                                              //       color: Colors.grey,
-                                              //     ),
-                                              //   ),
-                                              //   child: Row(
-                                              //     children: [
-                                              //       SizedBox(width: 15),
-                                              //       Text(
-                                              //         'Custom accent color',
-                                              //         style: TextStyle(
-                                              //           color: Colors.white,
-                                              //           fontSize: 16,
-                                              //         ),
-                                              //       ),
-                                              //       SizedBox(width: 175),
-                                              //       // TextField(
-
-                                              //       // ),
-                                              //       Text(
-                                              //         'COLORPICKER...',
-                                              //         style: TextStyle(
-                                              //           color: Colors.white,
-                                              //         ),
-                                              //       ),
-                                              //     ],
-                                              //   ),
-                                              // ),
-                                              SizedBox(height: 5),
-                                              Padding(
-                                                padding:
-                                                    EdgeInsetsGeometry.only(
-                                                      left: 10,
-                                                      right: 10,
-                                                    ),
-                                                child: Container(
-                                                  width: 500,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    // color: themeColor,
-                                                    border: Border.all(
-                                                      width: 0.2,
-                                                      color: Colors.grey,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.only(
-                                                          bottomLeft:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                          bottomRight:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                        ),
-                                                  ),
-                                                  child: Row(
-                                                    children: [
-                                                      SizedBox(width: 15),
-                                                      Expanded(
-                                                        child: Text(
-                                                          'Transition speed',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ),
-
-                                                      Padding(
-                                                        padding:
-                                                            EdgeInsetsGeometry.only(
-                                                              right: 15,
-                                                            ),
-                                                        child: Slider(
-                                                          min: 0.0,
-
-                                                          max: 2.0,
-                                                          // overlayColor: Color.fromARGB(1, 218, 218, 218),
-                                                          activeColor:
-                                                              Color.fromARGB(
-                                                                255,
-                                                                218,
-                                                                218,
-                                                                218,
-                                                              ),
-                                                          inactiveColor:
-                                                              Color.fromARGB(
-                                                                255,
-                                                                218,
-                                                                218,
-                                                                218,
-                                                              ),
-                                                          value:
-                                                              transitionSpeed,
-                                                          onChanged: (value) {
-                                                            if (mounted) {
-                                                              setOverlayState(() {
-                                                                transitionSpeed =
-                                                                    value;
-                                                              });
-                                                              setState(() {
-                                                                transitionSpeed =
-                                                                    value;
-                                                              });
-                                                            }
-                                                            Database.setValue(
-                                                              "transitionSpeed",
-                                                              value,
-                                                            );
-                                                          },
-                                                          thumbColor:
-                                                              Colors.white,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-
-                                          SizedBox(height: 25),
-
-                                          Row(
-                                            children: [
-                                              SizedBox(width: 50),
-                                              Text(
-                                                'Functional',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 18,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          SizedBox(height: 15),
-                                          Column(
-                                            children: [
-                                              Padding(
-                                                padding:
-                                                    EdgeInsetsGeometry.only(
-                                                      left: 10,
-                                                      right: 10,
-                                                    ),
-                                                child: Container(
-                                                  width: 500,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    // color: themeColor,
-                                                    border: Border.all(
-                                                      width: 0.2,
-                                                      color: Colors.grey,
-                                                    ),
-
-                                                    borderRadius:
-                                                        BorderRadius.only(
-                                                          topLeft:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                          topRight:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                        ),
-                                                  ),
-                                                  child: Row(
-                                                    children: [
-                                                      SizedBox(width: 15),
-                                                      Expanded(
-                                                        child: Text(
-                                                          'Automatic sorting of tracks',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ),
-
-                                                      Padding(
-                                                        padding:
-                                                            EdgeInsetsGeometry.only(
-                                                              right: 15,
-                                                            ),
-
-                                                        child: Switch(
-                                                          value:
-                                                              autoTrackSorting,
-                                                          onChanged: (
-                                                            bool value,
-                                                          ) {
-                                                            if (mounted) {
-                                                              setState(() {
-                                                                autoTrackSorting =
-                                                                    value;
-                                                              });
-                                                              setOverlayState(() {
-                                                                autoTrackSorting =
-                                                                    value;
-                                                              });
-                                                            }
-
-                                                            if (autoTrackSorting) {
-                                                              Database.setValue(
-                                                                'autoTrackSorting',
-                                                                true,
-                                                              );
-                                                            } else {
-                                                              Database.setValue(
-                                                                'autoTrackSorting',
-                                                                false,
-                                                              );
-                                                            }
-                                                          },
-                                                          activeColor:
-                                                              const Color.fromARGB(
-                                                                255,
-                                                                34,
-                                                                34,
-                                                                34,
-                                                              ),
-                                                          activeTrackColor:
-                                                              Colors.grey[300],
-                                                          inactiveThumbColor:
-                                                              Colors.grey[300],
-                                                          inactiveTrackColor:
-                                                              const Color.fromARGB(
-                                                                255,
-                                                                34,
-                                                                34,
-                                                                34,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(height: 5),
-                                              Padding(
-                                                padding:
-                                                    EdgeInsetsGeometry.only(
-                                                      left: 10,
-                                                      right: 10,
-                                                    ),
-                                                child: Container(
-                                                  width: 500,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    // color: themeColor,
-                                                    border: Border.all(
-                                                      width: 0.2,
-                                                      color: Colors.grey,
-                                                    ),
-
-                                                    borderRadius:
-                                                        BorderRadius.only(
-                                                          bottomLeft:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                          bottomRight:
-                                                              Radius.circular(
-                                                                10,
-                                                              ),
-                                                        ),
-                                                  ),
-                                                  child: InkWell(
-                                                    onTap: () {
-                                                      // player.stop();
-                                                      // _hidePlaylistOverlay();
-                                                      // _hideWarningMetadataOverlay();
-                                                      // _hideSettingsOverlay();
-                                                      Database.clear();
-                                                      Navigator.pop(context);
-                                                    },
-                                                    child: Row(
-                                                      children: [
-                                                        SizedBox(width: 15),
-                                                        Text(
-                                                          'Reset settings to default',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-
-                                              // Container(
-                                              //   width: 500,
-                                              //   height: 50,
-                                              //   decoration: BoxDecoration(
-                                              //     // color: themeColor,
-                                              //     border: Border.all(
-                                              //       width: 0.2,
-                                              //       color: Colors.grey,
-                                              //     ),
-
-                                              //     borderRadius: BorderRadius.only(
-                                              //       topLeft: Radius.circular(10),
-                                              //       topRight: Radius.circular(10),
-                                              //       bottomLeft: Radius.circular(10),
-                                              //       bottomRight: Radius.circular(10),
-                                              //     ),
-                                              //   ),
-                                              //   child: Row(
-                                              //     children: [
-                                              //       SizedBox(width: 15),
-                                              //       Text(
-                                              //         'Metadata recognize',
-                                              //         style: TextStyle(
-                                              //           color: Colors.white,
-                                              //           fontSize: 16,
-                                              //         ),
-                                              //       ),
-                                              //       SizedBox(width: 255),
-                                              //       Switch(
-                                              //         value:
-                                              //             isMetadataRecognizeEnable,
-                                              //         onChanged: (bool value) {
-                                              //           if (mounted) {
-                                              //             setState(() {
-                                              //               isMetadataRecognizeEnable =
-                                              //                   value;
-                                              //             });
-                                              //             setOverlayState(() {
-                                              //               isMetadataRecognizeEnable =
-                                              //                   value;
-                                              //             });
-                                              //           }
-
-                                              //           if (isMetadataRecognizeEnable) {
-                                              //             Database.setValue(
-                                              //               'metadataRecognize',
-                                              //               true,
-                                              //             );
-                                              //           } else {
-                                              //             Database.setValue(
-                                              //               'metadataRecognize',
-                                              //               false,
-                                              //             );
-                                              //           }
-                                              //         },
-                                              //         activeColor:
-                                              //             const Color.fromARGB(
-                                              //               255,
-                                              //               34,
-                                              //               34,
-                                              //               34,
-                                              //             ),
-                                              //         activeTrackColor:
-                                              //             Colors.grey[300],
-                                              //         inactiveThumbColor:
-                                              //             Colors.grey[300],
-                                              //         inactiveTrackColor:
-                                              //             const Color.fromARGB(
-                                              //               255,
-                                              //               34,
-                                              //               34,
-                                              //               34,
-                                              //             ),
-                                              //       ),
-                                              //     ],
-                                              //   ),
-                                              // ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-    );
-
-    Overlay.of(context).insert(settingsOverlayEntry!);
-    settingsAnimationController.forward();
-  }
-
-  void _hideSettingsOverlay() {
-    settingsAnimationController.reverse().then((_) {
-      settingsOverlayEntry?.remove();
-      settingsOverlayEntry = null;
-    });
-  }
-
-  late AnimationController warningMetadataAnimationController;
-  late Animation<Offset> warningMetadataOffsetAnimation;
-  OverlayEntry? warningMetadataOverlayEntry;
+  InteractiveSliderController positionController = InteractiveSliderController(
+    0.0,
+  );
 
   late AnimationController playlistAnimationController;
   late Animation<Offset> playlistOffsetAnimation;
   OverlayEntry? playlistOverlayEntry;
 
-  late AnimationController settingsAnimationController;
-  late Animation<Offset> settingsOffsetAnimation;
-  OverlayEntry? settingsOverlayEntry;
-
-  // IF WE CAN MAKE SHIT, WE WILL
-
-  List<String> songs = [];
-  List<String> shuffledPlaylist = [];
-  List<String>? trackArtistNames = [];
-  List<String> files = [];
-  List<String> selectedFiles = [];
-  List<String> fetchedSongs = [];
-
-  String currentPosition = '0:00';
-  String songDurationWidget = '0:00';
-  String trackName = '';
-  String lastSong = '';
-  String? selectedFolderPath;
-  String logPath = '';
-
-  double playerPadding = 0.0;
-  double songProgress = 0.0;
-  double volumeValue = 0.7;
-  double transitionSpeed = 1.0;
-
-  int nowPlayingIndex = 0;
-  Uint8List coverArtData = Uint8List.fromList([]);
-
-  // Setting default settings (u know). They will be replaced with user settings upon initialization.
-
-  bool isWhiteTheme = false;
-  bool isRepeatEnable = false;
-  bool isSliderActive = true;
-  bool isPlaylistOpened = false;
-  bool isPlayling = false;
-  bool isShuffleEnable = false;
-  bool isMetadataRecognizeEnable = true;
-  bool isBackgroudArtEnable = true;
-  bool isPlaylistAnimating = false;
-  bool autoTrackSorting = true;
-
-  final ValueNotifier<int> nowPlayingIndexNotifier = ValueNotifier<int>(0);
-
-  final player = AudioPlayer();
-  final volumeController = InteractiveSliderController(0.0);
-
-  Color themeColor = Color.fromARGB(255, 34, 34, 34);
-  Color backgroundGradientColor = Color.fromRGBO(24, 24, 26, 1);
-  Color backgroundSecondGradientColor = Color.fromRGBO(18, 18, 20, 1);
-  Color albumArtShadowColor = Color.fromARGB(255, 21, 21, 21);
-  Color alternativeThemeColor = Color.fromARGB(255, 197, 197, 197);
-
-  Color pickerColor = Colors.blue;
-
-  final String serverApiURL = '127.0.0.1:5678';
-  CancelToken? _currentToken;
-
-  final logger = Logger('mainlogger');
-  File? filePath;
-
-  List<Map<String, dynamic>>? cachedPlaylist;
-  // late SMTCWindows smtc;
-
-  // Working with additiongal songs that we can take from settings
-  Future<void> addFolderToSongs() async {
-    try {
-      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-      if (selectedDirectory != null) {
-        var files2 = await getFilesFromDirectory(selectedDirectory);
-        if (files2.isNotEmpty) {
-          for (var i in files2) {
-            if (mounted) {
-              setState(() {
-                songs.add(PathManager.getnormalizePath(i));
-              });
-            }
-          }
-        }
-      }
-    } catch (e) {
-      logger.warning(
-        'An error occurred while retrieving the selected multiple file: $e',
-      );
-    }
-  }
-
-  // Working with additiongal directories that we can take from settings
-  Future<List<String>> getFilesFromDirectory(String directoryPath) async {
-    try {
-      final dir = Directory(directoryPath);
-      final List<String> fileNames = [];
-
-      await for (final entity in dir.list()) {
-        if (entity is File) {
-          if (entity.path.toLowerCase().endsWith('.mp3') ||
-              entity.path.toLowerCase().endsWith('.wav') ||
-              entity.path.toLowerCase().endsWith('.flac') ||
-              entity.path.toLowerCase().endsWith('.aac') ||
-              entity.path.toLowerCase().endsWith('.m4a')) {
-            fileNames.add(entity.path);
-          }
-        }
-      }
-      files = fileNames.map((path) => path.split('/').last).toList();
-      selectedFiles = fileNames;
-
-      return fileNames;
-    } catch (e) {
-      logger.warning(
-        'An error occurred while retrieving the selected multiple file: $e',
-      );
-      return [];
-    }
-  }
-
-  // Applying existing tag to page
-  Future<void> applyTagToPage(Map<String, dynamic> tag) async {
+  void updateProgress(value) async {
     setState(() {
-      trackName =
-          (tag['trackName']?.toString().trim().isNotEmpty ?? false)
-              ? tag['trackName'].toString()
-              : PathManager.getFileName(songs[nowPlayingIndex]);
+      isSliderActive = true;
+    });
+    try {
+      final seconds = await getSecondsByValue(value);
+      await player2.seek(Duration(seconds: seconds));
+    } catch (e) {}
+  }
 
-      trackArtistNames =
-          (tag['trackArtistNames'] is List &&
-                  tag['trackArtistNames'].isNotEmpty)
-              ? List<String>.from(
-                tag['trackArtistNames'].where(
-                  (artist) => artist?.toString().trim().isNotEmpty ?? false,
-                ),
-              )
-              : ['Unknown'];
-
-      if (isBackgroudArtEnable) {
-        coverArtData =
-            (tag['albumArt'] is Uint8List) ? tag['albumArt'] : Uint8List(0);
-      } else {
-        coverArtData = Uint8List(0);
-      }
-      // smtc.updateMetadata(
-      //   MusicMetadata(
-      //     title: trackName,
-      //     album: 'almbu',
-      //     albumArtist: trackArtistNames?.join(', ') ?? 'Unknown',
-      //     artist: trackArtistNames?.join(', ') ?? 'Unknown',
-      //   ),
-      // );
+  void updateSlider() async {
+    setState(() {
+      isSliderActive = false;
     });
   }
 
-  // I was too lazy to make a class with an audio player, so we live like this for now
-  Future<void> steps({
-    // Ну не надо, ну не стукай
-    bool nextStep = false,
-    bool previousStep = false,
-    bool stopSteps = false,
-    bool replayStep = false,
-  }) async {
-    _hideWarningMetadataOverlay();
+  Future<int> getSecondsByValue(double value) async {
+    final duration = player2.durationNotifier.value;
 
-    if (nextStep) {
-      _currentToken?.cancel();
-      final token = CancelToken();
-      _currentToken = token;
-      if (mounted) {
-        setState(() {
-          nowPlayingIndex++;
-          nowPlayingIndexNotifier.value = nowPlayingIndex;
-
-          if (nowPlayingIndex >= songs.length) {
-            nowPlayingIndex = 0;
-            nowPlayingIndexNotifier.value = 0;
-          }
-        });
-      }
-
-      player.stop();
-      if (isPlayling) {
-        player.play(DeviceFileSource(songs[nowPlayingIndex]));
-      } else {
-        currentPosition = '0:00';
-        songDurationWidget = '0:00';
-      }
-
-      Map<String, dynamic> a = await FileTags.getTagsFromFile(
-        songs[nowPlayingIndex],
-      );
-
-      await applyTagToPage(a);
-
-      if (!fetchedSongs.contains(songs[nowPlayingIndex]) &&
-          coverArtData.isEmpty &&
-          isMetadataRecognizeEnable == true) {
-        bool founded = false;
-
-        final onValue = await Database.getValue('recognizedTracks');
-        if (onValue != null) {
-          for (var i in onValue) {
-            final filename1 = PathManager.getFileName(i['filename']);
-            final filename2 = PathManager.getFileName(songs[nowPlayingIndex]);
-
-            if (filename1 == filename2) {
-              coverArtData = i['coverArt'];
-              trackName = i['trackName'];
-              trackArtistNames = [i['artistName'].toString()];
-              founded = true;
-            }
-          }
-        }
-
-        if (!founded) {
-          try {
-            Map metadata = await RecognizerService.recognizeMetadata(
-              songs[nowPlayingIndex],
-              serverApiURL,
-            );
-
-            if (token.isCancelled) return;
-
-            if (metadata.isNotEmpty) {
-              Uint8List coverart = await RecognizerService.urlImageToUint8List(
-                metadata['coverarturl'],
-              );
-
-              if (token.isCancelled) return;
-              if (mounted) {
-                setState(() {
-                  coverArtData = coverart;
-                  trackName = metadata['trackname'];
-                  trackArtistNames = [metadata['artist']];
-                });
-              }
-
-              _showWarningMetadataOverlay();
-            }
-          } catch (e) {
-            if (token.isCancelled) {
-              return;
-            }
-            rethrow;
-          }
-        }
-      }
-
-      Database.setValue('lastPlaylistTrack', songs[nowPlayingIndex]);
-      updateSMTC();
-    }
-
-    if (previousStep) {
-      if (mounted) {
-        setState(() {
-          _currentToken?.cancel();
-          nowPlayingIndex--;
-          nowPlayingIndexNotifier.value = nowPlayingIndex;
-
-          if (nowPlayingIndex < 0) {
-            nowPlayingIndex = songs.length - 1;
-            nowPlayingIndexNotifier.value = songs.length - 1;
-          }
-        });
-      }
-
-      player.stop();
-      if (isPlayling) {
-        player.play(DeviceFileSource(songs[nowPlayingIndex]));
-      } else {
-        currentPosition = '0:00';
-        songDurationWidget = '0:00';
-      }
-
-      Map<String, dynamic> a = await FileTags.getTagsFromFile(
-        songs[nowPlayingIndex],
-      );
-
-      await applyTagToPage(a);
-
-      if (!fetchedSongs.contains(songs[nowPlayingIndex]) &&
-          coverArtData.isEmpty &&
-          isMetadataRecognizeEnable == true) {
-        final onValue = await Database.getValue('recognizedTracks');
-        if (onValue != null) {
-          for (var i in onValue) {
-            final filename1 = PathManager.getFileName(i['filename']);
-            final filename2 = PathManager.getFileName(songs[nowPlayingIndex]);
-
-            if (filename1 == filename2) {
-              coverArtData = i['coverArt'];
-              trackName = i['trackName'];
-              trackArtistNames = [i['artistName'].toString()];
-            }
-          }
-        }
-      }
-
-      Database.setValue('lastPlaylistTrack', songs[nowPlayingIndex]);
-
-      updateSMTC();
-    }
-
-    if (stopSteps) {
-      if (mounted) {
-        setState(() {
-          isPlayling = !isPlayling;
-
-          if (!isPlayling) {
-            player.pause();
-            // smtc.setPlaybackStatus(PlaybackStatus.paused);
-          } else {
-            // smtc.setPlaybackStatus(PlaybackStatus.playing);
-            player.play(DeviceFileSource(songs[nowPlayingIndex]));
-            Database.setValue('lastPlaylistTrack', songs[nowPlayingIndex]);
-          }
-        });
-      }
-    }
-
-    if (replayStep) {
-      _currentToken?.cancel();
-      final token = CancelToken();
-      _currentToken = token;
-      // This function is intended for when we have designated index outside this class and want to reproduce it.
-      player.stop();
-      if (isPlayling) {
-        player.play(DeviceFileSource(songs[nowPlayingIndex]));
-      } else {
-        currentPosition = '0:00';
-        songDurationWidget = '0:00';
-      }
-
-      Map<String, dynamic> a = await FileTags.getTagsFromFile(
-        songs[nowPlayingIndex],
-      );
-
-      await applyTagToPage(a);
-
-      if (!fetchedSongs.contains(songs[nowPlayingIndex]) &&
-          coverArtData.isEmpty &&
-          isMetadataRecognizeEnable == true) {
-        bool founded = false;
-
-        final onValue = await Database.getValue('recognizedTracks');
-        if (onValue != null) {
-          for (var i in onValue) {
-            final filename1 = PathManager.getFileName(i['filename']);
-            final filename2 = PathManager.getFileName(songs[nowPlayingIndex]);
-
-            if (filename1 == filename2) {
-              coverArtData = i['coverArt'];
-              trackName = i['trackName'];
-              trackArtistNames = [i['artistName'].toString()];
-              founded = true;
-            }
-          }
-        }
-
-        if (!founded) {
-          try {
-            Map metadata = await RecognizerService.recognizeMetadata(
-              songs[nowPlayingIndex],
-              serverApiURL,
-            );
-
-            if (token.isCancelled) return;
-
-            if (metadata.isNotEmpty) {
-              Uint8List coverart = await RecognizerService.urlImageToUint8List(
-                metadata['coverarturl'],
-              );
-
-              if (token.isCancelled) return;
-              if (mounted) {
-                setState(() {
-                  coverArtData = coverart;
-                  trackName = metadata['trackname'];
-                  trackArtistNames = [metadata['artist']];
-                });
-              }
-
-              _showWarningMetadataOverlay();
-            }
-          } catch (e) {
-            if (token.isCancelled) {
-              return;
-            }
-            rethrow;
-          }
-        }
-      }
-
-      Database.setValue('lastPlaylistTrack', songs[nowPlayingIndex]);
-      updateSMTC();
-    }
+    return ((value / 100.0) * duration.inSeconds).round();
   }
 
-  // Working with shuffle
-  Future<void> createNewShuffledPlaylist({
-    bool turnOnShuffle = false,
-    bool turnOffShuffle = false,
-  }) async {
-    if (turnOnShuffle == true) {
-      Database.setValue('shuffle', true);
-      var songList = widget.songs;
-
-      shuffledPlaylist = [];
-      songs = [];
-      songs = List.from(songList)..shuffle();
-    } else if (turnOffShuffle == true) {
-      Database.setValue('shuffle', false);
-
-      songs = [];
-      var songList = widget.songs;
-      for (int i = 0; i < songList.length; i++) {
-        songs.add(songList[i]);
-      }
-      if (autoTrackSorting) {
-        songs.sort();
-      }
-    }
+  void changeVolume(value) async {
+    volume = value;
+    await player2.setVolume(value);
+    await Database.setValue('volume', value);
   }
 
-  // Setup track complete listener
-  void _setupPlayerListeners() {
-    player.onPlayerComplete.listen((_) async {
-      if (isRepeatEnable == false) {
-        await steps(nextStep: true);
-      } else {
-        await steps(replayStep: true);
-      }
+  void updateWidget() {
+    // TODO: update keys, then remove
+    setState(() {
+      trackArtistNames = nowPlayingTrack.artists.isNotEmpty
+          ? nowPlayingTrack.artists
+                .map((artist) => artist.title ?? 'Unknown')
+                .join(', ')
+          : "Unknown artist";
+      isLiked = likedTracks.contains(nowPlayingTrack.id);
+      trackAlbumNames = nowPlayingTrack.albums.isNotEmpty
+          ? nowPlayingTrack.albums
+                .map((album) => album.title ?? 'Unknown album')
+                .join(', ')
+          : "Unknown album";
     });
   }
 
-  // Progressing track playback
-  void progressState() {
-    player.onPositionChanged.listen((position) async {
-      final duration = await player.getDuration();
+  void changeTrack({
+    bool next = false,
+    bool previous = false,
+    bool playpause = false,
+    bool reload = false,
+    Track? custom,
+  }) async {
+    // TODO: update
+    if (custom != null) {
+      nowPlayingTrack = custom;
+      updateWidget();
+      bool exists = await File(custom.filepath).exists();
+      if (!exists) {
+        showOperation(2);
+        await netPlayer.playYandex(nowPlayingTrack);
+        cacheFiles();
+        return;
+      }
+      await player2.playCustom(custom);
+    } else if (next) {
+      Track next =
+          currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) + 1) %
+              currentPlaylist.length];
+      nowPlayingTrack = next;
+      updateWidget();
+      bool exists = await File(next.filepath).exists();
+      if (!exists) {
+        showOperation(2);
+        await netPlayer.playYandex(nowPlayingTrack);
+        cacheFiles();
+        return;
+      }
+      await player2.playNext();
+    } else if (previous) {
+      Track next =
+          currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) - 1) %
+              currentPlaylist.length];
+      nowPlayingTrack = next;
+      updateWidget();
+      bool exists = await File(next.filepath).exists();
+      if (!exists) {
+        showOperation(2);
+        await netPlayer.playYandex(nowPlayingTrack);
+        cacheFiles();
+        return;
+      }
+      await player2.playPrevious();
+    } else if (reload) {
+      Track next = nowPlayingTrack;
+      updateWidget();
+      await player2.playCustom(next);
+    } else if (playpause) {
+      setState(() {
+        isPlaying = !isPlaying;
+      });
+
+      isPlaying ? await player2.player.resume() : await player2.player.pause();
+      player2.isPlaying = isPlaying ? true : false;
+    }
+    cacheFiles();
+    nativeControl.updateData(nowPlayingTrack);
+  }
+
+  void cacheFiles([List<Track>? tracks]) {
+    // TODO: UPDATE
+    tracks ??= [
+      currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) + 1) %
+          currentPlaylist.length],
+      currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) - 1) %
+          currentPlaylist.length],
+      currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack)) %
+          currentPlaylist.length],
+    ];
+    for (Track track in tracks) {
+      _cacheFileInBackground(track);
+    }
+  }
+
+  void updateLiked() async {
+    try {
+      List result = await widget.yandexMusic.usertracks.getLiked();
+      likedTracks.clear();
+
+      for (var track in result) {
+        likedTracks.add(track['id'].toString());
+      }
+      showOperation(1);
+      print(likedTracks);
+      updateWidget();
+    } catch (e) {
+      showOperation(-1);
+    }
+  }
+
+  // TODO: Make the indicator status typed instead of numbers
+  void showOperation(int newOperation) {
+    if (mounted) {
+      setState(() => operation = newOperation);
+      Future.delayed(Duration(seconds: 2), () {
+        if (mounted) setState(() => operation = 0);
+      });
+    }
+  }
+
+  Future<void> _cacheFileInBackground(Track track) async {
+    // TODO: FIX BUGS WHILE MULTIPLE TRACKS LOADING
+    final exists = await File(track.filepath).exists();
+    if (!exists) {
+      try {
+        final downloadLink = await widget.yandexMusic.tracks.getDownloadLink(
+          track.id,
+        );
+        showOperation(2);
+        final download = await widget.yandexMusic.tracks.getAsBytes(
+          downloadLink,
+        );
+        await File(track.filepath).parent.create(recursive: true);
+        await File(track.filepath).writeAsBytes(download);
+        showOperation(1);
+      } catch (error) {
+        print('''
+An error has occured while downloading track
+TrackID: ${track.id}
+Filepath: ${track.filepath}
+YandexMusic client: ${widget.yandexMusic.accountID}
+Error: ${error}
+''');
+        if (mounted) {
+          showOperation(-1);
+        }
+      }
+    }
+  }
+
+  void playerListeners() {
+    player2.playedNotifier.addListener(() {
+      final duration = player2.durationNotifier.value;
+      final position = player2.playedNotifier.value;
       String durationLocal = '';
-      var currentPos = 0.0;
+      double currentPos = 0.0;
 
       if (duration != null) {
-        var timeInMinutes = duration.inSeconds ~/ 60;
-        var timeInSeconds = duration.inSeconds % 60;
+        int timeInMinutes = duration.inSeconds ~/ 60;
+        int timeInSeconds = duration.inSeconds % 60;
 
         durationLocal += '$timeInMinutes:';
 
@@ -2090,8 +585,8 @@ class _PlaylistPageState extends State<PlaylistPage>
         }
       }
 
-      var timeInMinutes = position.inSeconds ~/ 60;
-      var timeInSeconds = position.inSeconds % 60;
+      int timeInMinutes = position.inSeconds ~/ 60;
+      int timeInSeconds = position.inSeconds % 60;
 
       String timing = '';
 
@@ -2106,402 +601,360 @@ class _PlaylistPageState extends State<PlaylistPage>
       if (mounted) {
         setState(() {
           currentPosition = timing;
-          songDurationWidget = durationLocal;
+          totalSongDuration = durationLocal;
           songProgress = currentPos;
-
-          if (isSliderActive) volumeController.value = currentPos / 100;
+          if (isSliderActive) {
+            positionController.value = currentPos / 100;
+          }
         });
       }
     });
+    player2.trackNotifier.addListener(() {
+      nowPlayingTrack = player2.trackNotifier.value;
+      updateWidget();
+    });
   }
 
-  // Changing volume
-  void changeVolume(volume) {
-    if (mounted) {
+  List<T> shuffleList<T>(List<T> list) {
+    final shuffled = List<T>.from(list);
+    shuffled.shuffle();
+    return shuffled;
+  }
+
+  void shuffle() async {
+    bool enable = !isShuffleEnable;
+    List<Track> lcpl = [];
+
+    if (enable) {
+      widget.playlist.tracks.clear();
+      widget.playlist.tracks.addAll([...currentPlaylist]);
+
+      final currentIndex = widget.playlist.tracks.indexOf(nowPlayingTrack);
+
+      if (currentIndex == -1) return;
+
+      final fixedPart = widget.playlist.tracks.sublist(0, currentIndex + 1);
+
+      final queue = widget.playlist.tracks.sublist(currentIndex + 1);
+
+      final shuffledQueue = shuffleList(queue);
+
+      List<Track> tcp = []
+        ..addAll(fixedPart)
+        ..addAll(shuffledQueue);
+
+      await player2.updatePlaylist(tcp);
       setState(() {
-        volumeValue = volume;
-        player.setVolume(volumeValue);
+        currentPlaylist = tcp;
       });
     }
 
-    Database.setValue('volume', volumeValue);
-  }
-
-  // Get track timing by 0-100 value from timeline slider
-  Future<int> getSecondsByValue(double value) async {
-    final duration = await player.getDuration();
-    if (duration != null) {
-      return ((value / 100.0) * duration.inSeconds).round();
+    if (!enable) {
+      lcpl = [...widget.playlist.tracks];
+      setState(() {
+        currentPlaylist = lcpl;
+      });
+      await player2.updatePlaylist(lcpl);
     }
-    return 0;
-  }
-
-  // Logger init function
-  Future<void> initLogger(String filePath2) async {
-    filePath = File(filePath2);
-    if (await filePath!.exists()) {
-      await filePath!.delete();
-    }
-    Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen((record) {
-      final logLine =
-          '${DateTime.now()} - ${record.level.name}: ${record.message}';
-      filePath?.writeAsStringSync('$logLine\n', mode: FileMode.append);
+    updatePlaylist();
+    setState(() {
+      isShuffleEnable = enable;
     });
   }
 
-  // Updating native media information
-  Future<void> updateSMTC() async {
-    // smtc.updateMetadata(
-    //   MusicMetadata(
-    //     title: trackName,
-    //     albumArtist: trackArtistNames?.join(', ') ?? 'Unknown',
-    //     artist: trackArtistNames?.join(', ') ?? 'Unknown',
-    //   ),
-    // );
+  void updatePlaylist() async {
+    if (isPlaylistOpened) {
+      playlistOverlayEntry?.remove();
+      playlistOverlayEntry = OverlayEntry(
+        builder: (context) => PlaylistOverlay(
+          playlistAnimationController: playlistAnimationController,
+          playlistOffsetAnimation: playlistOffsetAnimation,
+          togglePlaylist: togglePlaylist,
+          playlist: currentPlaylist,
+          playlistName: playlistName,
+          changeTrack: changeTrack,
+          changePlaylist: changePlaylist,
+          setPlaylist: setPlaylist,
+          yandexMusic: widget.yandexMusic,
+          showOperation: showOperation,
+          likedPlaylist: likedTracks,
+          addNext: addTrack,
+          removeTrack: removeTrack,
+        ),
+      );
+      Overlay.of(context).insert(playlistOverlayEntry!);
+    }
   }
+
+  /// Playlist functions
+
+  void setPlaylist(List<Track> playlist) {} // TODO: cut from code
+
+  void removeTrack(Track track) {
+    currentPlaylist.remove(track);
+    widget.playlist.tracks.remove(track);
+  }
+
+  // TODO: REMOVE THE CRUTCHES
+  // I don't even know what -56 -78 0 -2 and -1 are.
+  int addTrack(
+    Track track, [
+    bool? addToEnd,
+    bool? addLikedTrack,
+    bool? removeLiked,
+  ]) {
+    if (addToEnd == null && addLikedTrack == null) {
+      currentPlaylist.insert(
+        currentPlaylist.indexOf(nowPlayingTrack) + 1,
+        track,
+      );
+      return currentPlaylist.indexOf(nowPlayingTrack) + 1;
+    } else if (addLikedTrack != null) {
+      if (widget.playlist.name == "Liked") {
+        if (!currentPlaylist.contains(track)) {
+          currentPlaylist.insert(0, track);
+          likedTracks.add(track.id);
+          if (track == nowPlayingTrack) {
+            setState(() {
+              isLiked = false;
+            });
+          }
+          return -56;
+        }
+        return -1;
+      }
+      return -2;
+    } else if (removeLiked != null) {
+      likedTracks.remove(track.id);
+      if (track == nowPlayingTrack) {
+        setState(() {
+          isLiked = false;
+        });
+      }
+      return 0;
+    } else if (addToEnd != null) {
+      print(5);
+      currentPlaylist.add(track);
+      return currentPlaylist.indexOf(track);
+    } else {
+      return -78;
+    }
+  }
+
+  void togglePlaylist() async {
+    if (isPlaylistOpened) {
+      setState(() {
+        isPlaylistOpened = false;
+        playerPadding = 0.0;
+      });
+      await playlistAnimationController.reverse();
+    } else {
+      if (playlistOverlayEntry == null) {
+        playlistOverlayEntry = OverlayEntry(
+          builder: (context) => PlaylistOverlay(
+            playlistAnimationController: playlistAnimationController,
+            playlistOffsetAnimation: playlistOffsetAnimation,
+            togglePlaylist: togglePlaylist,
+            playlist: currentPlaylist,
+            playlistName: playlistName,
+            changeTrack: changeTrack,
+            changePlaylist: changePlaylist,
+            setPlaylist: setPlaylist,
+            yandexMusic: widget.yandexMusic,
+            showOperation: showOperation,
+            likedPlaylist: likedTracks,
+            addNext: addTrack,
+            removeTrack: removeTrack,
+          ),
+        );
+        Overlay.of(context).insert(playlistOverlayEntry!);
+      }
+
+      playlistAnimationController.forward();
+      setState(() {
+        isPlaylistOpened = true;
+        if (MediaQuery.of(context).size.width > 800) {
+          playerPadding = 400.0;
+        } else {
+          playerPadding = 0.0;
+        }
+      });
+    }
+  }
+
+  void changePlaylist(List<Track> playlist) {} // TODO: cut from code
+
+  void repeatChange() {
+    setState(() {
+      isRepeatEnable = !isRepeatEnable;
+    });
+    player2.isRepeat = isRepeatEnable;
+  }
+
+  void likeUnlike() async {
+    if (isLiked) {
+      try {
+        await widget.yandexMusic.usertracks.unlike([nowPlayingTrack.id]);
+        setState(() {
+          isLiked = false;
+        });
+        likedTracks.remove(nowPlayingTrack.id);
+        showOperation(1);
+      } catch (e) {
+        showOperation(-1);
+      }
+    } else {
+      try {
+        await widget.yandexMusic.usertracks.like([nowPlayingTrack.id]);
+        setState(() {
+          isLiked = true;
+        });
+        likedTracks.add(nowPlayingTrack.id);
+        addTrack(nowPlayingTrack, null, true);
+
+        showOperation(1);
+      } catch (e) {
+        showOperation(-1);
+      }
+    }
+  }
+
+  void loadDatabase() async {
+    var result = await Database.getKeys();
+    print(result);
+  }
+
+  /// Playlist functions
 
   @override
   void initState() {
-    // print(widget.lastSong);
-    getApplicationDocumentsDirectory().then((value) {
-      final logPath = '${value.path}/latestquarkaudio.log';
-      initLogger(logPath).then((_) {});
-    });
+    // Init playlists
 
     super.initState();
-    _setupPlayerListeners();
-    logger.info("setupPlayerListeners initalizing...");
-    progressState();
-    logger.info("Progress state initalizing...");
+    currentPlaylist = [...widget.playlist.tracks];
+    nowPlayingTrack = currentPlaylist[0];
 
+    // Classes
+
+    player2 = Player(
+      startVolume: volume,
+      playlist: currentPlaylist,
+      nowPlayingTrack: nowPlayingTrack,
+    );
+    player2.init();
+    player2.player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
+    netPlayer = NetPlayer(player: player2, yandexMusic: widget.yandexMusic);
+    nativeControl = NativeControl(
+      onPlay: player2.playPause,
+      onPause: player2.playPause,
+      onNext: player2.playNext,
+      onPrevious: player2.playPrevious,
+      onSeek: () {},
+    );
+    nativeControl.init();
     Database.init();
-    logger.info("Database initalizing...");
 
-    // INITIALIZING PLAYLIST, INFO MESSAGE AND SETTINGS .... YOU KNOW
-
-    warningMetadataAnimationController = AnimationController(
-      duration: Duration(milliseconds: (650 * transitionSpeed).round()),
-      vsync: this,
-    );
-
-    warningMetadataOffsetAnimation = Tween<Offset>(
-      begin: const Offset(1.0, 0),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: warningMetadataAnimationController,
-        curve: Curves.ease,
-      ),
-    );
+    // Controllers
 
     playlistAnimationController = AnimationController(
       duration: Duration(milliseconds: (650 * transitionSpeed).round()),
       vsync: this,
     );
 
-    playlistOffsetAnimation = Tween<Offset>(
-      begin: const Offset(-1.0, 0),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: playlistAnimationController, curve: Curves.ease),
-    );
-    settingsAnimationController = AnimationController(
-      duration: Duration(milliseconds: (850 * transitionSpeed).round()),
-      vsync: this,
-    );
-
-    settingsOffsetAnimation = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: settingsAnimationController, curve: Curves.ease),
-    );
-
-    // //
-
-    var songList = widget.songs;
-
-    for (int i = 0; i < songList.length; i++) {
-      logger.info("Updating songs list...");
-
-      // As a crutch, we fill in an alternative playlist variable instead of the main widget.songs variable
-      songs.add(PathManager.getnormalizePath(songList[i]));
-    }
-
-    Database.getValue('autoTrackSorting').then((value) {
-      if (value != null && mounted) {
-        setState(() {
-          autoTrackSorting = value;
-          if (value) {
-            songs.sort();
-            FileTags.getTagsFromFile(songs[nowPlayingIndex]).then((tags) {
-              applyTagToPage(tags);
-            });
-          }
-        });
-      }
-    });
-
-    if (PathManager.getnormalizePath(widget.lastSong) != '') {
-      // Get the last listened track from the previous page
-      var lastIndex = songs.indexWhere(
-        (path) => path.endsWith(PathManager.getnormalizePath(widget.lastSong)),
-      );
-      print(lastIndex);
-      print(widget.lastSong);
-      print(PathManager.getnormalizePath(widget.lastSong));
-      print(songs);
-
-      if (lastIndex != -1) {
-        if (mounted) {
-          setState(() {
-            print('4242');
-            nowPlayingIndex = lastIndex;
-            nowPlayingIndexNotifier.value = lastIndex;
-          });
-        }
-      }
-      //   if (nowPlayingIndex < 0 || nowPlayingIndex >= songs.length) {
-      //   logger.info("Last song initalizing...");
-
-      //   if (mounted) {
-      //     setState(() {
-      //       print(nowPlayingIndex);
-      //       nowPlayingIndex = 0;
-      //     });
-      //   }
-      // }
-    }
-
-    FileTags.getTagsFromFile(songs[nowPlayingIndex]).then((tags) {
-      // Loading the cover of the active track
-      logger.info("Getting tag from song...");
-
-      if (mounted) {
-        setState(() {
-          if (tags['trackName'] == '') {
-            trackName = PathManager.getFileName(songs[nowPlayingIndex]);
-          } else {
-            trackName = tags['trackName'];
-          }
-
-          if (tags['trackArtistNames'][0] == "") {
-            trackArtistNames = ['Unknown'];
-          } else {
-            trackArtistNames = tags['trackArtistNames'];
-          }
-          coverArtData = tags['albumArt'];
-        });
-      }
-    });
-
-    Database.getKeys().then((value) {
-      logger.info("Get keys from database...");
-
-      // If the application starts for the first time, we set some standard values
-      if (value.isEmpty) {
-        logger.info("Putting in database...");
-
-        Database.setValue('shuffle', false);
-        Database.setValue('volume', 0.7);
-        Database.setValue('metadataRecognize', true);
-        Database.setValue('autoTrackSorting', true);
-        Database.setValue("isBackgroudArtEnable", true);
-        Database.setValue("isWhiteTheme", false);
-        Database.setValue('transitionSpeed', 1.0);
-      }
-    });
-
-    Database.getKeys().then(
-      (value) => logger.info("Database loaded. Variables: $value"),
-    ); // For debugging, we display all database values
-
-    Database.setValue(
-      'lastPlaylist',
-      songList,
-    ); // After initializing the playlist, we add it to the table as the last one
-
-    Database.getValue('lastPlaylist').then(
-      (value) => logger.info("Last playlist: $value"),
-    ); // Getting data from the table and set the values
-
-    Database.getValue('volume').then(
-      (volume) => {
-        if (volume != null && mounted)
-          {
-            setState(() {
-              volumeValue = volume;
-              player.setVolume(volume);
-            }),
-          },
-      },
-    );
-
-    Database.getValue("isBackgroudArtEnable").then((value) {
-      if (value != null && mounted) {
-        isBackgroudArtEnable = value;
-      }
-    });
-
-    Database.getValue("isWhiteTheme").then((value) {
-      if (value != null && mounted) {
-        setState(() {
-          isWhiteTheme = value;
-
-          if (isWhiteTheme) {
-            themeColor = Color.fromARGB(255, 197, 197, 197);
-            backgroundGradientColor = Color.fromRGBO(68, 67, 67, 1);
-            backgroundSecondGradientColor = Color.fromRGBO(201, 201, 201, 1);
-            albumArtShadowColor = Color.fromARGB(255, 66, 66, 66);
-            alternativeThemeColor = Color.fromARGB(255, 34, 34, 34);
-          }
-        });
-      }
-    });
-
-    Database.getValue('metadataRecognize').then((value) {
-      if (value != null && mounted) {
-        setState(() {
-          isMetadataRecognizeEnable = value;
-        });
-      }
-      if (value == null && mounted) {
-        Database.setValue('metadataRecognize', true).then(
-          (value) => {
-            setState(() {
-              isMetadataRecognizeEnable = true;
-            }),
-          },
+    playlistOffsetAnimation =
+        Tween<Offset>(begin: const Offset(-1.0, 0), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: playlistAnimationController,
+            curve: Curves.ease,
+          ),
         );
-      }
-    });
 
-    Database.getValue("transitionSpeed").then((value) {
-      if (value != null && mounted) {
-        setState(() {
-          transitionSpeed = value;
-        });
-      }
-    });
+    // Update UI
 
-    FileTags.getAllTracksMetadata(songs).then((value) {
-      setState(() {
-        cachedPlaylist = value;
-      });
-    });
-
-    // smtc = SMTCWindows(
-    //   metadata: MusicMetadata(
-    //     title: trackName,
-    //     album: 'almbu',
-    //     albumArtist: trackArtistNames?.join(', ') ?? 'Unknown',
-    //     artist: trackArtistNames?.join(', ') ?? 'Unknown',
-    //   ),
-    //   // Which buttons to show in the OS media player
-    //   config: const SMTCConfig(
-    //     fastForwardEnabled: true,
-    //     nextEnabled: true,
-    //     pauseEnabled: true,
-    //     playEnabled: true,
-    //     rewindEnabled: true,
-    //     prevEnabled: true,
-    //     stopEnabled: true,
-    //   ),
-    // );
-
-    // WidgetsBinding.instance.addPostFrameCallback((_) async {
-    //   try {
-    //     smtc.buttonPressStream.listen((event) {
-    //       switch (event) {
-    //         case PressedButton.play:
-    //           steps(stopSteps: true);
-    //           break;
-    //         case PressedButton.pause:
-    //           steps(stopSteps: true);
-    //           break;
-    //         case PressedButton.next:
-    //           steps(nextStep: true);
-    //           break;
-    //         case PressedButton.previous:
-    //           steps(previousStep: true);
-    //           break;
-    //         case PressedButton.stop:
-    //           smtc.disableSmtc();
-    //           break;
-    //         default:
-    //           break;
-    //       }
-    //     });
-      // } catch (e) {
-      //   debugPrint("Error: $e");
-      // }
-  
+    playlistName = widget.playlist.name.toString();
+    playerListeners();
+    updateWidget();
+    updateLiked();
   }
 
-  // Handling exit from player
   @override
   void dispose() {
-    _currentToken?.cancel();
-
-    player.dispose();
+    player2.player.onPositionChanged.drain();
+    player2.player.stop();
+    player2.player.dispose();
+    player2._onCompleteSubscription?.cancel();
+    player2._onDurationChanged?.cancel();
+    player2._onPlayedChanged?.cancel();
+    player2.trackNotifier.dispose();
+    player2.playedNotifier.dispose();
+    player2.durationNotifier.dispose();
     playlistAnimationController.dispose();
-
-    playlistOverlayEntry?.remove();
-    warningMetadataOverlayEntry?.remove();
-    settingsOverlayEntry?.remove();
-    // smtc.disableSmtc();
-    // smtc.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // TODO: size
+    final size = MediaQuery.of(context).size;
+    if (!isPlaylistOpened) {
+      playerPadding = 0.0;
+    } else if (size.width > 810 && size.height > 600) {
+      playerPadding = 400.0;
+    } else if (size.width > 810) {
+      playerPadding = 400.0;
+    } else {
+      playerPadding = 0.0;
+    }
+
+    // TODO: SPLIT WIDGETS
+
     return ClipRect(
       child: AnimatedSwitcher(
         duration: Duration(milliseconds: (750 * transitionSpeed).round()),
         transitionBuilder: (Widget child, Animation<double> animation) {
           return FadeTransition(opacity: animation, child: child);
         },
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Row(
-            children: [
-              Container(
-                height: MediaQuery.of(context).size.height,
-                width: MediaQuery.of(context).size.width,
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: MemoryImage(coverArtData),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(0.5),
-                      BlendMode.darken,
-                    ),
-                  ),
-                  gradient: LinearGradient(
-                    colors: [
-                      backgroundGradientColor,
-                      backgroundSecondGradientColor,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+        child: Stack(
+          children: [
+            Container(
+              height: MediaQuery.of(context).size.height,
+              width: MediaQuery.of(context).size.width,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: (nowPlayingTrack.coverByted != null)
+                      ? MemoryImage(nowPlayingTrack.coverByted ??= Uint8List(0))
+                      : CachedNetworkImageProvider(
+                          'https://${nowPlayingTrack.coverUri.replaceAll('%%', '300x300')}',
+                        ),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Colors.black.withOpacity(0.5),
+                    BlendMode.darken,
                   ),
                 ),
-                child: ClipRect(
-                  child: AnimatedSwitcher(
-                    duration: Duration(
-                      milliseconds: (650 * transitionSpeed).round(),
-                    ),
-                    transitionBuilder: (
-                      Widget child,
-                      Animation<double> animation,
-                    ) {
-                      return FadeTransition(opacity: animation, child: child);
-                    },
-                    child: BackdropFilter(
-                      key: ValueKey<Uint8List>(coverArtData),
-                      filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
+                gradient: LinearGradient(
+                  colors: [
+                    Color.fromRGBO(24, 24, 26, 1),
+                    Color.fromRGBO(18, 18, 20, 1),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: ClipRect(
+                child: AnimatedSwitcher(
+                  duration: Duration(
+                    milliseconds: (650 * transitionSpeed).round(),
+                  ),
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
+                  child: BackdropFilter(
+                    key: ValueKey<Track>(nowPlayingTrack),
+                    filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
+                    child: Container(
+                      color: Colors.transparent,
                       child: AnimatedPadding(
                         duration: Duration(
                           milliseconds: (750 * transitionSpeed).round(),
@@ -2512,55 +965,112 @@ class _PlaylistPageState extends State<PlaylistPage>
                           color: Colors.transparent,
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
+
                             children: [
                               Container(
-                                height: 250,
-                                width: 250,
-                                decoration: BoxDecoration(
-                                  image: DecorationImage(
-                                    image: MemoryImage(coverArtData),
-                                    fit: BoxFit.cover,
-                                    colorFilter: ColorFilter.mode(
-                                      Colors.black.withOpacity(0),
-                                      BlendMode.darken,
-                                    ),
-                                  ),
+                                height: 270,
+                                width: 270,
 
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(5),
                                   boxShadow: [
                                     BoxShadow(
                                       color: albumArtShadowColor,
+
                                       blurRadius: 10,
-                                      offset: Offset(5, 10),
+                                      offset: Offset(5, 15),
                                     ),
                                   ],
                                 ),
-                              ),
+                                child: (nowPlayingTrack.coverByted != null)
+                                    ? Image.memory(
+                                        nowPlayingTrack.coverByted ??=
+                                            Uint8List(0),
+                                        height: 270,
+                                        width: 270,
+                                      )
+                                    : CachedNetworkImage(
+                                        key: ValueKey<Track>(nowPlayingTrack),
 
-                              SizedBox(height: 35),
+                                        imageUrl:
+                                            'https://${nowPlayingTrack.coverUri.replaceAll('%%', '300x300')}',
+                                        progressIndicatorBuilder:
+                                            (context, url, downloadProgress) =>
+                                                CircularProgressIndicator(
+                                                  value:
+                                                      downloadProgress.progress,
+                                                  color: Color.fromARGB(
+                                                    31,
+                                                    255,
+                                                    255,
+                                                    255,
+                                                  ),
+                                                ),
+                                        errorWidget: (context, url, error) =>
+                                            Icon(Icons.error),
+                                        height: 270,
+                                        width: 270,
+                                      ),
+                              ),
+                              const SizedBox(height: 20),
 
                               SizedBox(
-                                width: 500,
-
-                                child: SizedBox(
-                                  height: 45,
-                                  child: Text(
-                                    PathManager.getFileName(trackName),
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                height: 45,
+                                child: Text(
+                                  key: ValueKey<Track>(nowPlayingTrack),
+                                  nowPlayingTrack.title,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: 'noto',
+                                    decoration: TextDecoration.none,
+                                    color: Colors.white,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
 
                               Text(
-                                trackArtistNames?.join(', ') ?? 'Unknown',
+                                key: ValueKey<Track>(nowPlayingTrack),
+
+                                nowPlayingTrack.albums.isNotEmpty
+                                    ? nowPlayingTrack.albums
+                                          .map(
+                                            (album) =>
+                                                album.title ?? 'Unknown album',
+                                          )
+                                          .join(', ')
+                                    : "Unknown album",
+
                                 style: TextStyle(
                                   color: Colors.white,
+                                  fontFamily: 'noto',
                                   fontSize: 18,
+                                  decoration: TextDecoration.none,
                                   fontWeight: FontWeight.w300,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                nowPlayingTrack.artists.isNotEmpty
+                                    ? nowPlayingTrack.artists
+                                          .map(
+                                            (artist) =>
+                                                artist.title ?? 'Unknown',
+                                          )
+                                          .join(', ')
+                                    : "Unknown artist",
+                                style: TextStyle(
+                                  color: const Color.fromARGB(
+                                    200,
+                                    255,
+                                    255,
+                                    255,
+                                  ),
+                                  fontSize: 14,
+                                  fontFamily: 'noto',
+                                  decoration: TextDecoration.none,
+                                  fontWeight: FontWeight.w100,
                                 ),
                               ),
 
@@ -2571,7 +1081,9 @@ class _PlaylistPageState extends State<PlaylistPage>
                                     currentPosition,
                                     style: TextStyle(
                                       color: Colors.white,
+                                      fontFamily: 'noto',
                                       fontSize: 15,
+                                      decoration: TextDecoration.none,
                                       fontWeight: FontWeight.w300,
                                     ),
                                   ),
@@ -2580,24 +1092,17 @@ class _PlaylistPageState extends State<PlaylistPage>
                                     width: 325,
 
                                     child: InteractiveSlider(
-                                      controller: volumeController,
+                                      controller: positionController,
                                       unfocusedHeight: 5,
                                       focusedHeight: 10,
                                       min: 0.0,
                                       max: 100.0,
-                                      onProgressUpdated: (value) async {
+                                      onProgressUpdated: (value) {
                                         isSliderActive = true;
-                                        try {
-                                          final seconds =
-                                              await getSecondsByValue(value);
-                                          await player.seek(
-                                            Duration(seconds: seconds),
-                                          );
-                                        } catch (e) {
-                                          logger.warning(
-                                            "Error while seeking duration: $e",
-                                          );
-                                        }
+                                        updateProgress(value);
+                                      },
+                                      onFocused: (value) {
+                                        updateSlider();
                                       },
 
                                       brightness: Brightness.light,
@@ -2611,64 +1116,51 @@ class _PlaylistPageState extends State<PlaylistPage>
                                           Radius.circular(8),
                                         ),
                                       ),
-
-                                      onFocused:
-                                          (value) => {isSliderActive = false},
                                     ),
                                   ),
 
                                   Text(
-                                    songDurationWidget,
+                                    totalSongDuration,
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 15,
+                                      fontFamily: 'noto',
+
+                                      decoration: TextDecoration.none,
                                       fontWeight: FontWeight.w300,
                                     ),
                                   ),
                                 ],
                               ),
-
-                              SizedBox(height: 5),
-
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // PREVIOUS BUTTON
                                   Material(
                                     color: Colors.transparent,
                                     borderRadius: BorderRadius.all(
-                                      Radius.circular(20),
+                                      Radius.circular(30),
                                     ),
 
                                     child: InkWell(
                                       borderRadius: BorderRadius.all(
-                                        Radius.circular(10),
+                                        Radius.circular(30),
                                       ),
                                       onTap: () async {
-                                        await steps(previousStep: true);
+                                        changeTrack(previous: true);
                                       },
 
                                       child: Container(
                                         height: 40,
                                         width: 40,
 
-                                        decoration: BoxDecoration(
-                                          color: themeColor,
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(30),
-                                          ),
-                                        ),
+                                        decoration: buttonDecoration(),
                                         child: Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.skip_previous,
-
-                                              color:
-                                                  isWhiteTheme
-                                                      ? alternativeThemeColor
-                                                      : Colors.white,
+                                              color: Colors.white,
                                               size: 24,
                                             ),
                                           ],
@@ -2677,46 +1169,36 @@ class _PlaylistPageState extends State<PlaylistPage>
                                     ),
                                   ),
 
-                                  // // PREVIOUS BUTTON
-                                  SizedBox(width: 15),
+                                  const SizedBox(width: 15),
 
-                                  // PLAY BUTTON
                                   Material(
                                     color: Colors.transparent,
                                     borderRadius: BorderRadius.all(
-                                      Radius.circular(20),
+                                      Radius.circular(30),
                                     ),
 
                                     child: InkWell(
                                       borderRadius: BorderRadius.all(
-                                        Radius.circular(10),
+                                        Radius.circular(30),
                                       ),
                                       onTap: () async {
-                                        await steps(stopSteps: true);
+                                        changeTrack(playpause: true);
                                       },
 
                                       child: Container(
                                         height: 50,
                                         width: 50,
 
-                                        decoration: BoxDecoration(
-                                          color: themeColor,
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(30),
-                                          ),
-                                        ),
+                                        decoration: buttonDecoration(),
                                         child: Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
                                             Icon(
-                                              isPlayling
+                                              isPlaying
                                                   ? Icons.pause
                                                   : Icons.play_arrow,
-                                              color:
-                                                  isWhiteTheme
-                                                      ? alternativeThemeColor
-                                                      : Colors.white,
+                                              color: Colors.white,
 
                                               size: 28,
                                             ),
@@ -2726,44 +1208,33 @@ class _PlaylistPageState extends State<PlaylistPage>
                                     ),
                                   ),
 
-                                  // // PLAY BUTTON
-                                  SizedBox(width: 15),
+                                  const SizedBox(width: 15),
 
-                                  // NEXT SONG BUTTON
                                   Material(
                                     color: Colors.transparent,
                                     borderRadius: BorderRadius.all(
-                                      Radius.circular(20),
+                                      Radius.circular(30),
                                     ),
 
                                     child: InkWell(
                                       borderRadius: BorderRadius.all(
-                                        Radius.circular(10),
+                                        Radius.circular(30),
                                       ),
                                       onTap: () async {
-                                        await steps(nextStep: true);
+                                        changeTrack(next: true);
                                       },
                                       child: Container(
                                         height: 40,
                                         width: 40,
 
-                                        decoration: BoxDecoration(
-                                          color: themeColor,
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(30),
-                                          ),
-                                        ),
+                                        decoration: buttonDecoration(),
                                         child: Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.skip_next,
-                                              color:
-                                                  isWhiteTheme
-                                                      ? alternativeThemeColor
-                                                      : Colors.white,
-
+                                              color: Colors.white,
                                               size: 24,
                                             ),
                                           ],
@@ -2774,10 +1245,7 @@ class _PlaylistPageState extends State<PlaylistPage>
                                 ],
                               ),
 
-                              // // NEXT SONG BUTTON
-                              SizedBox(height: 5),
-
-                              // VOLUME SLIDER
+                              // SizedBox(height: 10),
                               SizedBox(
                                 width: 325,
 
@@ -2787,7 +1255,7 @@ class _PlaylistPageState extends State<PlaylistPage>
                                   min: 0.0,
                                   max: 1.0,
                                   brightness: Brightness.light,
-                                  initialProgress: volumeValue,
+                                  initialProgress: volume,
                                   iconColor: Colors.white,
                                   gradient: LinearGradient(
                                     colors: [Colors.white, Colors.white],
@@ -2795,336 +1263,262 @@ class _PlaylistPageState extends State<PlaylistPage>
                                   onChanged: (value) => changeVolume(value),
                                 ),
                               ),
-
-                              // // VOLUME SLIDER
-                              SizedBox(height: 20),
-
-                              // BUTTONS ROW
+                              // SizedBox(height: 10),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // PLAYLIST BUTTON
-                                  Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(20),
-                                    ),
-
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.all(
-                                        Radius.circular(10),
-                                      ),
-                                      splashColor: Colors.transparent,
-                                      highlightColor: Color.fromARGB(
-                                        255,
-                                        40,
-                                        40,
-                                        42,
-                                      ),
-                                      onTap: _showPlaylistOverlay,
-                                      child: Container(
-                                        height: 35,
-                                        width: 35,
-
-                                        decoration: BoxDecoration(
-                                          color: themeColor,
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(30),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.featured_play_list_outlined,
-                                              color:
-                                                  isPlaylistOpened
-                                                      ? Color.fromRGBO(
-                                                        255,
-                                                        255,
-                                                        255,
-                                                        1,
-                                                      )
-                                                      : Color.fromRGBO(
-                                                        255,
-                                                        255,
-                                                        255,
-                                                        0.500,
-                                                      ),
-                                              size: 20,
-                                              key: ValueKey<bool>(
-                                                isPlaylistOpened,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                                  functionPlayerButton(
+                                    Icons.featured_play_list_outlined,
+                                    Icons.featured_play_list_outlined,
+                                    isPlaylistOpened,
+                                    togglePlaylist,
                                   ),
-
-                                  // //PLAYLIST BUTTON
-                                  SizedBox(width: 15),
-
-                                  // SHUFFLITAS
-                                  Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(20),
-                                    ),
-
-                                    child: InkWell(
-                                      splashColor: Colors.transparent,
-                                      borderRadius: BorderRadius.circular(10),
-                                      highlightColor: Color.fromARGB(
-                                        255,
-                                        40,
-                                        40,
-                                        42,
-                                      ),
-
-                                      onTap: () async {
-                                        if (mounted) {
-                                          setState(() {
-                                            isShuffleEnable = !isShuffleEnable;
-                                          });
-                                        }
-
-                                        if (isShuffleEnable == true) {
-                                          await createNewShuffledPlaylist(
-                                            turnOnShuffle: true,
-                                          );
-                                        }
-                                        if (isShuffleEnable == false) {
-                                          await createNewShuffledPlaylist(
-                                            turnOffShuffle: true,
-                                          );
-                                        }
-                                        _hidePlaylistOverlay();
+                                  const SizedBox(width: 15),
+                                  functionPlayerButton(
+                                    Icons.shuffle,
+                                    Icons.shuffle_outlined,
+                                    isShuffleEnable,
+                                    () {
+                                      shuffle();
+                                    },
+                                  ),
+                                  const SizedBox(width: 15),
+                                  if (nowPlayingTrack.id != 'iddoesntexists')
+                                    functionPlayerButton(
+                                      Icons.favorite_outlined,
+                                      Icons.favorite_outlined,
+                                      likedTracks.contains(nowPlayingTrack.id),
+                                      () async {
+                                        likeUnlike();
                                       },
-
-                                      child: Container(
-                                        height: 35,
-                                        width: 35,
-
-                                        decoration: BoxDecoration(
-                                          color: themeColor,
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(30),
-                                          ),
-                                        ),
-
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            AnimatedSwitcher(
-                                              duration: Duration(
-                                                milliseconds: 120,
-                                              ),
-                                              transitionBuilder: (
-                                                child,
-                                                animation,
-                                              ) {
-                                                return FadeTransition(
-                                                  opacity: animation,
-                                                  child: child,
-                                                );
-                                              },
-                                              layoutBuilder:
-                                                  (
-                                                    currentChild,
-                                                    previousChildren,
-                                                  ) => Stack(
-                                                    alignment: Alignment.center,
-                                                    children: [
-                                                      ...previousChildren,
-                                                      if (currentChild != null)
-                                                        currentChild,
-                                                    ],
-                                                  ),
-                                              child: Icon(
-                                                isShuffleEnable
-                                                    ? Icons.shuffle
-                                                    : Icons.shuffle_outlined,
-                                                key: ValueKey<bool>(
-                                                  isShuffleEnable,
-                                                ),
-                                                color:
-                                                    isShuffleEnable
-                                                        ? Color.fromRGBO(
-                                                          255,
-                                                          255,
-                                                          255,
-                                                          1,
-                                                        )
-                                                        : Color.fromRGBO(
-                                                          255,
-                                                          255,
-                                                          255,
-                                                          0.5,
-                                                        ),
-                                                size: 20,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                      // ValueKey<Track>(nowPlayingTrack),
                                     ),
+                                  if (nowPlayingTrack.id == 'iddoesntexists')
+                                    const SizedBox(width: 35),
+
+                                  const SizedBox(width: 15),
+                                  functionPlayerButton(
+                                    Icons.repeat_one_outlined,
+                                    Icons.repeat_one_outlined,
+                                    isRepeatEnable,
+                                    () => repeatChange(),
                                   ),
-
-                                  // // SHUFFLITAS
-                                  SizedBox(width: 75),
-
-                                  // REPEATER BUTTON
+                                  const SizedBox(width: 15),
                                   Material(
-                                    color: Colors.transparent,
+                                    color: Color.fromARGB(31, 255, 255, 255),
                                     borderRadius: BorderRadius.all(
-                                      Radius.circular(20),
+                                      Radius.circular(30),
                                     ),
-
                                     child: InkWell(
                                       borderRadius: BorderRadius.all(
-                                        Radius.circular(10),
+                                        Radius.circular(30),
                                       ),
-                                      splashColor: Colors.transparent,
-                                      highlightColor: Color.fromARGB(
-                                        255,
-                                        40,
-                                        40,
-                                        42,
-                                      ),
-                                      onTap: () {
-                                        if (mounted) {
-                                          setState(() {
-                                            isRepeatEnable = !isRepeatEnable;
-                                          });
-                                        }
-                                      },
-                                      child: Container(
-                                        height: 35,
-                                        width: 35,
-
-                                        decoration: BoxDecoration(
-                                          color: themeColor,
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(30),
-                                          ),
+                                      onTap: () {},
+                                      child: PopupMenuButton(
+                                        borderRadius: BorderRadius.all(
+                                          Radius.circular(15),
+                                        ),
+                                        iconColor: Colors.white.withOpacity(
+                                          0.6,
                                         ),
 
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            AnimatedSwitcher(
-                                              duration: Duration(
-                                                milliseconds: 120,
+                                        offset: Offset(100, -60),
+                                        color: Color.fromARGB(25, 59, 59, 59),
+                                        itemBuilder: (context) => [
+                                          if (Platform.isLinux)
+                                            PopupMenuItem(
+                                              height: 45,
+                                              child: StatefulBuilder(
+                                                builder:
+                                                    (
+                                                      BuildContext context,
+                                                      StateSetter setMenuState,
+                                                    ) {
+                                                      return Row(
+                                                        children: [
+                                                          Text(
+                                                            'Playback speed',
+                                                            style: TextStyle(
+                                                              color:
+                                                                  popupTextColor,
+                                                            ),
+                                                          ),
+                                                          SizedBox(width: 15),
+                                                          IconButton(
+                                                            onPressed: () async {
+                                                              setMenuState(() {
+                                                                playerSpeed =
+                                                                    playerSpeed -
+                                                                    0.1;
+                                                              });
+                                                              print(
+                                                                'Player changed speed to: $playerSpeed',
+                                                              );
+                                                              await player2
+                                                                  .player
+                                                                  .setPlaybackRate(
+                                                                    playerSpeed,
+                                                                  );
+                                                              setState(() {});
+                                                            },
+                                                            icon: Icon(
+                                                              Icons.remove,
+                                                              color:
+                                                                  popupIconsColor,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            playerSpeed
+                                                                .toStringAsFixed(
+                                                                  1,
+                                                                ),
+                                                            style: TextStyle(
+                                                              color:
+                                                                  popupTextColor,
+                                                            ),
+                                                          ),
+                                                          IconButton(
+                                                            onPressed: () async {
+                                                              setMenuState(() {
+                                                                playerSpeed =
+                                                                    playerSpeed +
+                                                                    0.1;
+                                                              });
+                                                              await player2
+                                                                  .player
+                                                                  .setPlaybackRate(
+                                                                    playerSpeed,
+                                                                  );
+                                                              print(
+                                                                'Player changed speed to: $playerSpeed',
+                                                              );
+                                                              setState(() {});
+                                                            },
+                                                            icon: Icon(
+                                                              Icons.add,
+                                                              color:
+                                                                  popupIconsColor,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      );
+                                                    },
                                               ),
-                                              transitionBuilder: (
-                                                child,
-                                                animation,
-                                              ) {
-                                                return FadeTransition(
-                                                  opacity: animation,
-                                                  child: child,
-                                                );
-                                              },
-                                              layoutBuilder:
-                                                  (
-                                                    currentChild,
-                                                    previousChildren,
-                                                  ) => Stack(
-                                                    alignment: Alignment.center,
-                                                    children: [
-                                                      ...previousChildren,
-                                                      if (currentChild != null)
-                                                        currentChild,
-                                                    ],
+                                            ),
+                                          PopupMenuItem(
+                                            height: 45,
+                                            onTap: () {
+                                              setState(() {
+                                                playlistAnimationController
+                                                    .reverse()
+                                                    .then((_) {
+                                                      playlistOverlayEntry
+                                                          ?.remove();
+                                                      playlistOverlayEntry =
+                                                          null;
+                                                      Navigator.pop(context);
+                                                    });
+                                              });
+                                            },
+                                            child: Row(
+                                              children: [
+                                                Text(
+                                                  'Exit',
+                                                  style: TextStyle(
+                                                    color: popupTextColor,
                                                   ),
-
-                                              child: Icon(
-                                                Icons.repeat_one_outlined,
-                                                color:
-                                                    isRepeatEnable
-                                                        ? Color.fromRGBO(
-                                                          255,
-                                                          255,
-                                                          255,
-                                                          1,
-                                                        )
-                                                        : Color.fromRGBO(
-                                                          255,
-                                                          255,
-                                                          255,
-                                                          0.500,
-                                                        ),
-                                                size: 20,
-                                                key: ValueKey<bool>(
-                                                  isRepeatEnable,
                                                 ),
-                                              ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-
-                                  // // REPEATER BUTTON
-                                  SizedBox(width: 15),
-
-                                  // MENU BUTTON
-                                  Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(20),
-                                    ),
-
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.all(
-                                        Radius.circular(10),
-                                      ),
-                                      splashColor: Colors.transparent,
-                                      highlightColor: Color.fromARGB(
-                                        255,
-                                        40,
-                                        40,
-                                        42,
-                                      ),
-                                      onTap: _showSettingsOverlay,
-                                      child: Container(
-                                        height: 35,
-                                        width: 35,
-
-                                        decoration: BoxDecoration(
-                                          color: themeColor,
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(30),
                                           ),
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.menu,
-                                              color:
-                                                  isWhiteTheme
-                                                      ? alternativeThemeColor
-                                                      : Colors.white,
-
-                                              size: 20,
+                                          PopupMenuItem(
+                                            enabled: false,
+                                            height: 5,
+                                            child: Container(
+                                              height: 1,
+                                              width: double.infinity,
+                                              color: popupTextColor,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+
+                                          PopupMenuItem(
+                                            height: 45,
+                                            child: StatefulBuilder(
+                                              builder:
+                                                  (
+                                                    BuildContext context,
+                                                    StateSetter setMenuState,
+                                                  ) {
+                                                    return Row(
+                                                      children: [
+                                                        Text(
+                                                          'Transition speed',
+                                                          style: TextStyle(
+                                                            color:
+                                                                popupTextColor,
+                                                          ),
+                                                        ),
+                                                        SizedBox(width: 15),
+                                                        IconButton(
+                                                          onPressed: () {
+                                                            setMenuState(() {
+                                                              transitionSpeed =
+                                                                  transitionSpeed -
+                                                                  0.1;
+                                                            });
+                                                            setState(() {});
+                                                          },
+                                                          icon: Icon(
+                                                            Icons.remove,
+                                                            color:
+                                                                popupIconsColor,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          transitionSpeed
+                                                              .toStringAsFixed(
+                                                                1,
+                                                              ),
+                                                          style: TextStyle(
+                                                            color:
+                                                                popupTextColor,
+                                                          ),
+                                                        ),
+                                                        IconButton(
+                                                          onPressed: () {
+                                                            setMenuState(() {
+                                                              transitionSpeed =
+                                                                  transitionSpeed +
+                                                                  0.1;
+                                                            });
+                                                            setState(() {});
+                                                          },
+                                                          icon: Icon(
+                                                            Icons.add,
+                                                            color:
+                                                                popupIconsColor,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    );
+                                                  },
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            enabled: false,
+                                            height: 5,
+                                            child: Container(
+                                              height: 1,
+                                              width: double.infinity,
+                                              color: popupTextColor,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-
-                                  // // MENU BUTTON
                                 ],
                               ),
-                              // // BUTTONS ROW
                             ],
                           ),
                         ),
@@ -3133,9 +1527,48 @@ class _PlaylistPageState extends State<PlaylistPage>
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+            Positioned(
+              top: 15,
+              right: 15,
+              child: StateIndicator(operation: operation),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class StateIndicator extends StatelessWidget {
+  final int operation;
+
+  const StateIndicator({Key? key, required this.operation}) : super(key: key);
+
+  static Color _getColor(int operation) {
+    switch (operation) {
+      case 0:
+        return Colors.transparent;
+      case 1:
+        return Colors.greenAccent;
+      case -1:
+        return Colors.red;
+      case 2:
+        return Colors.orange;
+      default:
+        return Colors.transparent;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: 10,
+      width: 10,
+      decoration: BoxDecoration(
+        color: _getColor(operation),
+        shape: BoxShape.circle,
       ),
     );
   }
