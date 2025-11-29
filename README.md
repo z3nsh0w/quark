@@ -16,8 +16,6 @@
 
 </div>
 
----
-
 ## Features
 
 - **Universal Audio Formats Support**
@@ -25,11 +23,7 @@
 - **Slowing down/Speed up tracks (Linux only)**
 - **Beautiful Design**
 
----
-
 ## Current version: 0.2.3
-
----
 
 ### Downloads
 
@@ -46,16 +40,12 @@ All files are available in the [**Releases**](https://github.com/z3nsh0w/QUARK/r
 > **For Linux Users:**
 > - Requires `libwebkit2gtk` or `qtwebengine` (usually pre-installed on popular distributions)
 
----
-
 ## Screenshots
 
 <p align="center">
   <img src="appphoto.png" alt="QUARK Interface" width="45%">
   <img src="appphoto1.png" alt="QUARK Player" width="45%">
 </p>
-
----
 
 ## Development Team
 
