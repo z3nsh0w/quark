@@ -23,7 +23,7 @@
 - **Slowing down/Speed up tracks (Linux only)**
 - **Beautiful Design**
 
-## Current version: 0.2.3
+## Current version: 0.2.2
 
 ### Downloads
 
