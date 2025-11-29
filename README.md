@@ -43,8 +43,8 @@ All files are available in the [**Releases**](https://github.com/z3nsh0w/QUARK/r
 ## Screenshots
 
 <p align="center">
-  <img src="appphoto.png" alt="QUARK Interface" width="45%">
-  <img src="appphoto1.png" alt="QUARK Player" width="45%">
+  <img src="/assets/player.png" alt="QUARK Interface" width="45%">
+  <img src="/assets/player_main_menu.png" alt="QUARK Player" width="45%">
 </p>
 
 ## Development Team
