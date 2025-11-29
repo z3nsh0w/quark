@@ -8,10 +8,6 @@
   <strong>Lightweight, easy to use and beautiful audio player</strong>
 </h1>
 
-<p align="center">
-  <a href="https://quarkaudio.github.io/">For a more beautiful description, see the website</a>
-</p>
-
 <div align="center">
 
 ![Release](https://img.shields.io/github/v/release/z3nsh0w/QUARK?style=flat-square)
