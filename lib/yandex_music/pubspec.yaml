@@ -1,6 +1,6 @@
 name: yandex_music
 description: "A library for accessing Yandex Music API (api.music.yandex.net)."
-version: 1.1.0
+version: 1.2.1
 homepage: https://github.com/z3nsh0w/yandex_music_flutter
 
 environment:
@@ -10,14 +10,12 @@ dependencies:
   crypto: ^3.0.6
   xml: ^6.5.0
   dio: ^5.9.0
-  pointycastle: ^4.0.0
   mime: ^2.0.0
-  path_provider: ^2.1.5
 
 
 dev_dependencies:
   test: ^1.24.0
-  lints: ^3.0.0
+  lints: ^6.0.0
   logger: ^2.6.1
 
 

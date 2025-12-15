@@ -1,25 +1,25 @@
 // Flutter packages
 import 'dart:io';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 // Additional packages
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:quark/objects/track.dart';
 import 'package:yandex_music/yandex_music.dart';
-import 'package:interactive_slider/interactive_slider.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:audio_service/audio_service.dart';
-import 'package:smtc_windows/smtc_windows.dart';
-import 'package:smtc_windows/src/rust/frb_generated.dart';
+import 'package:interactive_slider/interactive_slider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 // Local components&modules
 import 'database.dart';
 import 'player_widget.dart';
 import 'playlist_widget.dart';
-import 'audio_control.dart';
-import 'main.dart' show Files;
+import '/services/player.dart';
+import '/objects/playlist.dart';
+import '/services/net_player.dart';
+import '/services/native_control.dart';
 
 // TODO: Database & Settings
 // Database settings variables:
@@ -37,288 +37,6 @@ import 'main.dart' show Files;
 
 // TODO: ADVANCED SETTINGS MENU
 
-// A standalone player running in the background, independent of the stream UI
-class Player {
-  final double startVolume;
-  final trackNotifier = ValueNotifier<Track>(Track({}));
-  final playedNotifier = ValueNotifier<Duration>(Duration());
-  final durationNotifier = ValueNotifier<Duration>(Duration());
-
-  List<Track> playlist;
-  Track nowPlayingTrack;
-
-  Player({
-    required this.startVolume,
-    required this.playlist,
-    required this.nowPlayingTrack,
-  });
-
-  final player = AudioPlayer();
-  bool isPlaying = false;
-  bool isRepeat = false;
-  StreamSubscription? _onCompleteSubscription;
-  StreamSubscription? _onDurationChanged;
-  StreamSubscription? _onPlayedChanged;
-
-  Future<void> init() async {
-    await player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
-    trackNotifier.value = nowPlayingTrack;
-    setupListeners();
-  }
-
-  Future<void> setupListeners() async {
-    _onCompleteSubscription?.cancel();
-    _onDurationChanged?.cancel();
-    _onPlayedChanged?.cancel();
-    _onCompleteSubscription = player.onPlayerComplete.listen((event) {
-      playNext();
-    });
-
-    _onDurationChanged = player.onDurationChanged.listen((event) async {
-      durationNotifier.value = event;
-    });
-
-    _onPlayedChanged = player.onPositionChanged.listen((event) async {
-      playedNotifier.value = event;
-    });
-  }
-
-  Future<Duration> getPosition() async {
-    Duration? position = await player.getCurrentPosition();
-    return position ?? Duration();
-  }
-
-  Future<Duration> getTrackDuration() async {
-    Duration? duration = await player.getDuration();
-    return duration ?? Duration();
-  }
-
-  Future<void> eventListener() async {
-    player.onPlayerComplete.listen((onData) {
-      playNext();
-    });
-  }
-
-  Future<void> playNext() async {
-    int nowIndex = playlist.indexWhere((t) => t == nowPlayingTrack);
-    int nextIndex = isRepeat
-        ? nowIndex
-        : playlist.length - 1 != nowIndex
-        ? nowIndex + 1
-        : 0;
-    nowPlayingTrack = playlist[nextIndex];
-    trackNotifier.value = nowPlayingTrack;
-    await player.stop();
-    await _playIsPlaying();
-  }
-
-  Future<void> _playIsPlaying() async {
-    await player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
-    if (isPlaying) {
-      await player.play(DeviceFileSource(nowPlayingTrack.filepath));
-    }
-  }
-
-  Future<void> playPrevious() async {
-    int nowIndex = playlist.indexWhere((t) => t == nowPlayingTrack);
-    int nextIndex = nowIndex == 0
-        ? playlist.length - 1
-        : nowIndex > 0
-        ? nowIndex - 1
-        : 0;
-    nowPlayingTrack = playlist[nextIndex];
-    trackNotifier.value = nowPlayingTrack;
-    await player.stop();
-    await _playIsPlaying();
-  }
-
-  Future<void> playPause(bool play) async {
-    isPlaying = play ? true : false;
-    play ? await player.resume() : await player.pause();
-  }
-
-  Future<void> setVolume(double volume) async {
-    await player.setVolume(volume);
-  }
-
-  Future<void> seek(Duration seek) async {
-    await player.seek(seek);
-  }
-
-  Future<void> updatePlaylist(List<Track> newPlaylist) async {
-    playlist = newPlaylist;
-  }
-
-  Future<void> playNetTrack(String link, Track track) async {
-    nowPlayingTrack = track;
-    trackNotifier.value = nowPlayingTrack;
-    await player.stop();
-    await player.setSource(UrlSource(link));
-    if (isPlaying) {
-      await player.play(UrlSource(link));
-    }
-  }
-
-  Future<void> playCustom(Track track) async {
-    nowPlayingTrack = track;
-    trackNotifier.value = nowPlayingTrack;
-    await player.stop();
-    await player.setSource(DeviceFileSource(track.filepath));
-    await _playIsPlaying();
-  }
-}
-
-// A complementary class to the main player, created for network playback of tracks. (SPOTIFY may be added)
-class NetPlayer {
-  final Player player;
-  final YandexMusic yandexMusic;
-
-  NetPlayer({required this.player, required this.yandexMusic});
-
-  Future<void> playYandex(Track track) async {
-    try {
-      String link = await yandexMusic.tracks.getDownloadLink(track.id);
-      await player.playNetTrack(link, track);
-    } catch (e) {}
-  }
-}
-
-// A collection of native media notifications for controlling the player from outside
-class NativeControl {
-  late final control;
-
-  Function(bool) onPlay;
-  Function(bool) onPause;
-  Function() onNext;
-  Function() onPrevious;
-  Function() onSeek;
-
-  NativeControl({
-    required this.onPlay,
-    required this.onPause,
-    required this.onNext,
-    required this.onPrevious,
-    required this.onSeek,
-  });
-
-  Future<void> init() async {
-    if (Platform.isWindows) {
-      try {
-        await RustLib.init();
-        control = SMTCWindows(
-          metadata: MusicMetadata(
-            title: 'Unknown',
-            album: 'Unknown',
-            albumArtist: 'Unknown',
-            artist: 'Unknown',
-          ),
-          config: const SMTCConfig(
-            fastForwardEnabled: true,
-            nextEnabled: true,
-            pauseEnabled: true,
-            playEnabled: true,
-            rewindEnabled: true,
-            prevEnabled: true,
-            stopEnabled: true,
-          ),
-        );
-      } catch (e) {}
-
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        try {
-          control.buttonPressStream.listen((event) {
-            switch (event) {
-              case PressedButton.play:
-                onPlay(true);
-                break;
-              case PressedButton.pause:
-                onPause(false);
-                break;
-              case PressedButton.next:
-                onNext();
-                break;
-              case PressedButton.previous:
-                onPrevious();
-                break;
-              case PressedButton.stop:
-                control.disableSmtc();
-                break;
-              default:
-                break;
-            }
-          });
-        } catch (e) {
-          debugPrint("Error: $e");
-        }
-      });
-    } else {
-      try {
-        control = await AudioService.init(
-          builder: () => MyAudioHandler(
-            onPlay: () => onPlay(true),
-            onPause: () => onPause(false),
-            onNext: () => onNext(),
-            onPrevious: () => onPrevious(),
-            onSeek: (position) => onSeek(),
-          ),
-          config: AudioServiceConfig(
-            androidNotificationChannelId: 'quark.quarkaudio.app.channel.audio',
-            androidNotificationChannelName: 'Audio playback',
-            androidNotificationOngoing: true,
-          ),
-        );
-      } catch (e) {}
-    }
-  }
-
-  Future<void> setPlaybackStatus(bool status) async {
-    if (Platform.isWindows) {
-      status
-          ? await control.setPlaybackStatus(PlaybackStatus.playing)
-          : await control.setPlaybackStatus(PlaybackStatus.paused);
-    }
-  }
-
-  Future<void> updateData(Track track) async {
-    if (Platform.isWindows) {
-      try {
-        await control.updateMetadata(
-          MusicMetadata(
-            title: track.title,
-            album: 'Unknown',
-            albumArtist: track.artists.isNotEmpty
-                ? track.artists[0].title
-                : 'Unknown',
-            artist: track.artists.isNotEmpty
-                ? track.artists[0].title
-                : 'Unknown',
-            thumbnail: 'https://${track.coverUri.replaceAll('%%', '300x300')}',
-          ),
-        );
-      } catch (e) {}
-    } else {
-      try {
-        Duration duration = Duration.zero;
-        await (control as MyAudioHandler).setPlayback(
-          track.title,
-          track.artists.isNotEmpty
-              ? track.artists
-                    .map((artist) => artist.title ?? 'Unknown')
-                    .join(', ')
-              : "Unknown artist",
-          track.albums.isNotEmpty
-              ? track.albums
-                    .map((album) => album.title ?? 'Unknown album')
-                    .join(', ')
-              : "Unknown album",
-          duration,
-          'https://${track.coverUri.replaceAll('%%', '300x300')}',
-          track.id,
-        );
-      } catch (e) {}
-    }
-  }
-}
 
 class PlaylistPage extends StatefulWidget {
   final PlayerPlaylist playlist;
@@ -358,8 +76,9 @@ class _PlaylistPageState extends State<PlaylistPage>
   bool stateIndicatorState = true;
   bool playlistDownloaded = false;
 
-  late List<Track> currentPlaylist;
-  late Track nowPlayingTrack;
+  late List<PlayerTrack> currentPlaylist;
+  late List<PlayerTrack> backupPlaylist;
+  late PlayerTrack nowPlayingTrack;
   late NetPlayer netPlayer;
   late Player player2;
   late NativeControl nativeControl;
@@ -409,34 +128,18 @@ class _PlaylistPageState extends State<PlaylistPage>
     await Database.setValue('volume', value);
   }
 
-  void updateWidget() {
-    // TODO: update keys, then remove
-    setState(() {
-      trackArtistNames = nowPlayingTrack.artists.isNotEmpty
-          ? nowPlayingTrack.artists
-                .map((artist) => artist.title ?? 'Unknown')
-                .join(', ')
-          : "Unknown artist";
-      isLiked = likedTracks.contains(nowPlayingTrack.id);
-      trackAlbumNames = nowPlayingTrack.albums.isNotEmpty
-          ? nowPlayingTrack.albums
-                .map((album) => album.title ?? 'Unknown album')
-                .join(', ')
-          : "Unknown album";
-    });
-  }
-
   void changeTrack({
     bool next = false,
     bool previous = false,
     bool playpause = false,
     bool reload = false,
-    Track? custom,
+    PlayerTrack? custom,
   }) async {
     // TODO: update
     if (custom != null) {
-      nowPlayingTrack = custom;
-      updateWidget();
+      setState(() {
+        nowPlayingTrack = custom;
+      });
       bool exists = await File(custom.filepath).exists();
       if (!exists) {
         showOperation(2);
@@ -446,11 +149,12 @@ class _PlaylistPageState extends State<PlaylistPage>
       }
       await player2.playCustom(custom);
     } else if (next) {
-      Track next =
+      PlayerTrack next =
           currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) + 1) %
               currentPlaylist.length];
-      nowPlayingTrack = next;
-      updateWidget();
+      setState(() {
+        nowPlayingTrack = next;
+      });
       bool exists = await File(next.filepath).exists();
       if (!exists) {
         showOperation(2);
@@ -458,13 +162,14 @@ class _PlaylistPageState extends State<PlaylistPage>
         cacheFiles();
         return;
       }
-      await player2.playNext();
+      await player2.playNext(forceNext: true);
     } else if (previous) {
-      Track next =
+      PlayerTrack next =
           currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) - 1) %
               currentPlaylist.length];
-      nowPlayingTrack = next;
-      updateWidget();
+      setState(() {
+        nowPlayingTrack = next;
+      });
       bool exists = await File(next.filepath).exists();
       if (!exists) {
         showOperation(2);
@@ -474,8 +179,7 @@ class _PlaylistPageState extends State<PlaylistPage>
       }
       await player2.playPrevious();
     } else if (reload) {
-      Track next = nowPlayingTrack;
-      updateWidget();
+      PlayerTrack next = nowPlayingTrack;
       await player2.playCustom(next);
     } else if (playpause) {
       setState(() {
@@ -489,7 +193,7 @@ class _PlaylistPageState extends State<PlaylistPage>
     nativeControl.updateData(nowPlayingTrack);
   }
 
-  void cacheFiles([List<Track>? tracks]) {
+  void cacheFiles([List<PlayerTrack>? tracks]) {
     // TODO: UPDATE
     tracks ??= [
       currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) + 1) %
@@ -499,22 +203,20 @@ class _PlaylistPageState extends State<PlaylistPage>
       currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack)) %
           currentPlaylist.length],
     ];
-    for (Track track in tracks) {
+    for (PlayerTrack track in tracks) {
       _cacheFileInBackground(track);
     }
   }
 
   void updateLiked() async {
     try {
-      List result = await widget.yandexMusic.usertracks.getLiked();
+      List<Track2> result = await widget.yandexMusic.usertracks.getLiked();
       likedTracks.clear();
 
-      for (var track in result) {
-        likedTracks.add(track['id'].toString());
+      for (Track2 track in result) {
+        likedTracks.add(track.trackID);
       }
       showOperation(1);
-      print(likedTracks);
-      updateWidget();
     } catch (e) {
       showOperation(-1);
     }
@@ -530,13 +232,13 @@ class _PlaylistPageState extends State<PlaylistPage>
     }
   }
 
-  Future<void> _cacheFileInBackground(Track track) async {
+  Future<void> _cacheFileInBackground(PlayerTrack track) async {
     // TODO: FIX BUGS WHILE MULTIPLE TRACKS LOADING
     final exists = await File(track.filepath).exists();
     if (!exists) {
       try {
         final downloadLink = await widget.yandexMusic.tracks.getDownloadLink(
-          track.id,
+          (track as YandexMusicTrack).track.id,
         );
         showOperation(2);
         final download = await widget.yandexMusic.tracks.getAsBytes(
@@ -548,7 +250,7 @@ class _PlaylistPageState extends State<PlaylistPage>
       } catch (error) {
         print('''
 An error has occured while downloading track
-TrackID: ${track.id}
+TrackID: ${(track as YandexMusicTrack).track.id}
 Filepath: ${track.filepath}
 YandexMusic client: ${widget.yandexMusic.accountID}
 Error: ${error}
@@ -611,7 +313,6 @@ Error: ${error}
     });
     player2.trackNotifier.addListener(() {
       nowPlayingTrack = player2.trackNotifier.value;
-      updateWidget();
     });
   }
 
@@ -623,23 +324,20 @@ Error: ${error}
 
   void shuffle() async {
     bool enable = !isShuffleEnable;
-    List<Track> lcpl = [];
+    List<PlayerTrack> lcpl = [];
 
     if (enable) {
-      widget.playlist.tracks.clear();
-      widget.playlist.tracks.addAll([...currentPlaylist]);
-
-      final currentIndex = widget.playlist.tracks.indexOf(nowPlayingTrack);
+      backupPlaylist.clear();
+      backupPlaylist.addAll([...currentPlaylist]);
+      final currentIndex = backupPlaylist.indexOf(nowPlayingTrack);
 
       if (currentIndex == -1) return;
 
-      final fixedPart = widget.playlist.tracks.sublist(0, currentIndex + 1);
-
-      final queue = widget.playlist.tracks.sublist(currentIndex + 1);
-
+      final fixedPart = backupPlaylist.sublist(0, currentIndex + 1);
+      final queue = backupPlaylist.sublist(currentIndex + 1);
       final shuffledQueue = shuffleList(queue);
 
-      List<Track> tcp = []
+      List<PlayerTrack> tcp = []
         ..addAll(fixedPart)
         ..addAll(shuffledQueue);
 
@@ -650,7 +348,7 @@ Error: ${error}
     }
 
     if (!enable) {
-      lcpl = [...widget.playlist.tracks];
+      lcpl = [...backupPlaylist];
       setState(() {
         currentPlaylist = lcpl;
       });
@@ -688,17 +386,17 @@ Error: ${error}
 
   /// Playlist functions
 
-  void setPlaylist(List<Track> playlist) {} // TODO: cut from code
+  void setPlaylist(List<PlayerTrack> playlist) {} // TODO: cut from code
 
-  void removeTrack(Track track) {
+  void removeTrack(PlayerTrack track) {
     currentPlaylist.remove(track);
-    widget.playlist.tracks.remove(track);
+    backupPlaylist.remove(track);
   }
 
   // TODO: REMOVE THE CRUTCHES
   // I don't even know what -56 -78 0 -2 and -1 are.
   int addTrack(
-    Track track, [
+    PlayerTrack track, [
     bool? addToEnd,
     bool? addLikedTrack,
     bool? removeLiked,
@@ -713,7 +411,7 @@ Error: ${error}
       if (widget.playlist.name == "Liked") {
         if (!currentPlaylist.contains(track)) {
           currentPlaylist.insert(0, track);
-          likedTracks.add(track.id);
+          likedTracks.add((track as YandexMusicTrack).track.id);
           if (track == nowPlayingTrack) {
             setState(() {
               isLiked = false;
@@ -725,7 +423,7 @@ Error: ${error}
       }
       return -2;
     } else if (removeLiked != null) {
-      likedTracks.remove(track.id);
+      likedTracks.remove((track as YandexMusicTrack).track.id);
       if (track == nowPlayingTrack) {
         setState(() {
           isLiked = false;
@@ -782,7 +480,7 @@ Error: ${error}
     }
   }
 
-  void changePlaylist(List<Track> playlist) {} // TODO: cut from code
+  void changePlaylist(List<PlayerTrack> playlist) {} // TODO: cut from code
 
   void repeatChange() {
     setState(() {
@@ -794,22 +492,26 @@ Error: ${error}
   void likeUnlike() async {
     if (isLiked) {
       try {
-        await widget.yandexMusic.usertracks.unlike([nowPlayingTrack.id]);
+        await widget.yandexMusic.usertracks.unlike([
+          (nowPlayingTrack as YandexMusicTrack).track.id,
+        ]);
         setState(() {
           isLiked = false;
         });
-        likedTracks.remove(nowPlayingTrack.id);
+        likedTracks.remove((nowPlayingTrack as YandexMusicTrack).track.id);
         showOperation(1);
       } catch (e) {
         showOperation(-1);
       }
     } else {
       try {
-        await widget.yandexMusic.usertracks.like([nowPlayingTrack.id]);
+        await widget.yandexMusic.usertracks.like([
+          (nowPlayingTrack as YandexMusicTrack).track.id,
+        ]);
         setState(() {
           isLiked = true;
         });
-        likedTracks.add(nowPlayingTrack.id);
+        likedTracks.add((nowPlayingTrack as YandexMusicTrack).track.id);
         addTrack(nowPlayingTrack, null, true);
 
         showOperation(1);
@@ -832,6 +534,7 @@ Error: ${error}
 
     super.initState();
     currentPlaylist = [...widget.playlist.tracks];
+    backupPlaylist = [...widget.playlist.tracks];
     nowPlayingTrack = currentPlaylist[0];
 
     // Classes
@@ -873,7 +576,6 @@ Error: ${error}
 
     playlistName = widget.playlist.name.toString();
     playerListeners();
-    updateWidget();
     updateLiked();
   }
 
@@ -882,9 +584,9 @@ Error: ${error}
     player2.player.onPositionChanged.drain();
     player2.player.stop();
     player2.player.dispose();
-    player2._onCompleteSubscription?.cancel();
-    player2._onDurationChanged?.cancel();
-    player2._onPlayedChanged?.cancel();
+    player2.onCompleteSubscription?.cancel();
+    player2.onDurationChanged?.cancel();
+    player2.onPlayedChanged?.cancel();
     player2.trackNotifier.dispose();
     player2.playedNotifier.dispose();
     player2.durationNotifier.dispose();
@@ -921,10 +623,12 @@ Error: ${error}
               width: MediaQuery.of(context).size.width,
               decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: (nowPlayingTrack.coverByted != null)
-                      ? MemoryImage(nowPlayingTrack.coverByted ??= Uint8List(0))
+                  image:
+                      (nowPlayingTrack is LocalTrack &&
+                          nowPlayingTrack.coverByted != Uint8List(0))
+                      ? MemoryImage(nowPlayingTrack.coverByted)
                       : CachedNetworkImageProvider(
-                          'https://${nowPlayingTrack.coverUri.replaceAll('%%', '300x300')}',
+                          'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
                         ),
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(
@@ -951,7 +655,7 @@ Error: ${error}
                         return FadeTransition(opacity: animation, child: child);
                       },
                   child: BackdropFilter(
-                    key: ValueKey<Track>(nowPlayingTrack),
+                    key: ValueKey<PlayerTrack>(nowPlayingTrack),
                     filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
                     child: Container(
                       color: Colors.transparent,
@@ -982,18 +686,22 @@ Error: ${error}
                                     ),
                                   ],
                                 ),
-                                child: (nowPlayingTrack.coverByted != null)
+                                child:
+                                    (nowPlayingTrack is LocalTrack &&
+                                        nowPlayingTrack.coverByted !=
+                                            Uint8List(0))
                                     ? Image.memory(
-                                        nowPlayingTrack.coverByted ??=
-                                            Uint8List(0),
+                                        nowPlayingTrack.coverByted,
                                         height: 270,
                                         width: 270,
                                       )
                                     : CachedNetworkImage(
-                                        key: ValueKey<Track>(nowPlayingTrack),
+                                        key: ValueKey<PlayerTrack>(
+                                          nowPlayingTrack,
+                                        ),
 
                                         imageUrl:
-                                            'https://${nowPlayingTrack.coverUri.replaceAll('%%', '300x300')}',
+                                            'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
                                         progressIndicatorBuilder:
                                             (context, url, downloadProgress) =>
                                                 CircularProgressIndicator(
@@ -1017,7 +725,7 @@ Error: ${error}
                               SizedBox(
                                 height: 45,
                                 child: Text(
-                                  key: ValueKey<Track>(nowPlayingTrack),
+                                  key: ValueKey<PlayerTrack>(nowPlayingTrack),
                                   nowPlayingTrack.title,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
@@ -1031,16 +739,9 @@ Error: ${error}
                               ),
 
                               Text(
-                                key: ValueKey<Track>(nowPlayingTrack),
+                                key: ValueKey<PlayerTrack>(nowPlayingTrack),
 
-                                nowPlayingTrack.albums.isNotEmpty
-                                    ? nowPlayingTrack.albums
-                                          .map(
-                                            (album) =>
-                                                album.title ?? 'Unknown album',
-                                          )
-                                          .join(', ')
-                                    : "Unknown album",
+                                nowPlayingTrack.albums.join(','),
 
                                 style: TextStyle(
                                   color: Colors.white,
@@ -1052,14 +753,7 @@ Error: ${error}
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                nowPlayingTrack.artists.isNotEmpty
-                                    ? nowPlayingTrack.artists
-                                          .map(
-                                            (artist) =>
-                                                artist.title ?? 'Unknown',
-                                          )
-                                          .join(', ')
-                                    : "Unknown artist",
+                                nowPlayingTrack.artists.join(","),
                                 style: TextStyle(
                                   color: const Color.fromARGB(
                                     200,
@@ -1283,17 +977,20 @@ Error: ${error}
                                     },
                                   ),
                                   const SizedBox(width: 15),
-                                  if (nowPlayingTrack.id != 'iddoesntexists')
+                                  if (nowPlayingTrack is YandexMusicTrack)
                                     functionPlayerButton(
                                       Icons.favorite_outlined,
                                       Icons.favorite_outlined,
-                                      likedTracks.contains(nowPlayingTrack.id),
+                                      likedTracks.contains(
+                                        (nowPlayingTrack as YandexMusicTrack)
+                                            .track
+                                            .id,
+                                      ),
                                       () async {
                                         likeUnlike();
                                       },
-                                      // ValueKey<Track>(nowPlayingTrack),
                                     ),
-                                  if (nowPlayingTrack.id == 'iddoesntexists')
+                                  if (nowPlayingTrack is! YandexMusicTrack)
                                     const SizedBox(width: 35),
 
                                   const SizedBox(width: 15),

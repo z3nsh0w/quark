@@ -11,12 +11,17 @@ class Requests {
   final dio = Dio(BaseOptions(validateStatus: (status) => true));
 
   Future<dynamic> basicGet(
-    String route, [
+    String route, {
     String? fullRoute,
     ResponseType? responceType,
-  ]) async {
+    Map<String, dynamic>? headers,
+    CancelToken? cancelToken,
+  }) async {
     String finalRoute;
-
+    headers ??= {
+            'Authorization': 'OAuth $token',
+            'Content-Type': 'application/json',
+          };
     if (fullRoute != null) {
       finalRoute = fullRoute;
     } else {
@@ -26,12 +31,10 @@ class Requests {
       final response = await dio.get(
         finalRoute,
         options: Options(
-          headers: {
-            'Authorization': 'OAuth $token',
-            'Content-Type': 'application/json',
-          },
+          headers: headers,
           responseType: responceType,
         ),
+        cancelToken: cancelToken,
       );
 
       switch (response.statusCode) {
@@ -75,10 +78,11 @@ class Requests {
 
   Future<Map<String, dynamic>> customGet(
     String route,
-    Map<String, dynamic> queryParameters, [
+    Map<String, dynamic> queryParameters, {
     String? fullRoute,
     Map<String, dynamic>? headers,
-  ]) async {
+    CancelToken? cancelToken,
+  }) async {
     String finalRoute;
 
     if (fullRoute != null) {
@@ -104,6 +108,7 @@ class Requests {
         finalRoute,
         queryParameters: queryParameters,
         options: Options(headers: fullheaders),
+        cancelToken: cancelToken,
       );
 
       switch (response.statusCode) {
@@ -141,11 +146,17 @@ class Requests {
   }
 
   Future<dynamic> post(
-    String route, [
+    String route, {
     Map<String, dynamic>? queryParameters,
     dynamic data,
     dynamic contentType,
-  ]) async {
+    Map<String, dynamic>? headers,
+    CancelToken? cancelToken,
+  }) async {
+    headers ??= {
+            'Authorization': 'OAuth $token',
+            'Content-Type': contentType,
+    };
     try {
       contentType ??= 'application/x-www-form-urlencoded';
       route.replaceFirst(baseUrl, '');
@@ -154,11 +165,9 @@ class Requests {
         queryParameters: queryParameters,
         data: data,
         options: Options(
-          headers: {
-            'Authorization': 'OAuth $token',
-            'Content-Type': contentType,
-          },
+          headers: headers,
         ),
+        cancelToken: cancelToken,
       );
 
       switch (response.statusCode) {
@@ -204,9 +213,10 @@ class Requests {
 
   Future<dynamic> put(
     String route,
-    Map<String, dynamic> data, [
+    Map<String, dynamic> data, {
     String? customRoute,
-  ]) async {
+    CancelToken? cancelToken,
+  }) async {
     try {
       route = customRoute != null ? customRoute : route;
       route.replaceFirst(baseUrl, '');
@@ -219,6 +229,7 @@ class Requests {
             'Content-Type': 'application/json',
           },
         ),
+        cancelToken: cancelToken,
       );
 
       switch (response.statusCode) {
@@ -264,9 +275,10 @@ class Requests {
 
   Future<dynamic> delete(
     String route,
-    Map<String, dynamic> data, [
+    Map<String, dynamic> data, {
     String? customRoute,
-  ]) async {
+    CancelToken? cancelToken,
+  }) async {
     try {
       route = customRoute != null ? customRoute : route;
       route.replaceFirst(baseUrl, '');
@@ -279,6 +291,7 @@ class Requests {
             'Content-Type': 'application/json',
           },
         ),
+        cancelToken: cancelToken,
       );
 
       switch (response.statusCode) {

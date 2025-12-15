@@ -6,7 +6,8 @@ enum YandexMusicExceptionType {
   parse,
   badRequest,
   notFound,
-  wrongRevision
+  wrongRevision, 
+  argumentError
 }
 
 
@@ -90,11 +91,6 @@ class YandexMusicException implements Exception {
   /// (Либо разработчик где то не прописал токен :)
   YandexMusicException.unauthorized(String message, {int? code}) 
       : this(message, YandexMusicExceptionType.unauthorized, code: code);
-  
-  /// Не используется.
-  /// Заменена на request
-  YandexMusicException.parse(String message) 
-      : this(message, YandexMusicExceptionType.parse);
 
   /// Запрос был выполнен успешно, но сервер не нашел информацию по запросу
   YandexMusicException.notFound(String message, {int? code})
@@ -107,6 +103,10 @@ class YandexMusicException implements Exception {
   /// Для изменения плейлиста необходимо указать правильную ревизию плейлиста.
   YandexMusicException.wrongRevision(String message, {int? code})
       : this(message, YandexMusicExceptionType.wrongRevision, code: code);
+
+  /// Переданный аргумент неверный.
+  YandexMusicException.argumentError(String message, {int? code})
+      : this(message, YandexMusicExceptionType.argumentError, code: code);
 
   @override
   String toString() {

@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import './requests/requests.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:yandex_music/src/signs/signs.dart';
-import './requests/requests.dart';
-import 'dart:io';
+import 'package:yandex_music/src/objects/wave.dart';
+import 'package:yandex_music/src/objects/track.dart';
+
+// Yup, That's Me.
+// You're probably wondering how I ended up in this situation
 
 class YandexMusicApiAsync {
   final String token;
@@ -18,24 +23,32 @@ class YandexMusicApiAsync {
     requests = Requests(token: token);
   }
 
-  /// Provides full information about the user account
-  Future<Map<String, dynamic>> getAccountInformation() async {
+  Future<Map<String, dynamic>> getAccountInformation({
+    CancelToken? cancelToken,
+  }) async {
     final response = await requests.basicGet('/account/status');
     return response;
   }
 
-  Future<Map<String, dynamic>> getAccountSettings() async {
-    final response = await requests.basicGet('/account/settings');
+  Future<Map<String, dynamic>> getAccountSettings({
+    CancelToken? cancelToken,
+  }) async {
+    final response = await requests.basicGet(
+      '/account/settings',
+      cancelToken: cancelToken,
+    );
     return response;
   }
 
   Future<dynamic> getUsersPlaylists(
-    int userId, [
+    int userId, {
     bool? addPlaylistWithLikes,
-  ]) async {
+    CancelToken? cancelToken,
+  }) async {
     if (addPlaylistWithLikes != null) {
       final responce = await requests.basicGet(
         '/users/$userId/playlists/list/kinds?addPlaylistWithLikes=true',
+        cancelToken: cancelToken,
       );
       final result = getMultiplePlaylists(userId, responce['result']);
       return result;
@@ -43,34 +56,45 @@ class YandexMusicApiAsync {
 
     final responce = await requests.basicGet(
       '/users/$userId/playlists/list',
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> getUsersDislikedTracks(int userId) async {
+  Future<dynamic> getUsersDislikedTracks(
+    int userId, {
+    CancelToken? cancelToken,
+  }) async {
     final response = await requests.basicGet(
       '/users/$userId/dislikes/tracks',
+      cancelToken: cancelToken,
     );
     return response;
   }
 
-  Future<dynamic> getPlaylist(int userId, int playlistKind) async {
+  Future<dynamic> getPlaylist(
+    int userId,
+    int playlistKind, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.basicGet(
       '/users/$userId/playlists/$playlistKind',
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> getMultiplePlaylists(int userId, List kinds) async {
-    final responce = await requests.customGet(
-      '/users/$userId/playlists',
-      {
-        'userId': userId,
-        'kinds': kinds.join(','),
-        'mixed': true,
-        'rich-tracks': false,
-      },
-    );
+  Future<dynamic> getMultiplePlaylists(
+    int userId,
+    List kinds, {
+    CancelToken? cancelToken,
+  }) async {
+    final responce = await requests.customGet('/users/$userId/playlists', {
+      'userId': userId,
+      'kinds': kinds.join(','),
+      'mixed': true,
+      'rich-tracks': false,
+    }, cancelToken: cancelToken);
     return responce;
   }
 
@@ -80,22 +104,18 @@ class YandexMusicApiAsync {
     int from,
     int to,
     List tracks,
-    int revision,
-  ) async {
+    int revision, {
+    CancelToken? cancelToken,
+  }) async {
     final diffString = jsonEncode([
       {"op": "move", "from": from, "to": to, "tracks": tracks},
     ]);
-    final data = {
-      'revision': revision.toString(),
-      'diff': diffString,
-    };
+    final data = {'revision': revision.toString(), 'diff': diffString};
     final responce = await requests.post(
       '/users/$userId/playlists/$kind/change-relative',
-      null,
-      data,
+      data: data,
+      cancelToken: cancelToken,
     );
-
-
 
     return responce;
   }
@@ -103,16 +123,17 @@ class YandexMusicApiAsync {
   Future<dynamic> renameTrack(
     String trackId,
     String trackName,
-    String artist,
-    [String? contentType]
-  ) async {
+    String artist, {
+    String? contentType,
+    CancelToken? cancelToken,
+  }) async {
     var data = {'title': trackName, 'artist': artist};
 
     final responce = await requests.post(
       '/ugc/tracks/$trackId/change',
-      null,
-      data,
-      contentType
+      data: data,
+      contentType: contentType,
+      cancelToken: cancelToken,
     );
 
     return responce;
@@ -120,29 +141,45 @@ class YandexMusicApiAsync {
 
   Future<dynamic> getPlaylistRecommendations(
     int userId,
-    int playlistKind,
-  ) async {
+    int playlistKind, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.basicGet(
       '/users/$userId/playlists/$playlistKind/recommendations',
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> getUsersLikedTracks(int userId) async {
-    final responce = await requests.basicGet('/users/$userId/likes/tracks');
+  Future<dynamic> getUsersLikedTracks(
+    int userId, {
+    CancelToken? cancelToken,
+  }) async {
+    final responce = await requests.basicGet(
+      '/users/$userId/likes/tracks',
+      cancelToken: cancelToken,
+    );
     return responce;
   }
 
-  Future<dynamic> getTrackDownloadInfo(int userId, String trackID) async {
+  Future<dynamic> getTrackDownloadInfo(
+    int userId,
+    String trackID, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.basicGet(
       '/tracks/$trackID/download-info',
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
   Future<dynamic> getTrackDownloadLink(String downloadInfoUrl) async {
     // final responce = await requests.customUrlRequest(downloadInfoUrl);
-    final responce = await requests.basicGet('route', downloadInfoUrl);
+    final responce = await requests.basicGet(
+      'route',
+      fullRoute: downloadInfoUrl,
+    );
     final xmlDoc = xml.XmlDocument.parse(responce.toString());
 
     final host = xmlDoc.findAllElements('host').first.text;
@@ -157,8 +194,9 @@ class YandexMusicApiAsync {
   Future<dynamic> getTrackDownloadLinkV2(
     String trackId,
     int userId,
-    String requestedQuality,
-  ) async {
+    String requestedQuality, {
+    CancelToken? cancelToken,
+  }) async {
     final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
     List<String> codecs = [
@@ -203,8 +241,9 @@ class YandexMusicApiAsync {
     var request = await requests.customGet(
       '/get-file-info',
       query,
-      'https://api.music.yandex.net/get-file-info',
-      headerss,
+      fullRoute: 'https://api.music.yandex.net/get-file-info',
+      headers: headerss,
+      cancelToken: cancelToken,
     );
     return request;
   }
@@ -212,8 +251,9 @@ class YandexMusicApiAsync {
   Future<dynamic> getTrackLyrics(
     String trackId,
     int userId,
-    String format,
-  ) async {
+    String format, {
+    CancelToken? cancelToken,
+  }) async {
     final sign = getLyricsSign(trackId: trackId);
 
     Map<String, dynamic> headerss = {
@@ -230,65 +270,59 @@ class YandexMusicApiAsync {
         'timeStamp': sign['timestamp'],
         'sign': sign['signature'],
       },
-      'https://api.music.yandex.net/tracks/$trackId/lyrics',
-      headerss,
+      fullRoute: 'https://api.music.yandex.net/tracks/$trackId/lyrics',
+      headers: headerss,
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> downloadTrack(String downloadLink) async {
+  Future<dynamic> downloadTrack(
+    String downloadLink, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.basicGet(
       'route',
-      downloadLink,
-      ResponseType.bytes,
+      fullRoute: downloadLink,
+      responceType: ResponseType.bytes,
+      cancelToken: cancelToken,
     );
     return responce;
-
-    // try {
-    //   final response = await dio.get(
-    //     downloadLink,
-    //     options: Options(
-    //       headers: {
-    //         'Authorization': 'OAuth $token',
-    //       },
-    //       responseType: ResponseType.bytes,
-    //     ),
-    //   );
-
-    //   if (response.statusCode != 200) {
-    //     throw YandexMusicRequestException(
-    //       'Request Failed. Error: ${response.statusMessage}',
-    //       code: response.statusCode,
-    //     );
-    //   } else {
-    //     await trackFile.writeAsBytes(response.data);
-    //   }
-    // } on DioException catch (e) {
-    //   throw YandexMusicNetworkException(
-    //     'Request Failed. Network Error: ${e.message}',
-    //     code: e.response?.statusCode,
-    //   );
-    // }
   }
 
   Future<dynamic> getAdditionalInformationOfTrack(
     int userId,
-    String trackID,
-  ) async {
-    final responce = await requests.basicGet('/tracks/$trackID/supplement');
+    String trackID, {
+    CancelToken? cancelToken,
+  }) async {
+    final responce = await requests.basicGet(
+      '/tracks/$trackID/supplement',
+      cancelToken: cancelToken,
+    );
     return responce;
   }
 
-  Future<dynamic> getSimilarTracks(int userId, String trackID) async {
-    final responce = await requests.basicGet('/tracks/$trackID/similar');
+  Future<dynamic> getSimilarTracks(
+    int userId,
+    String trackID, {
+    CancelToken? cancelToken,
+  }) async {
+    final responce = await requests.basicGet(
+      '/tracks/$trackID/similar',
+      cancelToken: cancelToken,
+    );
     return responce;
   }
 
-  Future<dynamic> getTracks(int userId, List trackIds) async {
+  Future<dynamic> getTracks(
+    int userId,
+    List trackIds, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.customGet('/tracks', {
       'track-ids': trackIds,
       'with-positions': 'false',
-    });
+    }, cancelToken: cancelToken);
     return responce;
   }
 
@@ -296,14 +330,15 @@ class YandexMusicApiAsync {
     String query,
     int page,
     String type,
-    bool noCorrect,
-  ) async {
+    bool noCorrect, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.customGet('/search', {
       'text': query,
       'page': page,
       'type': type,
       'nocorrect': noCorrect,
-    });
+    }, cancelToken: cancelToken);
     return responce;
   }
 
@@ -314,26 +349,39 @@ class YandexMusicApiAsync {
   Future<dynamic> createPlaylist(
     int userId,
     String title,
-    String visibility,
-  ) async {
+    String visibility, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.post(
       '/users/$userId/playlists/create',
-      {'title': title, 'visibility': visibility},
+      queryParameters: {'title': title, 'visibility': visibility},
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> renamePlaylist(int userId, int kind, String newName) async {
+  Future<dynamic> renamePlaylist(
+    int userId,
+    int kind,
+    String newName, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.post(
       '/users/$userId/playlists/$kind/name',
-      {'value': newName},
+      queryParameters: {'value': newName},
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> deletePlaylist(int userId, int kind) async {
+  Future<dynamic> deletePlaylist(
+    int userId,
+    int kind, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.post(
       '/users/$userId/playlists/$kind/delete',
+      cancelToken: cancelToken,
     );
     return responce;
   }
@@ -343,9 +391,10 @@ class YandexMusicApiAsync {
     int userId,
     int kind,
     List<Map<String, dynamic>> tracks,
-    int revision, [
+    int revision, {
     int? at,
-  ]) async {
+    CancelToken? cancelToken,
+  }) async {
     at ??= 0;
     final diffString = jsonEncode([
       {"op": "insert", "at": at, "tracks": tracks},
@@ -357,8 +406,8 @@ class YandexMusicApiAsync {
     };
     final responce = await requests.post(
       '/users/$userId/playlists/$kind/change',
-      null,
-      data,
+      data: data,
+      cancelToken: cancelToken,
     );
     return responce;
   }
@@ -368,9 +417,10 @@ class YandexMusicApiAsync {
     int kind,
     String trackId,
     String albumId,
-    int revision, [
+    int revision, {
     int? at,
-  ]) async {
+    CancelToken? cancelToken,
+  }) async {
     at ??= 0;
     List tracks = [
       {"id": trackId, albumId: albumId},
@@ -385,8 +435,8 @@ class YandexMusicApiAsync {
     };
     final responce = await requests.post(
       '/users/$userId/playlists/$kind/change',
-      null,
-      data,
+      data: data,
+      cancelToken: cancelToken,
     );
     return responce;
   }
@@ -396,8 +446,9 @@ class YandexMusicApiAsync {
     int kind,
     int from,
     int to,
-    int revision,
-  ) async {
+    int revision, {
+    CancelToken? cancelToken,
+  }) async {
     final diffString = jsonEncode([
       {"op": "delete", "from": from, "to": to},
     ]);
@@ -408,8 +459,8 @@ class YandexMusicApiAsync {
     };
     final responce = await requests.post(
       '/users/$userId/playlists/$kind/change',
-      null,
-      data,
+      data: data,
+      cancelToken: cancelToken,
     );
 
     return responce;
@@ -418,82 +469,125 @@ class YandexMusicApiAsync {
   Future<dynamic> changeVisibility(
     int userId,
     int kind,
-    String visibility,
-  ) async {
+    String visibility, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.post(
       '/users/$userId/playlists/$kind/visibility',
-      null,
-      {'value': visibility},
+      queryParameters: {'value': visibility},
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> likeTracks(int userId, List trackIds) async {
+  Future<dynamic> likeTracks(
+    int userId,
+    List trackIds, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.post(
       '/users/$userId/likes/tracks/add-multiple',
-      null,
-      {'track-ids': trackIds},
+      queryParameters: {'track-ids': trackIds},
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> unlikeTracks(int userId, List trackIds) async {
+  Future<dynamic> unlikeTracks(
+    int userId,
+    List trackIds, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.post(
       '/users/$userId/likes/tracks/remove',
-      null,
-      {'track-ids': trackIds},
+      queryParameters: {'track-ids': trackIds},
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> getPlaylistsInformation(List playlistIds) async {
-    final responce = await requests.post('/playlists/list', null, {
-      'playlistIds': playlistIds,
-    });
+  Future<dynamic> getPlaylistsInformation(
+    List playlistIds, {
+    CancelToken? cancelToken,
+  }) async {
+    final responce = await requests.post(
+      '/playlists/list',
+      data: {'playlistIds': playlistIds},
+      cancelToken: cancelToken,
+    );
     return responce;
   }
 
-  Future<dynamic> getAlbum(int albumId) async {
-    final responce = await requests.basicGet('/albums/$albumId');
+  Future<dynamic> getAlbum(int albumId, {CancelToken? cancelToken}) async {
+    final responce = await requests.basicGet(
+      '/albums/$albumId',
+      cancelToken: cancelToken,
+    );
     return responce;
   }
 
-  Future<dynamic> getAlbumWithTracks(int albumId) async {
+  Future<dynamic> getAlbumWithTracks(
+    int albumId, {
+    CancelToken? cancelToken,
+  }) async {
     final responce = await requests.basicGet(
       '/albums/$albumId/with-tracks',
+      cancelToken: cancelToken,
     );
     return responce;
   }
 
-  Future<dynamic> getAlbums(List albumIds) async {
-    final responce = await requests.post('/albums', null, {
-      'album-ids': albumIds,
-    });
+  Future<dynamic> getAlbums(List albumIds, {CancelToken? cancelToken}) async {
+    final responce = await requests.post(
+      '/albums',
+      data: {'album-ids': albumIds},
+      cancelToken: cancelToken,
+    );
     return responce;
   }
 
-  Future<dynamic> getLangingBlocks() async {
+  Future<dynamic> getLangingBlocks({CancelToken? cancelToken}) async {
     final responce = await requests.customGet('/landing3', {
       'blocks':
           'personalplaylists,promotions,new-releases,new-playlists,mixes,chart,artists,albums,playlists,play_contexts,podcasts',
-    });
+    }, cancelToken: cancelToken);
     return responce;
   }
 
-  Future<dynamic> getBlock(String block) async {
+  Future<dynamic> getBlock(String block, {CancelToken? cancelToken}) async {
     final responce = await requests.customGet('/landing3/$block', {
       'blocks': block,
-    });
+    }, cancelToken: cancelToken);
     return responce;
   }
 
-  Future<dynamic> put(String route, Map<String, dynamic> body, [String? fullRoute]) async {
-    final response = await requests.put(route, body, fullRoute);
+  Future<dynamic> put(
+    String route,
+    Map<String, dynamic> body, {
+    String? fullRoute,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await requests.put(
+      route,
+      body,
+      customRoute: fullRoute,
+      cancelToken: cancelToken,
+    );
     return response;
   }
 
-  Future<dynamic> delete(String route, Map<String, dynamic> body, [String? fullRoute]) async {
-    final response = await requests.delete(route, body, fullRoute);
+  Future<dynamic> delete(
+    String route,
+    Map<String, dynamic> body, {
+    String? fullRoute,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await requests.delete(
+      route,
+      body,
+      customRoute: fullRoute,
+      cancelToken: cancelToken,
+    );
     return response;
   }
 
@@ -502,30 +596,29 @@ class YandexMusicApiAsync {
   Future<dynamic> getUploadLink(
     int userId,
     String fileName,
-    String playlistId,
-  ) async {
-    // Map<String, dynamic> headerss = {
-    //   'Authorization': 'OAuth $token',
-    //   'Content-Type': 'application/json',
-    //   'User-Agent': 'YandexMusicAPI/1.0.0',
-    //   'x-yandex-music-client': 'YandexMusicWebNext/1.0.0',
-    //   'x-yandex-music-without-invocation-info': '1',
-    //   'x-yandex-music-multi-auth-user-id': '$userId',
-    //   'Referer': 'https://music.yandex.ru/',
-    //   'Origin': 'https://music.yandex.ru',
-    // };
+    String playlistId, {
+    CancelToken? cancelToken,
+  }) async {
 
     final response = await requests.post(
       '/loader/upload-url',
-      {'uid': '$userId', 'playlist-id': playlistId, 'path': fileName},
-      '/loader/upload-url',
-      // headerss,
+      queryParameters: {
+        'uid': '$userId',
+        'playlist-id': playlistId,
+        'path': fileName,
+      },
+      data: '/loader/upload-url',
+      cancelToken: cancelToken,
     );
 
     return response;
   }
 
-  Future<Response> uploadFile(String url, File file) async {
+  Future<Response> uploadFile(
+    String url,
+    File file, {
+    CancelToken? cancelToken,
+  }) async {
     final formData = FormData.fromMap({
       'file': await MultipartFile.fromFile(
         file.path,
@@ -536,11 +629,95 @@ class YandexMusicApiAsync {
     return await dio.post(
       url,
       data: formData,
-      options: Options(
-        headers: {
-          'Content-Type': 'multipart/form-data',
+      options: Options(headers: {'Content-Type': 'multipart/form-data'}),
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<dynamic> getAvailableSettings() async {
+    return await requests.basicGet('/rotor/wave/settings');
+  }
+
+  Future<dynamic> createWave(
+    List seeds, {
+    bool? includeTracksInResponce,
+    bool? includeWaveModel,
+    bool? interactive,
+    List? queue,
+  }) async {
+    return await requests.post(
+      '/rotor/session/new',
+      data: {
+        'includeTracksInResponse': includeTracksInResponce ??= true,
+        'includeWaveModel': includeWaveModel ??= true,
+        'interactive': interactive ??= true,
+        'queue': queue ??= [],
+        'seeds': seeds,
+      },
+    );
+  }
+
+  Future<dynamic> trackFinishedFeedback(
+    Wave wave,
+    List<Track> queue,
+    double totalPlayedSeconds,
+    Track track,
+  ) async {
+    await _feedbacker(wave, queue, totalPlayedSeconds, track, 'trackFinished');
+  }
+
+  Future<dynamic> skipFeedback(
+    Wave wave,
+    List<Track> queue,
+    double totalPlayedSeconds,
+    Track track,
+  ) async {
+    await _feedbacker(wave, queue, totalPlayedSeconds, track, 'skip');
+  }
+
+  Future<dynamic> trackStartedFeedBack(Wave wave, Track track) async {
+    final timestamp = DateTime.now().toUtc().toIso8601String();
+    return await requests.post(
+      '/rotor/session/${wave.sessionId}/feedback',
+      data: {
+        'batchId': wave.batchId,
+        'from': 'web-home-rup_main-radio-default',
+        'event': {
+          'timestamp': timestamp,
+          'trackId': '${track.id}:${track.albums[0].id}',
+          'type': 'trackStarted',
         },
-      ),
+      },
+    );
+  }
+
+  Future<dynamic> _feedbacker(
+    Wave wave,
+    List<Track> queue,
+    double totalPlayedSeconds,
+    Track track,
+    String feedbackType,
+  ) async {
+    List<String> b = queue.map((e) => '${e.id}:${e.albums[0].id}').toList();
+    final timestamp = DateTime.now().toUtc().toIso8601String();
+
+    return await requests.post(
+      '/rotor/session/${wave.sessionId}/tracks',
+      data: {
+        'queue': b,
+        'feedbacks': [
+          {
+            'batchId': wave.batchId,
+            'from': 'web-home-rup_main-radio-default',
+            'event': {
+              'timestamp': timestamp,
+              'type': feedbackType,
+              'totalPlayedSeconds': totalPlayedSeconds,
+              'trackId': '${track.id}:${track.albums[0].id}',
+            },
+          },
+        ],
+      },
     );
   }
 }

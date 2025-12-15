@@ -1,12 +1,13 @@
 import 'dart:ui';
-import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:yandex_music/yandex_music.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:quark/objects/track.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:yandex_music/yandex_music.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 Widget playlistSearch(
   TextEditingController searchController,
@@ -45,29 +46,29 @@ class PlaylistOverlay extends StatefulWidget {
   final AnimationController playlistAnimationController;
   final Animation<Offset> playlistOffsetAnimation;
   final VoidCallback togglePlaylist;
-  final List<Track> playlist;
+  final List<PlayerTrack> playlist;
   final String playlistName;
-  final Function(List<Track> newPlaylist) setPlaylist;
+  final Function(List<PlayerTrack> newPlaylist) setPlaylist;
   final YandexMusic yandexMusic;
   final Function({
     bool next,
     bool previous,
     bool playpause,
     bool reload,
-    Track? custom,
+    PlayerTrack? custom,
   })
   changeTrack;
-  final Function(List<Track> playlist) changePlaylist;
+  final Function(List<PlayerTrack> playlist) changePlaylist;
   final Function(int operation) showOperation;
   final List<String> likedPlaylist;
   final Function(
-    Track, [
+    PlayerTrack, [
     bool? addToEnd,
     bool? addLikedTrack,
     bool? removeLiked,
   ])
   addNext;
-  final Function(Track track) removeTrack;
+  final Function(PlayerTrack track) removeTrack;
 
   const PlaylistOverlay({
     super.key,
@@ -92,7 +93,7 @@ class PlaylistOverlay extends StatefulWidget {
 
 class _PlaylistOverlayState extends State<PlaylistOverlay> {
   late final TextEditingController _searchController;
-  late List<Track> playlistView;
+  late List<PlayerTrack> playlistView;
   Timer? _searchDebounceTimer;
   final Duration _searchDebounceDuration = const Duration(milliseconds: 500);
   CancelToken? searchCancel = CancelToken();
@@ -137,20 +138,18 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
       }
 
       for (final artist in track.artists) {
-        final artistTitle = artist.title;
-        if (artistTitle != null) {
-          if (artistTitle.toLowerCase().contains(searchLower)) {
-            return true;
-          }
+        final artistTitle = artist;
+
+        if (artistTitle.toLowerCase().contains(searchLower)) {
+          return true;
         }
       }
 
       for (final album in track.albums) {
-        final albumtitle = album.title;
-        if (albumtitle != null) {
-          if (albumtitle.toLowerCase().contains(searchLower)) {
-            return true;
-          }
+        final albumtitle = album;
+
+        if (albumtitle.toLowerCase().contains(searchLower)) {
+          return true;
         }
       }
 
@@ -175,9 +174,23 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
           var directory = await getApplicationCacheDirectory();
           var result = await widget.yandexMusic.search.tracks(search);
           for (var track in result) {
-            track.filepath =
-                '${directory.path}/cisum_xednay_krauq${track.id}.flac';
-            filtered.add(track);
+            YandexMusicTrack tr = YandexMusicTrack(
+              filepath: '${directory.path}/cisum_xednay_krauq${track.id}.flac',
+              title: track.title,
+              albums: track.albums.isNotEmpty
+                  ? track.albums
+                        .map((album) => album.title ?? 'Unknown album')
+                        .toList()
+                  : ['Unknown album'],
+              artists: track.artists
+                  .map((album) => album.title ?? 'Unknown album')
+                  .toList(),
+              track: track,
+            );
+            String? cover = track.coverUri;
+            cover ??= tr.cover;
+            tr.cover = cover;
+            filtered.add(tr);
           }
 
           if (currentQuery == search && currentQuery.isNotEmpty) {
@@ -186,13 +199,162 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
             });
           }
         } catch (e) {
+      print(e);
+
           widget.showOperation(-1);
         }
       });
     }
   }
 
-  void searchSimilar(String trackId) {}
+  // WIDGET FUNCTIONS
+
+  Future<void> likeUnlike(int index) async {
+    if (widget.likedPlaylist.contains(
+      (playlistView[index] as YandexMusicTrack).track.id,
+    )) {
+      try {
+        widget.yandexMusic.usertracks.unlike([
+          (playlistView[index] as YandexMusicTrack).track.id,
+        ]);
+        widget.showOperation(1);
+        setState(() {
+          widget.likedPlaylist.remove(
+            (playlistView[index] as YandexMusicTrack).track.id,
+          );
+        });
+        widget.addNext(playlistView[index], null, null, true);
+      } catch (e) {
+        widget.showOperation(-1);
+      }
+    } else {
+      try {
+        widget.yandexMusic.usertracks.like([
+          (playlistView[index] as YandexMusicTrack).track.id,
+        ]);
+        widget.showOperation(1);
+        widget.likedPlaylist.add(
+          (playlistView[index] as YandexMusicTrack).track.id,
+        );
+        widget.addNext(playlistView[index], null, true);
+      } catch (e) {
+        widget.showOperation(-1);
+      }
+    }
+  }
+
+  Future<void> removeTrackFromPlaylist(int index) async {
+    widget.removeTrack(playlistView[index]);
+    setState(() {
+      playlistView.remove(playlistView[index]);
+    });
+  }
+
+  Future<void> addNextQueue(int index) async {
+    PlayerTrack track = playlistView[index];
+    if (track is LocalTrack) {
+      LocalTrack tr = LocalTrack(
+        filepath: track.filepath,
+        title: track.title,
+        albums: track.albums,
+        artists: track.artists,
+        cover: track.cover,
+        coverByted: track.coverByted
+      );
+      tr.cover = track.cover;
+      index = widget.addNext(tr);
+      print(index);
+      setState(() {
+        playlistView.insert(index, tr);
+      });
+    } else if (track is YandexMusicTrack) {
+      YandexMusicTrack tr = YandexMusicTrack(
+        filepath: track.filepath,
+        title: track.title,
+        albums: track.albums,
+        artists: track.artists,
+        track: track.track,
+      );
+      tr.cover = track.cover;
+
+      index = widget.addNext(tr);
+      print(index);
+      setState(() {
+        playlistView.insert(index, tr);
+      });
+    }
+  }
+
+  Future<void> addBottomQueue(int index) async {
+    PlayerTrack track = playlistView[index];
+    if (track is LocalTrack) {
+      LocalTrack tr = LocalTrack(
+        filepath: track.filepath,
+        title: track.title,
+        albums: track.albums,
+        artists: track.artists,
+        cover: track.cover,
+        coverByted: track.coverByted
+      );
+      tr.cover = track.cover;
+      index = widget.addNext(tr, true);
+      print(index);
+      setState(() {
+        playlistView.add(tr);
+      });
+    } else if (track is YandexMusicTrack) {
+      YandexMusicTrack tr = YandexMusicTrack(
+        filepath: track.filepath,
+        title: track.title,
+        albums: track.albums,
+        artists: track.artists,
+        track: track.track,
+      );
+      tr.cover = track.cover;
+      index = widget.addNext(tr, true);
+      print(index);
+      setState(() {
+        playlistView.add(tr);
+      });
+    }
+  }
+
+  Future<void> findSimilar(int index) async {
+    try {
+      _searchController.text = 'Similar: ${playlistView[index].title}';
+      List<PlayerTrack> filtered = [];
+      var directory = await getApplicationCacheDirectory();
+      var result = await widget.yandexMusic.tracks.getSimilar(
+        (playlistView[index] as YandexMusicTrack).track.id,
+      );
+
+      for (Track track in result) {
+        YandexMusicTrack tr = YandexMusicTrack(
+          filepath: '${directory.path}/cisum_xednay_krauq${track.id}.flac',
+          title: track.title,
+          albums: track.albums.isNotEmpty
+              ? track.albums
+                    .map((album) => album.title ?? 'Unknown album')
+                    .toList()
+              : ['Unknown album'],
+          artists: track.artists
+              .map((album) => album.title ?? 'Unknown album')
+              .toList(),
+          track: track,
+        );
+        String? cover = track.coverUri;
+        cover ??= tr.cover;
+        tr.cover = cover;
+        filtered.add(tr);
+      }
+      setState(() {
+        playlistView = filtered;
+      });
+    } catch (e) {
+      print(e);
+      widget.showOperation(-1);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -252,50 +414,10 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                       } else {
                                         menuOpened = true;
                                         return [
+                                          if (playlistView[index] is YandexMusicTrack)
                                           PopupMenuItem(
-                                            onTap: () {
-                                              if (widget.likedPlaylist.contains(
-                                                playlistView[index].id,
-                                              )) {
-                                                try {
-                                                  widget.yandexMusic.usertracks
-                                                      .unlike([
-                                                        playlistView[index].id,
-                                                      ]);
-                                                  widget.showOperation(1);
-                                                  setState(() {
-                                                    widget.likedPlaylist.remove(
-                                                      playlistView[index].id,
-                                                    );
-                                                  });
-                                                  widget.addNext(
-                                                    playlistView[index],
-                                                    null,
-                                                    null,
-                                                    true,
-                                                  );
-                                                } catch (e) {
-                                                  widget.showOperation(-1);
-                                                }
-                                              } else {
-                                                try {
-                                                  widget.yandexMusic.usertracks
-                                                      .like([
-                                                        playlistView[index].id,
-                                                      ]);
-                                                  widget.showOperation(1);
-                                                  widget.likedPlaylist.add(
-                                                    playlistView[index].id,
-                                                  );
-                                                  widget.addNext(
-                                                    playlistView[index],
-                                                    null,
-                                                    true,
-                                                  );
-                                                } catch (e) {
-                                                  widget.showOperation(-1);
-                                                }
-                                              }
+                                            onTap: () async {
+                                              await likeUnlike(index);
                                             },
                                             child: Row(
                                               children: [
@@ -309,7 +431,10 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                                 ),
                                                 Text(
                                                   widget.likedPlaylist.contains(
-                                                        playlistView[index].id,
+                                                        (playlistView[index]
+                                                                as YandexMusicTrack)
+                                                            .track
+                                                            .id,
                                                       )
                                                       ? 'Unlike'
                                                       : 'Like',
@@ -322,15 +447,10 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                             ),
                                           ),
                                           PopupMenuItem(
-                                            onTap: () {
-                                              widget.removeTrack(
-                                                playlistView[index],
+                                            onTap: () async {
+                                              await removeTrackFromPlaylist(
+                                                index,
                                               );
-                                              setState(() {
-                                                playlistView.remove(
-                                                  playlistView[index],
-                                                );
-                                              });
                                             },
                                             child: Row(
                                               children: [
@@ -355,20 +475,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                           ),
                                           PopupMenuItem(
                                             onTap: () async {
-                                              var track = playlistView[index];
-                                              var directory =
-                                                  await getApplicationCacheDirectory();
-                                              Track newTrack = Track(track.raw);
-                                              newTrack.filepath =
-                                                  '${directory.path}/cisum_xednay_krauq${newTrack.id}.flac';
-                                              index = widget.addNext(newTrack);
-                                              print(index);
-                                              setState(() {
-                                                playlistView.insert(
-                                                  index,
-                                                  newTrack,
-                                                );
-                                              });
+                                              await addNextQueue(index);
                                             },
                                             child: Row(
                                               children: [
@@ -394,20 +501,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                           ),
                                           PopupMenuItem(
                                             onTap: () async {
-                                              var track = playlistView[index];
-                                              var directory =
-                                                  await getApplicationCacheDirectory();
-                                              Track newTrack = Track(track.raw);
-                                              newTrack.filepath =
-                                                  '${directory.path}/cisum_xednay_krauq${newTrack.id}.flac';
-                                              index = widget.addNext(
-                                                newTrack,
-                                                true,
-                                              );
-                                              print(index);
-                                              setState(() {
-                                                playlistView.add(newTrack);
-                                              });
+                                              await addBottomQueue(index);
                                             },
                                             child: Row(
                                               children: [
@@ -430,33 +524,10 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                               ],
                                             ),
                                           ),
+                                          if (playlistView[index] is YandexMusicTrack)
                                           PopupMenuItem(
                                             onTap: () async {
-                                              try {
-                                                _searchController.text =
-                                                    'Similar: ${playlistView[index].title}';
-                                                List<Track> filtered = [];
-                                                var directory =
-                                                    await getApplicationCacheDirectory();
-                                                var result = await widget
-                                                    .yandexMusic
-                                                    .tracks
-                                                    .getSimilar(
-                                                      playlistView[index].id,
-                                                    );
-
-                                                for (Track track in result) {
-                                                  track.filepath =
-                                                      '${directory.path}/cisum_xednay_krauq${track.id}.flac';
-                                                  filtered.add(track);
-                                                }
-                                                setState(() {
-                                                  playlistView = filtered;
-                                                });
-                                              } catch (e) {
-                                                print(e);
-                                                widget.showOperation(-1);
-                                              }
+                                              await findSimilar(index);
                                             },
                                             enabled: playlistView[index]
                                                 .albums
@@ -505,188 +576,6 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                                 ],
                                               ),
                                             ),
-
-                                          // PopupMenuItem(
-                                          //   child: Row(
-                                          //     children: [
-                                          //       Icon(
-                                          //         CupertinoIcons.info,
-                                          //         size: popupIconSize,
-                                          //         color: popupIconsColor,
-                                          //       ),
-                                          //       SizedBox(
-                                          //         width: popupSpaceBetween,
-                                          //       ),
-                                          //       Text(
-                                          //         'Show about',
-                                          //         style: TextStyle(
-                                          //           color: popupTextColor,
-                                          //         ),
-                                          //       ),
-                                          //       PopupMenuButton(
-                                          //         constraints: BoxConstraints(
-                                          //           minWidth: 300,
-                                          //           maxWidth:
-                                          //               MediaQuery.of(
-                                          //                 context,
-                                          //               ).size.width -
-                                          //               10,
-                                          //         ),
-                                          //         iconColor: Colors.white
-                                          //             .withOpacity(0.6),
-                                          //         elevation: 1000,
-                                          //         offset: Offset(70, 0),
-                                          //         color: Color.fromARGB(
-                                          //           20,
-                                          //           255,
-                                          //           255,
-                                          //           255,
-                                          //         ),
-                                          //         onCanceled: () {
-                                          //           menuOpened = false;
-                                          //         },
-                                          //         itemBuilder: (context) {
-                                          //           menuOpened = true;
-                                          //           return [
-                                          //             PopupMenuItem(
-                                          //               onTap: () {},
-                                          //               child: Row(
-                                          //                 children: [
-                                          //                   Icon(
-                                          //                     Icons.title,
-                                          //                     size:
-                                          //                         popupIconSize,
-                                          //                     color:
-                                          //                         popupIconsColor,
-                                          //                   ),
-                                          //                   SizedBox(
-                                          //                     width:
-                                          //                         popupSpaceBetween,
-                                          //                   ),
-                                          //                   Text(
-                                          //                     'Title: ${playlistView[index].title}',
-                                          //                     style: TextStyle(
-                                          //                       color:
-                                          //                           popupTextColor,
-                                          //                     ),
-                                          //                   ),
-                                          //                 ],
-                                          //               ),
-                                          //             ),
-                                          //             if (playlistView[index]
-                                          //                 .artists
-                                          //                 .isNotEmpty)
-                                          //               PopupMenuItem(
-                                          //                 onTap: () {},
-                                          //                 child: Row(
-                                          //                   children: [
-                                          //                     Icon(
-                                          //                       Icons
-                                          //                           .face_6_outlined,
-                                          //                       size:
-                                          //                           popupIconSize,
-                                          //                       color:
-                                          //                           popupIconsColor,
-                                          //                     ),
-                                          //                     SizedBox(
-                                          //                       width:
-                                          //                           popupSpaceBetween,
-                                          //                     ),
-                                          //                     Text(
-                                          //                       'Artists: ${playlistView[index].artists.map((artist) => artist.title ?? 'Unknown').join(', ')}',
-                                          //                       style: TextStyle(
-                                          //                         color:
-                                          //                             popupTextColor,
-                                          //                       ),
-                                          //                     ),
-                                          //                   ],
-                                          //                 ),
-                                          //               ),
-                                          //             if (playlistView[index]
-                                          //                 .albums
-                                          //                 .isNotEmpty)
-                                          //               PopupMenuItem(
-                                          //                 onTap: () {},
-                                          //                 child: Row(
-                                          //                   children: [
-                                          //                     Icon(
-                                          //                       Icons.album,
-                                          //                       size:
-                                          //                           popupIconSize,
-                                          //                       color:
-                                          //                           popupIconsColor,
-                                          //                     ),
-                                          //                     SizedBox(
-                                          //                       width:
-                                          //                           popupSpaceBetween,
-                                          //                     ),
-                                          //                     Text(
-                                          //                       'Album: ${playlistView[index].albums.map((artist) => artist.title ?? 'Unknown').join(', ')}',
-                                          //                       style: TextStyle(
-                                          //                         color:
-                                          //                             popupTextColor,
-                                          //                       ),
-                                          //                     ),
-                                          //                   ],
-                                          //                 ),
-                                          //               ),
-                                          //             PopupMenuItem(
-                                          //               onTap: () {},
-                                          //               child: Row(
-                                          //                 children: [
-                                          //                   Icon(
-                                          //                     Icons
-                                          //                         .access_time_sharp,
-                                          //                     size:
-                                          //                         popupIconSize,
-                                          //                     color:
-                                          //                         popupIconsColor,
-                                          //                   ),
-                                          //                   SizedBox(
-                                          //                     width:
-                                          //                         popupSpaceBetween,
-                                          //                   ),
-                                          //                   Text(
-                                          //                     'Duration: ${playlistView[index].durationMs}ms',
-                                          //                     style: TextStyle(
-                                          //                       color:
-                                          //                           popupTextColor,
-                                          //                     ),
-                                          //                   ),
-                                          //                 ],
-                                          //               ),
-                                          //             ),
-                                          //             PopupMenuItem(
-                                          //               onTap: () {},
-                                          //               child: Row(
-                                          //                 children: [
-                                          //                   Icon(
-                                          //                     Icons.numbers,
-                                          //                     size:
-                                          //                         popupIconSize,
-                                          //                     color:
-                                          //                         popupIconsColor,
-                                          //                   ),
-                                          //                   SizedBox(
-                                          //                     width:
-                                          //                         popupSpaceBetween,
-                                          //                   ),
-                                          //                   Text(
-                                          //                     'ID: ${playlistView[index].id}',
-                                          //                     style: TextStyle(
-                                          //                       color:
-                                          //                           popupTextColor,
-                                          //                     ),
-                                          //                   ),
-                                          //                 ],
-                                          //               ),
-                                          //             ),
-                                          //           ];
-                                          //         },
-                                          //       ),
-                                          //     ],
-                                          //   ),
-                                          // ),
                                         ];
                                       }
                                     },
@@ -726,7 +615,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
   }
 }
 
-Widget songElement(Track track) {
+Widget songElement(PlayerTrack track) {
   return Row(
     children: [
       Container(
@@ -734,10 +623,10 @@ Widget songElement(Track track) {
         width: 55,
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: (track.coverByted != null)
-                ? MemoryImage(track.coverByted ??= Uint8List(0))
+            image: (track is LocalTrack && track.coverByted != Uint8List(0))
+                ? MemoryImage(track.coverByted)
                 : CachedNetworkImageProvider(
-                    'https://${track.coverUri.replaceAll('%%', '300x300')}',
+                    'https://${track.cover.replaceAll('%%', '300x300')}',
                   ),
 
             fit: BoxFit.cover,
@@ -769,9 +658,7 @@ Widget songElement(Track track) {
               style: TextStyle(color: Colors.white, fontFamily: 'noto'),
             ),
             Text(
-              track.artists
-                  .map((artist) => artist.title ?? 'Unknown')
-                  .join(', '),
+              track.artists.join(', '),
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: Colors.grey, fontFamily: 'noto'),
             ),
@@ -809,11 +696,11 @@ Widget appBar(
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            onPressed: refreshPlaylist,
-            icon: Icon(Icons.refresh),
-            color: Colors.white.withOpacity(0.8),
-          ),
+          // IconButton(
+          //   onPressed: refreshPlaylist,
+          //   icon: Icon(Icons.refresh),
+          //   color: Colors.white.withOpacity(0.8),
+          // ),
           IconButton(
             onPressed: togglePlaylist,
             icon: Icon(Icons.close),

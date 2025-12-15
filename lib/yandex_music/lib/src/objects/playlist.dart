@@ -89,7 +89,7 @@ class Playlist2 {
       title = json['title'],
       revision = json['revision'],
       visibility = json['visibility'],
-      cover = json['cover']['error'] == null ?  json['cover'] : {"type": "pic", "uri": "raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png", "custom": true},
+      cover = json['cover'],
       tracks = json['tracks'] != null
           ? (json['tracks'] as List).map((t) => Track2(t['track'] ?? t)).toList()
           : [],

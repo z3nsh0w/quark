@@ -2,19 +2,21 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quark/objects/track.dart';
 import 'dart:math';
 
 // Additional packages
+import 'package:path/path.dart' as path;
+import 'package:file_picker/file_picker.dart';
 import 'package:yandex_music/yandex_music.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:path/path.dart' as path;
 
 // Local files
+import 'package:quark/objects/playlist.dart';
 import 'database.dart';
 import 'playlist_page.dart';
 
@@ -22,13 +24,12 @@ import 'playlist_page.dart';
 // TODO: ADD LAST PLAYLIST
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
 
-
 void main() async {
-  runApp(const quark());
+  runApp(const Quark());
 }
 
-class quark extends StatelessWidget {
-  const quark({super.key});
+class Quark extends StatelessWidget {
+  const Quark({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -40,10 +41,10 @@ class quark extends StatelessWidget {
 }
 
 class Files {
-  Future<List<Track>> getFilesFromDirectory(String directoryPath) async {
+  Future<List<PlayerTrack>> getFilesFromDirectory(String directoryPath) async {
     try {
       final dir = Directory(directoryPath);
-      final List<Track> fileNames = [];
+      final List<PlayerTrack> fileNames = [];
 
       await for (final entity in dir.list()) {
         if (entity is File) {
@@ -56,7 +57,6 @@ class Files {
               entity.path.toLowerCase().endsWith('.alac') ||
               entity.path.toLowerCase().endsWith('.pcm') ||
               entity.path.toLowerCase().endsWith('.m4a')) {
-
             try {
               final tagsFromFile = readMetadata(
                 File(entity.path),
@@ -64,46 +64,28 @@ class Files {
               );
 
               String trackName = tagsFromFile.title ??= 'Unknown';
-              var artists = [
-                {'name': tagsFromFile.artist ??= 'Unknown'},
-              ];
               Uint8List? cover = tagsFromFile.pictures.isNotEmpty
                   ? tagsFromFile.pictures.first.bytes
                   : null;
 
-              Track track = Track({
-                'title': trackName,
-                // TODO: Create a field in the track object for the local, Yandex, or Spotify source
-                'id': 'iddoesntexists',
-                'artists': artists,
-                'albums': [],
-                'coverUri':
-                    'raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png',
-              });
+              LocalTrack track = LocalTrack(
+                title: trackName,
+                artists: [tagsFromFile.artist ??= 'Unknown'],
+                filepath: entity.path,
+                albums: ['Unknown'],
+              );
 
-              track.filepath = entity.path;
-              track.coverByted = cover;
+              track.coverByted = cover!;
 
               fileNames.add(track);
             } catch (e) {
               String trackName = path.basename(path.normalize(entity.path));
-              var artists = [
-                {'name': 'Unknown'},
-              ];
-              Uint8List? cover = null;
-
-              Track track = Track({
-                'title': trackName,
-                'id': 'iddoesntexists',
-                'artists': artists,
-                'albums': [],
-                'coverUri':
-                    'raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png',
-              });
-
-              track.filepath = entity.path;
-              track.coverByted = cover;
-
+              LocalTrack track = LocalTrack(
+                title: trackName,
+                artists: ['Unknown'],
+                filepath: entity.path,
+                albums: ['Unknown'],
+              );
               fileNames.add(track);
             }
           }
@@ -134,7 +116,7 @@ class _MainPageState extends State<MainPage> {
     try {
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
       if (selectedDirectory != null) {
-        List<Track> result = await Files().getFilesFromDirectory(
+        List<PlayerTrack> result = await Files().getFilesFromDirectory(
           selectedDirectory,
         );
         if (result.isNotEmpty) {
@@ -168,7 +150,8 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  void playlistRestore() async { // TODO: finish
+  void playlistRestore() async {
+    // TODO: finish
     PlayerPlaylist? lastPlaylist = await Database.getValue('last_playlist');
     String? token = await Database.getValue('yandex_music_token');
     if (lastPlaylist == null) {
@@ -775,12 +758,38 @@ class _YandexPlaylistsState extends State<YandexPlaylists> {
                                 .getTracks(trackIds);
                             var cacheDirectory =
                                 await getApplicationCacheDirectory();
-                            playlistTracks.forEach(
-                              (track) => track.filepath =
-                                  '${cacheDirectory.path}/cisum_xednay_krauq${track.id}.flac',
-                            );
-                            playlistTracks.removeWhere(
-                              (track) => track.available == false,
+
+                            List<YandexMusicTrack> output = [];
+
+                            playlistTracks.forEach((track) {
+                              YandexMusicTrack tr = YandexMusicTrack(
+                                filepath:
+                                    '${cacheDirectory.path}/cisum_xednay_krauq${track.id}.flac',
+                                title: track.title,
+                                albums: track.albums.isNotEmpty
+                                    ? track.albums
+                                          .map(
+                                            (album) =>
+                                                album.title ?? 'Unknown album',
+                                          )
+                                          .toList()
+                                    : ['Unknown album'],
+                                artists: track.artists
+                                    .map(
+                                      (album) => album.title ?? 'Unknown album',
+                                    )
+                                    .toList(),
+                                track: track
+                              );
+                              String? cover = track.coverUri;
+                              cover ??= tr.cover;
+                              tr.cover = cover;
+                              
+                              output.add(tr);
+                              print(tr.cover);
+                            });
+                            output.removeWhere(
+                              (track) => track.track.available != true,
                             );
 
                             await widget.closeView();
@@ -790,7 +799,7 @@ class _YandexPlaylistsState extends State<YandexPlaylists> {
                                 widget.playlists[index].ownerUid,
                                 widget.playlists[index].kind,
                                 widget.playlists[index].title,
-                                playlistTracks,
+                                output,
                               ),
                             );
                           },
@@ -864,153 +873,4 @@ class _YandexPlaylistsState extends State<YandexPlaylists> {
       ),
     );
   }
-}
-
-Widget yandexPlaylists(
-  BuildContext context,
-  Function() closeView,
-  YandexMusic yandexMusic,
-  List<Playlist2> playlists,
-  Function(PlayerPlaylist playlist) playlistRouter,
-) {
-  final size = MediaQuery.of(context).size;
-
-  bool enabled = true;
-
-  return Center(
-    child: Container(
-      alignment: AlignmentDirectional.center,
-      width: min(size.width * 0.92, 1040),
-      height: min(size.height * 0.92, 1036),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(15)),
-        color: Color.fromARGB(30, 255, 255, 255),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(36.0),
-              child: Wrap(
-                spacing: 16.0,
-                runSpacing: 16.0,
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                direction: Axis.horizontal,
-                children: List.generate(playlists.length, (index) {
-                  return Container(
-                    width: 310,
-                    height: 310,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.all(Radius.circular(15)),
-                      image: DecorationImage(
-                        image: CachedNetworkImageProvider(
-                          '${yandexMusic.playlists.getPlaylistCoverArtUrl(playlists[index].cover ?? {"type": "pic", "uri": "raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png", "custom": true})}',
-                        ),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    child: Material(
-                      clipBehavior: Clip.antiAlias,
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(15),
-
-                      child: InkWell(
-                        onTap: () async {
-                          if (!enabled) {
-                            return;
-                          }
-
-                          final trackIds = playlists[index].tracks
-                              .map((track) => track.trackID)
-                              .toList();
-                          if (trackIds.isEmpty) {
-                            return;
-                          }
-                          enabled = false;
-                          final playlistTracks = await yandexMusic.tracks
-                              .getTracks(trackIds);
-                          var cacheDirectory =
-                              await getApplicationCacheDirectory();
-                          playlistTracks.forEach(
-                            (track) => track.filepath =
-                                '${cacheDirectory.path}/cisum_xednay_krauq${track.id}.flac',
-                          );
-                          playlistTracks.removeWhere(
-                            (track) => track.available == false,
-                          );
-
-                          playlistRouter(
-                            PlayerPlaylist(
-                              playlists[index].ownerUid,
-                              playlists[index].kind,
-                              playlists[index].title,
-                              playlistTracks,
-                            ),
-                          );
-                        },
-
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                padding: EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
-                                    colors: [
-                                      Colors.black.withOpacity(0.8),
-                                      Colors.black.withOpacity(0.4),
-                                      Colors.transparent,
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.only(
-                                    bottomLeft: Radius.circular(15),
-                                    bottomRight: Radius.circular(15),
-                                  ),
-                                ),
-                                child: Text(
-                                  playlists[index].title,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-
-                            Positioned(
-                              top: 10,
-                              right: 10,
-                              child: IconButton(
-                                onPressed: () {},
-                                icon: Transform.rotate(
-                                  angle: 40 * (3.14159 / 180),
-                                  child: Icon(
-                                    Icons.push_pin_rounded,
-                                    color: Color.fromRGBO(255, 255, 255, 0.500),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 }
