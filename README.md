@@ -23,22 +23,16 @@
 - **Slowing down/Speed up tracks (Linux only)**
 - **Beautiful Design**
 
-## Current version: 0.2.2
-
-### Downloads
-
-All files are available in the [**Releases**](https://github.com/z3nsh0w/QUARK/releases) section
-
-> **Note:** macOS version coming soon (waiting for our dev to grace us with their attention)
-
 ### ⚠ Important Notes
 
 > [!WARNING]
 > **Windows**
-> To use player on Windows older than 10 1809 you need to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe). 
+> To use player on Windows you need to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
+>
+> To use the player in Windows versions lower than 10 1809, you must additionally install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
 > 
 > **For Linux Users:**
-> - Requires `libwebkit2gtk` or `qtwebengine` (usually pre-installed on popular distributions)
+> - Requires `libgtk-4-1` or `libqt6gui6` (usually pre-installed on popular distributions)
 
 ## Screenshots
 
@@ -49,11 +43,11 @@ All files are available in the [**Releases**](https://github.com/z3nsh0w/QUARK/r
 
 ## Development Team
 
-**Made by Penises Development Group (Penises DG)**
+**Made by PDG**
 - [@z3nsh0w](https://github.com/z3nsh0w)
 - [@aror](https://github.com/Aror1)
 
 ## License
 
-#### This project is licensed under MIT license. See the `LICENSE` file for details.
+**This project is licensed under MIT license. See the `LICENSE` file for details.**
 ---
