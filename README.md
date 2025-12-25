@@ -29,7 +29,7 @@
 > **Windows**
 > To use player on Windows you need to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
 >
-> To use the player in Windows versions lower than 10 1809, you must additionally install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
+> To use the player in Windows versions lower than 10 1809, you could additionally install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
 > 
 > **For Linux Users:**
 > - Requires `libgtk-4-1` or `libqt6gui6` (usually pre-installed on popular distributions)
