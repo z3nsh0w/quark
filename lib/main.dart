@@ -1,26 +1,22 @@
 // Flutter & Dart
 import 'dart:io';
-import 'package:flutter/cupertino.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:quark/objects/track.dart';
-import 'dart:math';
 
 // Additional packages
 import 'package:logging/logging.dart';
-import 'package:path/path.dart' as path;
 import 'package:file_picker/file_picker.dart';
 import 'package:yandex_music/yandex_music.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 
 // Local files
 import 'playlist_page.dart';
+import '/services/files.dart';
+import '/widgets/settings.dart';
 import '/objects/playlist.dart';
-// import '/widgets/settings.dart';
 import '/services/database.dart';
+import '/widgets/yandex_login.dart';
 import '/widgets/yandex_playlists_widget.dart';
 
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
@@ -41,64 +37,6 @@ class Quark extends StatelessWidget {
   }
 }
 
-class Files {
-  Future<List<PlayerTrack>> getFilesFromDirectory(String directoryPath) async {
-    try {
-      final dir = Directory(directoryPath);
-      final List<PlayerTrack> fileNames = [];
-
-      await for (final entity in dir.list()) {
-        if (entity is File) {
-          if (entity.path.toLowerCase().endsWith('.mp3') ||
-              entity.path.toLowerCase().endsWith('.wav') ||
-              entity.path.toLowerCase().endsWith('.flac') ||
-              entity.path.toLowerCase().endsWith('.dsf') ||
-              entity.path.toLowerCase().endsWith('.aac') ||
-              entity.path.toLowerCase().endsWith('.ogg') ||
-              entity.path.toLowerCase().endsWith('.alac') ||
-              entity.path.toLowerCase().endsWith('.pcm') ||
-              entity.path.toLowerCase().endsWith('.m4a')) {
-            try {
-              final tagsFromFile = readMetadata(
-                File(entity.path),
-                getImage: true,
-              );
-
-              String trackName = tagsFromFile.title ??= 'Unknown';
-              Uint8List? cover = tagsFromFile.pictures.isNotEmpty
-                  ? tagsFromFile.pictures.first.bytes
-                  : null;
-
-              LocalTrack track = LocalTrack(
-                title: trackName,
-                artists: [tagsFromFile.artist ??= 'Unknown'],
-                filepath: entity.path,
-                albums: ['Unknown'],
-              );
-
-              track.coverByted = cover!;
-
-              fileNames.add(track);
-            } catch (e) {
-              String trackName = path.basename(path.normalize(entity.path));
-              LocalTrack track = LocalTrack(
-                title: trackName,
-                artists: ['Unknown'],
-                filepath: entity.path,
-                albums: ['Unknown'],
-              );
-              fileNames.add(track);
-            }
-          }
-        }
-      }
-
-      return fileNames;
-    } catch (e) {}
-    return [];
-  }
-}
-
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
 
@@ -116,6 +54,7 @@ class _MainPageState extends State<MainPage> {
   List<Playlist2> userPlaylists = [];
   YandexMusic yandexMusic = YandexMusic(token: '');
 
+  /// Reacting on pick folder button
   Future<void> pickFolder() async {
     try {
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
@@ -140,6 +79,7 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  /// Reacting on close login button
   void closeLogin([bool? openPlaylists]) {
     setState(() {
       loginView = false;
@@ -148,18 +88,21 @@ class _MainPageState extends State<MainPage> {
     });
   }
 
+  /// Reacting on close playlist button
   void closePlaylist([bool? openPlaylists]) async {
     setState(() {
       playlistView = false;
     });
   }
 
+  /// Reacting on close settings button
   void closeSettings() async {
     setState(() {
       settingsView = false;
     });
   }
 
+  /// Routing to playlist page
   void playlistRoute(PlayerPlaylist playlist) async {
     Map play = await serializePlaylist(playlist);
     await Database.setValue(DatabaseKeys.lastPlaylist.value, play);
@@ -173,12 +116,13 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
+  /// Reaction on playlist restore button
   void playlistRestore() async {
     String? token = await Database.getValue(
       DatabaseKeys.yandexMusicToken.value,
     );
 
-    final playlist = lastPlaylist;
+    final playlist = await restoreLastPlaylistFromDatabase();
 
     if (playlist == null) {
       return;
@@ -192,6 +136,7 @@ class _MainPageState extends State<MainPage> {
     playlistRoute(playlist);
   }
 
+  /// Preloading the first tracks of all playlists from yandex music
   void precacheTracks() async {
     Future.delayed(Duration(milliseconds: 50), () async {
       var cacheDirectory = await getApplicationCacheDirectory();
@@ -218,6 +163,7 @@ class _MainPageState extends State<MainPage> {
     });
   }
 
+  /// Update playlists from yandex music
   void ymUpdate() async {
     try {
       String? token = await Database.getValue(
@@ -225,6 +171,8 @@ class _MainPageState extends State<MainPage> {
       );
       if (token != null) {
         yandexMusic = YandexMusic(token: token);
+        log.warning('Trying to initialize yandex music instance...');
+
         await yandexMusic.init();
         inited = true;
 
@@ -251,6 +199,9 @@ class _MainPageState extends State<MainPage> {
     } on YandexMusicException catch (e) {
       switch (e.type) {
         case YandexMusicException.unauthorized:
+          log.warning(
+            'Yandex Music initizalization failed. Redirecting to login widget...',
+          );
           setState(() {
             loginView = true;
           });
@@ -261,46 +212,83 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  void restoreLastPlaylistFromDatabase() async {
+  /// Execute last playlist from database
+  Future<PlayerPlaylist?> restoreLastPlaylistFromDatabase() async {
     final executed = await Database.getValue(DatabaseKeys.lastPlaylist.value);
     if (executed != null) {
       lastPlaylist = await deserializePlaylist(
         (executed as Map).cast<String, dynamic>(),
       );
       setState(() {});
-    }
+      return lastPlaylist;
+    } else {return null;}
   }
 
+  /// Logger
   void initLogger() async {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
       print(
-        '${record.level.name}: ${record.time.toIso8601String()}: ${record.message} ${record.error}',
+        '${record.level.name}: ${record.time.toIso8601String()}: ${record.message} ${record.error ?? ''}',
       );
     });
+    log.finest('Hello world!');
+  }
+
+  /// Reaction on yandex music button
+  void yandexMusicButton() async {
+    if (inited) {
+      if (userPlaylists.isEmpty) {
+        yandexMusic.usertracks.getPlaylistsWithLikes().then((playlists) {
+          setState(() {
+            userPlaylists = playlists;
+
+            playlistView = true;
+          });
+        });
+      } else {
+        setState(() {
+          playlistView = true;
+        });
+        precacheTracks();
+      }
+    } else {
+      ymUpdate();
+    }
   }
 
   @override
   void initState() {
     super.initState();
-    Database.init();
     initLogger();
+    log.info('Trying to initialize database...');
+    Database.init();
+    log.fine('Database initialized successfully');
     Future.delayed(Duration(milliseconds: 25), () async {
-      restoreLastPlaylistFromDatabase();
+      await restoreLastPlaylistFromDatabase();
     });
-    Future.delayed(Duration(milliseconds: 25), () async {
-      try {
-        String? token = await Database.getValue(
-          DatabaseKeys.yandexMusicToken.value,
-        );
-        if (token != null) {
-          yandexMusic = YandexMusic(token: token);
+    Future.delayed(Duration(milliseconds: 15), () async {
+      bool? yandexPreload = await Database.getValue(
+        DatabaseKeys.yandexMusicPreload.value,
+      );
 
-          await yandexMusic.init();
-          inited = true;
+      if (yandexPreload != false) {
+        log.info('Yandex preloading is enabled. Trying to initialize...');
+        try {
+          String? token = await Database.getValue(
+            DatabaseKeys.yandexMusicToken.value,
+          );
+          if (token != null) {
+            yandexMusic = YandexMusic(token: token);
+
+            await yandexMusic.init();
+            inited = true;
+            log.fine('Yandex Music successfully initialized.');
+          }
+        } on YandexMusicException {
+          log.warning('Yandex Music preloading initizalization failed...');
+          inited = false;
         }
-      } on YandexMusicException {
-        inited = false;
       }
     });
   }
@@ -332,7 +320,7 @@ class _MainPageState extends State<MainPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 25),
+                  const SizedBox(height: 15),
                   const SizedBox(
                     width: 400,
                     child: Text(
@@ -353,41 +341,22 @@ class _MainPageState extends State<MainPage> {
                   if (lastPlaylist != null)
                     Column(
                       children: [
-                        button(() async {
-                          playlistRestore();
-                        }, 'Restore playlist'),
+                        _mainPageButton(
+                          () async => playlistRestore(),
+                          'Restore playlist',
+                        ),
                         SizedBox(height: 12.5),
                       ],
                     ),
 
-                  button(() async {
+                  _mainPageButton(() async {
                     await pickFolder();
                   }, 'Add folder'),
                   const SizedBox(height: 12.5),
-                  button(() async {
-                    if (inited) {
-                      if (userPlaylists.isEmpty) {
-                        yandexMusic.usertracks.getPlaylistsWithLikes().then((
-                          playlists,
-                        ) {
-                          setState(() {
-                            userPlaylists = playlists;
-
-                            playlistView = true;
-                          });
-                        });
-                      } else {
-                        setState(() {
-                          playlistView = true;
-                        });
-                        precacheTracks();
-                      }
-                    } else {
-                      ymUpdate();
-                    }
-                  }, 'Yandex Music'),
-                  // SizedBox(height: 12.5),
-                  // button(() {}, 'Spotify'),
+                  _mainPageButton(
+                    () async => yandexMusicButton(),
+                    'Yandex Music',
+                  ),
                 ],
               ),
             ),
@@ -397,13 +366,17 @@ class _MainPageState extends State<MainPage> {
             duration: Duration(milliseconds: 300),
             child: loginView
                 ? GestureDetector(
-                    onTap: () => setState(() => loginView = false),
+                    onTap: () => setState(() {
+                      if (Platform.isLinux) {
+                        loginView = false;
+                      }
+                    }),
                     child: Container(
                       key: ValueKey('login'),
-                      color: Colors.black.withOpacity(0.99),
+                      color: Colors.black.withAlpha(25),
                       child: Stack(
                         children: [
-                          yandexLogin(context, closeLogin),
+                          YandexLogin(closeView: closeLogin),
                           Positioned(
                             right: 0,
                             child: IconButton(
@@ -426,7 +399,7 @@ class _MainPageState extends State<MainPage> {
                     onTap: () => setState(() => playlistView = false),
                     child: Container(
                       key: ValueKey('playlist'),
-                      color: Colors.black.withOpacity(0.99),
+                      color: Colors.black.withAlpha(25),
                       child: Stack(
                         children: [
                           GestureDetector(
@@ -452,60 +425,58 @@ class _MainPageState extends State<MainPage> {
                   )
                 : SizedBox.shrink(key: ValueKey('empty')),
           ),
-
-          // TODO: SETTINGS
-          // AnimatedSwitcher(
-          //   duration: Duration(milliseconds: 300),
-          //   child: settingsView
-          //       ? GestureDetector(
-          //           onTap: () => setState(() => settingsView = false),
-          //           child: Container(
-          //             color: Colors.black.withOpacity(0.99),
-          //             child: Stack(
-          //               children: [
-          //                 GestureDetector(
-          //                   onTap: () {},
-          //                   child: Settings(closeView: closeSettings),
-          //                 ),
-          //                 Positioned(
-          //                   right: 0,
-          //                   child: IconButton(
-          //                     onPressed: () =>
-          //                         setState(() => settingsView = false),
-          //                     icon: Icon(Icons.close, color: Colors.white70),
-          //                   ),
-          //                 ),
-          //               ],
-          //             ),
-          //           ),
-          //         )
-          //       : SizedBox.shrink(key: ValueKey('empty')),
-          // ),
-          // if (playlistView == false &&
-          //     loginView == false &&
-          //     settingsView == false)
-          //   Positioned(
-          //     right: 0,
-          //     top: 0,
-          //     child: IconButton(
-          //       onPressed: () {
-          //         setState(() {
-          //           settingsView = true;
-          //         });
-          //       },
-          //       icon: Icon(
-          //         Icons.settings,
-          //         color: Color.fromRGBO(255, 255, 255, 0.8),
-          //       ),
-          //     ),
-          //   ),
+          AnimatedSwitcher(
+            duration: Duration(milliseconds: 300),
+            child: settingsView
+                ? GestureDetector(
+                    onTap: () => setState(() => settingsView = false),
+                    child: Container(
+                      color: Colors.black.withAlpha(25),
+                      child: Stack(
+                        children: [
+                          GestureDetector(
+                            onTap: () {},
+                            child: Settings(closeView: closeSettings),
+                          ),
+                          Positioned(
+                            right: 0,
+                            child: IconButton(
+                              onPressed: () =>
+                                  setState(() => settingsView = false),
+                              icon: Icon(Icons.close, color: Colors.white70),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : SizedBox.shrink(key: ValueKey('empty')),
+          ),
+          if (playlistView == false &&
+              loginView == false &&
+              settingsView == false)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: IconButton(
+                onPressed: () {
+                  setState(() {
+                    settingsView = true;
+                  });
+                },
+                icon: Icon(
+                  Icons.settings,
+                  color: Color.fromRGBO(255, 255, 255, 0.8),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-Material button(Function() onTap, String text) {
+Material _mainPageButton(Function() onTap, String text) {
   return Material(
     color: Colors.transparent,
     borderRadius: BorderRadius.circular(15),
@@ -526,255 +497,6 @@ Material button(Function() onTap, String text) {
             style: TextStyle(color: Colors.white, fontSize: 18),
           ),
         ),
-      ),
-    ),
-  );
-}
-
-Widget yandexLogin(BuildContext context, Function() closeView) {
-  final Uri loginUrl = Uri.parse(
-    'https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d',
-  );
-
-  InAppWebViewController? webViewController;
-
-  YandexMusic yandexMusic = YandexMusic(token: '');
-
-  final TextEditingController _tokenController = TextEditingController();
-
-  final size = MediaQuery.of(context).size;
-
-  Future<void> _launchUrl() async {
-    if (!await launchUrl(loginUrl)) {
-      throw Exception('Could not launch $loginUrl');
-    }
-  }
-
-  if (Platform.isLinux) {
-    String hint = 'Enter token here';
-    return Center(
-      child: Container(
-        alignment: AlignmentDirectional.center,
-        width: min(480, size.width - 50),
-        height: min(382, size.height - 50),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(15)),
-          color: Color.fromARGB(30, 255, 255, 255),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-
-            const Text(
-              'We apologize, but webview is currently unavailable for logging in on Linux.',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            const SizedBox(
-              width: 420,
-              child: Text(
-                'Enter the token received via the quarkaudio.ru website \nor manually copied from the',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w100,
-                ),
-
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 15),
-            SizedBox(
-              width: 420,
-              child: InkWell(
-                onTap: _launchUrl,
-                child: Text(
-                  'Yandex Music web Page',
-                  style: TextStyle(
-                    color: Color.fromARGB(255, 184, 203, 255),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w100,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-            const SizedBox(height: 15),
-            SizedBox(
-              width: 400,
-              child: TextField(
-                style: TextStyle(
-                  color: Colors.white.withAlpha(220),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                ),
-                controller: _tokenController,
-                decoration: InputDecoration(
-                  hintText: hint,
-                  hintStyle: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 16,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.key,
-                    color: Colors.white.withOpacity(0.8),
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                  ),
-                  filled: false,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            button(() async {
-              String token = _tokenController.text;
-              yandexMusic = YandexMusic(token: token);
-              try {
-                await yandexMusic.init();
-              } on YandexMusicException {
-                hint = 'Authorization error. Invalid token.';
-                _tokenController.text = '';
-                return;
-              }
-
-              String email = await yandexMusic.account.getEmail();
-              String displayName = await yandexMusic.account.getDisplayName();
-              String fullName = await yandexMusic.account.getFullName();
-              String login = await yandexMusic.account.getLogin();
-
-              Database.setValue(DatabaseKeys.yandexMusicToken.value, token);
-              Database.setValue(
-                DatabaseKeys.yandexMusicUid.value,
-                yandexMusic.accountID,
-              );
-              Database.setValue(DatabaseKeys.yandexMusicEmail.value, email);
-              Database.setValue(
-                DatabaseKeys.yandexMusicDisplayName.value,
-                displayName,
-              );
-              Database.setValue(
-                DatabaseKeys.yandexMusicFullName.value,
-                fullName,
-              );
-              Database.setValue(DatabaseKeys.yandexMusicLogin.value, login);
-              closeView();
-            }, 'Continue'),
-            const SizedBox(height: 20),
-            Text(
-              'Read about how to obtain a token on our website',
-              style: TextStyle(color: Colors.white.withAlpha(200)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  return Center(
-    child: Container(
-      alignment: AlignmentDirectional.center,
-      width: min(390, size.width - 50),
-      height: min(650, size.height - 50),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(15)),
-        color: Color.fromARGB(30, 255, 255, 255),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: InAppWebView(
-              initialUrlRequest: URLRequest(
-                url: WebUri(
-                  'https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d',
-                ),
-              ),
-              initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
-              onWebViewCreated: (controller) {
-                webViewController = controller;
-              },
-              onLoadStop: (controller, url) async {
-                if (url.toString().contains('access_token')) {
-                  try {
-                    String token = url
-                        .toString()
-                        .split('#')[1]
-                        .split('&')[0]
-                        .replaceAll('access_token=', '');
-                    if (token.length > 3) {
-                      yandexMusic = YandexMusic(token: token);
-                      try {
-                        await yandexMusic.init();
-                      } on YandexMusicException {
-                        _tokenController.text =
-                            'Authorization error. Invalid token.';
-                      }
-
-                      String email = await yandexMusic.account.getEmail();
-                      String displayName = await yandexMusic.account
-                          .getDisplayName();
-                      String fullName = await yandexMusic.account.getFullName();
-                      String login = await yandexMusic.account.getLogin();
-
-                      Database.setValue(
-                        DatabaseKeys.yandexMusicToken.value,
-                        token,
-                      );
-                      Database.setValue(
-                        DatabaseKeys.yandexMusicUid.value,
-                        yandexMusic.accountID,
-                      );
-                      Database.setValue(
-                        DatabaseKeys.yandexMusicEmail.value,
-                        email,
-                      );
-                      Database.setValue(
-                        DatabaseKeys.yandexMusicDisplayName.value,
-                        displayName,
-                      );
-                      Database.setValue(
-                        DatabaseKeys.yandexMusicFullName.value,
-                        fullName,
-                      );
-                      Database.setValue(
-                        DatabaseKeys.yandexMusicLogin.value,
-                        login,
-                      );
-                      closeView();
-                    }
-                  } catch (ex) {}
-                }
-              },
-            ),
-          ),
-        ],
       ),
     ),
   );

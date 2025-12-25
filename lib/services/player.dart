@@ -31,7 +31,6 @@ class Player {
   StreamSubscription? onPlayedChanged;
 
   Future<void> init() async {
-    await player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
     trackNotifier.value = nowPlayingTrack;
     setupListeners();
   }

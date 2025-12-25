@@ -90,7 +90,15 @@ enum DatabaseKeys {
 
   /// ```double```
   /// Animations speed
-  transitionSpeed('transition_speed');
+  transitionSpeed('transition_speed'),
+
+  /// ```bool```
+  /// Enables yandex music search in playlistview
+  yandexMusicSearch('yandex_music_search'),
+
+  /// ```bool```
+  /// Preload yandexMusic when player starts
+  yandexMusicPreload('yandex_music_preload');
 
   final String value;
   const DatabaseKeys(this.value);

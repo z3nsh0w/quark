@@ -4,9 +4,11 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:quark/objects/track.dart';
 
 // Additional packages
-import 'package:quark/objects/track.dart';
+import 'package:logging/logging.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:interactive_slider/interactive_slider.dart';
@@ -17,12 +19,11 @@ import 'player_widget.dart';
 import 'playlist_widget.dart';
 import '/services/player.dart';
 import '/objects/playlist.dart';
+import '/widgets/settings.dart';
 import '/services/database.dart';
 import '/services/net_player.dart';
 import '/services/native_control.dart';
 import '/widgets/state_indicator.dart';
-
-// TODO: ADVANCED SETTINGS MENU
 
 class PlaylistPage extends StatefulWidget {
   final PlayerPlaylist playlist;
@@ -50,6 +51,8 @@ class _PlaylistPageState extends State<PlaylistPage>
   double playerPadding = 0.0;
   Uint8List animationInitiator = Uint8List(0);
 
+  bool settingsView = false;
+
   bool isSliderActive = true;
   bool isPlaying = false;
   bool isLiked = false;
@@ -57,18 +60,36 @@ class _PlaylistPageState extends State<PlaylistPage>
   bool isShuffleEnable = false;
   bool isRepeatEnable = false;
   bool stateIndicator = true;
+  bool openPlaylistNextTime = false;
 
+  /// Main playlist
   late List<PlayerTrack> currentPlaylist;
-  late List<PlayerTrack> backupPlaylist;
-  late PlayerTrack nowPlayingTrack;
-  late NetPlayer netPlayer;
-  late Player player2;
-  late NativeControl nativeControl;
-  List<String> likedTracks = [];
 
-  Color popupIconsColor = Colors.white.withAlpha(
-    170,
-  ); // TODO: MAKE ACCENT COLORS AS SETTINGS
+  /// Unshuffled playlist
+  late List<PlayerTrack> backupPlaylist;
+
+  /// Now playing track
+  late PlayerTrack nowPlayingTrack;
+
+  List<String> likedTracks = [];
+  final log = Logger('PlaylistPage');
+
+  //
+  //
+  // Instances
+  //
+  //
+
+  /// Main Player instance
+  late Player player;
+
+  /// Network player instance (shell over the main player class)
+  late NetPlayer netPlayer;
+
+  /// NativeControl instance
+  late NativeControl nativeControl;
+
+  Color popupIconsColor = const Color.fromARGB(255, 255, 255, 255).withAlpha(170); // TODO: MAKE ACCENT COLORS AS SETTINGS
   Color popupTextColor = Colors.white.withAlpha(220);
   Color albumArtShadowColor = Color.fromARGB(255, 21, 21, 21);
 
@@ -82,37 +103,14 @@ class _PlaylistPageState extends State<PlaylistPage>
   late Animation<Offset> playlistOffsetAnimation;
   OverlayEntry? playlistOverlayEntry;
 
-  void updateProgress(value) async {
-    setState(() {
-      isSliderActive = true;
-    });
-    try {
-      final seconds = await getSecondsByValue(value);
-      await player2.seek(Duration(seconds: seconds));
-    } catch (e) {}
-  }
-
-  void updateSlider() async {
-    setState(() {
-      isSliderActive = false;
-    });
-  }
-
+  /// The name tells for itself
   Future<int> getSecondsByValue(double value) async {
-    final duration = player2.durationNotifier.value;
+    final duration = player.durationNotifier.value;
 
     return ((value / 100.0) * duration.inSeconds).round();
   }
 
-  void changeVolume(value) async {
-    volume = value;
-    await player2.setVolume(value);
-    await Database.setValue(DatabaseKeys.volume.value, value);
-    setState(() {
-      volume = value;
-    });
-  }
-
+  /// Saving last track from database
   void saveLastTrack() async {
     await Database.setValue(
       DatabaseKeys.lastTrack.value,
@@ -120,103 +118,7 @@ class _PlaylistPageState extends State<PlaylistPage>
     );
   }
 
-  void restoreLastTrack() async {
-    String? resl = await Database.getValue(DatabaseKeys.lastTrack.value);
-    if (resl != null) {
-      bool exist = false;
-      PlayerTrack? tracks;
-      for (PlayerTrack track in currentPlaylist) {
-        if (track.filepath == resl) {
-          exist = true;
-          tracks = track;
-          break;
-        }
-      }
-      if (exist) {
-        nowPlayingTrack = tracks!;
-        await player2.playCustom(nowPlayingTrack);
-        playAnimation();
-      }
-    }
-  }
-
-  void changeTrack({
-    bool next = false,
-    bool previous = false,
-    bool playpause = false,
-    bool reload = false,
-    PlayerTrack? custom,
-  }) async {
-    // TODO: update
-    if (custom != null) {
-      setState(() {
-        nowPlayingTrack = custom;
-      });
-      bool exists = await File(custom.filepath).exists();
-      if (!exists && custom is! LocalTrack) {
-        showOperation(StateIndicatorOperation.loading);
-        await netPlayer.playYandex(nowPlayingTrack);
-        cacheFiles();
-        return;
-      } else if (!exists && custom is LocalTrack) {
-        showOperation(StateIndicatorOperation.error);
-        return;
-      }
-      await player2.playCustom(custom);
-    } else if (next) {
-      PlayerTrack next =
-          currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) + 1) %
-              currentPlaylist.length];
-      setState(() {
-        nowPlayingTrack = next;
-      });
-      bool exists = await File(next.filepath).exists();
-      if (!exists && next is! LocalTrack) {
-        showOperation(StateIndicatorOperation.loading);
-        await netPlayer.playYandex(next);
-        cacheFiles();
-        return;
-      } else if (!exists && next is LocalTrack) {
-        showOperation(StateIndicatorOperation.error);
-        changeTrack(next: true);
-        return;
-      }
-      await player2.playNext(forceNext: true);
-    } else if (previous) {
-      PlayerTrack next =
-          currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) - 1) %
-              currentPlaylist.length];
-      setState(() {
-        nowPlayingTrack = next;
-      });
-      bool exists = await File(next.filepath).exists();
-      if (!exists && next is! LocalTrack) {
-        showOperation(StateIndicatorOperation.loading);
-        await netPlayer.playYandex(next);
-        cacheFiles();
-        return;
-      } else if (!exists && next is LocalTrack) {
-        showOperation(StateIndicatorOperation.error);
-        changeTrack(previous: true);
-        return;
-      }
-      await player2.playPrevious();
-    } else if (reload) {
-      PlayerTrack next = nowPlayingTrack;
-      await player2.playCustom(next);
-    } else if (playpause) {
-      setState(() {
-        isPlaying = !isPlaying;
-      });
-
-      isPlaying ? await player2.player.resume() : await player2.player.pause();
-      player2.isPlaying = isPlaying ? true : false;
-    }
-    cacheFiles();
-    saveLastTrack();
-    nativeControl.updateData(nowPlayingTrack);
-  }
-
+  /// Top function for caching tracks in storage
   void cacheFiles([List<PlayerTrack>? tracks]) {
     tracks ??= [];
     for (int i = -1; i < 2; i++) {
@@ -232,20 +134,7 @@ class _PlaylistPageState extends State<PlaylistPage>
     }
   }
 
-  void updateLiked() async {
-    try {
-      List<Track2> result = await widget.yandexMusic.usertracks.getLiked();
-      likedTracks.clear();
-
-      for (Track2 track in result) {
-        likedTracks.add(track.trackID);
-      }
-      showOperation(StateIndicatorOperation.success);
-    } catch (e) {
-      showOperation(StateIndicatorOperation.error);
-    }
-  }
-
+  /// Function for changing the indicator status
   void showOperation(StateIndicatorOperation newOperation) {
     if (mounted) {
       setState(() => operation = newOperation);
@@ -255,29 +144,39 @@ class _PlaylistPageState extends State<PlaylistPage>
     }
   }
 
+  /// Lower function for caching tracks in storage
   Future<void> _cacheFileInBackground(PlayerTrack track) async {
-    // TODO: FIX BUGS WHILE MULTIPLE TRACKS LOADING
+    String? quality = await Database.getValue(
+      DatabaseKeys.yandexMusicTrackQuality.value,
+    );
+    quality ??= 'mp3';
+    AudioQuality downloadQuality = switch (quality) {
+      'lossless' => AudioQuality.lossless,
+      'nq' => AudioQuality.normal,
+      'lq' => AudioQuality.low,
+      'mp3' => AudioQuality.mp3,
+      _ => AudioQuality.mp3,
+    };
+
     final exists = await File(track.filepath).exists();
     if (!exists) {
       try {
-        final downloadLink = await widget.yandexMusic.tracks.getDownloadLink(
-          (track as YandexMusicTrack).track.id,
-        );
         showOperation(StateIndicatorOperation.loading);
-        final download = await widget.yandexMusic.tracks.getAsBytes(
-          downloadLink,
+        final download = await widget.yandexMusic.tracks.download(
+          (track as YandexMusicTrack).track.id,
+          quality: downloadQuality,
         );
         await File(track.filepath).parent.create(recursive: true);
         await File(track.filepath).writeAsBytes(download);
         showOperation(StateIndicatorOperation.success);
       } catch (error) {
-        print('''
+        log.shout('''
 An error has occured while downloading track
 TrackID: ${(track as YandexMusicTrack).track.id}
 Filepath: ${track.filepath}
+Quality: $quality
 YandexMusic client: ${widget.yandexMusic.accountID}
-Error: ${error}
-''');
+''', error);
         if (mounted) {
           showOperation(StateIndicatorOperation.error);
         }
@@ -285,135 +184,59 @@ Error: ${error}
     }
   }
 
-  void playerListeners() {
-    player2.playedNotifier.addListener(() {
-      final duration = player2.durationNotifier.value;
-      final position = player2.playedNotifier.value;
-      String durationLocal = '';
-      double currentPos = 0.0;
-
-      int durationTimeInMinutes = duration.inSeconds ~/ 60;
-      int durationTimeInSeconds = duration.inSeconds % 60;
-
-      durationLocal += '$durationTimeInMinutes:';
-
-      if (durationTimeInSeconds < 10) {
-        durationLocal += '0$durationTimeInSeconds';
-      } else {
-        durationLocal += '$durationTimeInSeconds';
-      }
-
-      currentPos = position.inMicroseconds / duration.inMicroseconds * 100.0;
-      if (currentPos > 100.0) {
-        currentPos = 100.0;
-      }
-
-      int timeInMinutes = position.inSeconds ~/ 60;
-      int timeInSeconds = position.inSeconds % 60;
-
-      String timing = '';
-
-      timing += '$timeInMinutes:';
-
-      if (timeInSeconds < 10) {
-        timing += '0$timeInSeconds';
-      } else {
-        timing += '$timeInSeconds';
-      }
-
-      if (mounted) {
-        setState(() {
-          currentPosition = timing;
-          totalSongDuration = durationLocal;
-          songProgress = currentPos;
-          if (isSliderActive) {
-            positionController.value = currentPos / 100;
-          }
-        });
-      }
-    });
-    player2.trackNotifier.addListener(() {
-      nowPlayingTrack = player2.trackNotifier.value;
-      saveLastTrack();
-    });
-  }
-
+  /// A convenient shuffle function that is only needed in one place xd
   List<T> shuffleList<T>(List<T> list) {
     final shuffled = List<T>.from(list);
     shuffled.shuffle();
     return shuffled;
   }
 
-  void shuffle() async {
-    bool enable = !isShuffleEnable;
-    List<PlayerTrack> lcpl = [];
+  /// Agreement on track removing caused by playlistview
+  void removeTrack(PlayerTrack track) async {
+    currentPlaylist.remove(track);
+    backupPlaylist.remove(track);
+    player.updatePlaylist(currentPlaylist);
+    updateDatabasePlaylist();
+  }
 
-    if (enable) {
-      backupPlaylist.clear();
-      backupPlaylist.addAll([...currentPlaylist]);
-      final currentIndex = backupPlaylist.indexOf(nowPlayingTrack);
-
-      if (currentIndex == -1) return;
-
-      final fixedPart = backupPlaylist.sublist(0, currentIndex + 1);
-      final queue = backupPlaylist.sublist(currentIndex + 1);
-      final shuffledQueue = shuffleList(queue);
-
-      List<PlayerTrack> tcp = []
-        ..addAll(fixedPart)
-        ..addAll(shuffledQueue);
-
-      await player2.updatePlaylist(tcp);
-      setState(() {
-        currentPlaylist = tcp;
-      });
-    }
-
-    if (!enable) {
-      lcpl = [...backupPlaylist];
-      setState(() {
-        currentPlaylist = lcpl;
-      });
-      await player2.updatePlaylist(lcpl);
-    }
-    updatePlaylist();
+  /// Forced animation playback
+  void playAnimation() async {
+    /// To play the animation, simply reassign the key variable.
     setState(() {
-      isShuffleEnable = enable;
+      animationInitiator = Uint8List(0);
     });
   }
 
-  void updatePlaylist() async {
-    if (isPlaylistOpened) {
-      playlistOverlayEntry?.remove();
-      playlistOverlayEntry = OverlayEntry(
-        builder: (context) => PlaylistOverlay(
-          playlistAnimationController: playlistAnimationController,
-          playlistOffsetAnimation: playlistOffsetAnimation,
-          togglePlaylist: togglePlaylist,
-          playlist: currentPlaylist,
-          playlistName: widget.playlist.name,
-          changeTrack: changeTrack,
-          yandexMusic: widget.yandexMusic,
-          showOperation: showOperation,
-          likedPlaylist: likedTracks,
-          addNext: addTrack,
-          removeTrack: removeTrack,
-        ),
-      );
-      Overlay.of(context).insert(playlistOverlayEntry!);
+  /// Update database playlist
+  void updateDatabasePlaylist() async {
+    if (isShuffleEnable) {
+      return;
     }
+    PlayerPlaylist pl = PlayerPlaylist(ownerUid: widget.playlist.ownerUid, kind: widget.playlist.kind, name: widget.playlist.name, tracks: currentPlaylist, source: widget.playlist.source);
+    Map play = await serializePlaylist(pl);
+    await Database.setValue(DatabaseKeys.lastPlaylist.value, play);
   }
 
-  /// Playlist functions
+  //
+  //
+  // Playlist interaction functions
+  //
+  //
 
-  void removeTrack(PlayerTrack track) {
-    currentPlaylist.remove(track);
-    backupPlaylist.remove(track);
-    // player2.updatePlaylist(currentPlaylist);
+  /// Agreement on track relocation caused by playlistview
+  void moveTrack(int oldIndex, int newIndex) async {
+    final element = currentPlaylist[oldIndex];
+    currentPlaylist.remove(element);
+    currentPlaylist.insert(
+      newIndex < oldIndex ? newIndex : newIndex - 1,
+      element,
+    );
+    await player.updatePlaylist(currentPlaylist);
+    updateDatabasePlaylist();
   }
 
   // TODO: REMOVE THE CRUTCHES
-  // I don't even know what -56 -78 0 -2 and -1 are.
+  /// Agreement on track adding caused by playlistview
   int addTrack(
     PlayerTrack track, [
     bool? addToEnd,
@@ -458,6 +281,7 @@ Error: ${error}
     }
   }
 
+  /// Reaction on playlist button
   void togglePlaylist() async {
     if (isPlaylistOpened) {
       setState(() {
@@ -480,6 +304,7 @@ Error: ${error}
             likedPlaylist: likedTracks,
             addNext: addTrack,
             removeTrack: removeTrack,
+            moveTrack: moveTrack,
           ),
         );
         Overlay.of(context).insert(playlistOverlayEntry!);
@@ -497,13 +322,52 @@ Error: ${error}
     }
   }
 
+  /// Forced playlist update
+  void updatePlaylist() async {
+    if (isPlaylistOpened) {
+      playlistOverlayEntry?.remove();
+      playlistOverlayEntry = OverlayEntry(
+        builder: (context) => PlaylistOverlay(
+          playlistAnimationController: playlistAnimationController,
+          playlistOffsetAnimation: playlistOffsetAnimation,
+          togglePlaylist: togglePlaylist,
+          playlist: currentPlaylist,
+          playlistName: widget.playlist.name,
+          changeTrack: changeTrack,
+          yandexMusic: widget.yandexMusic,
+          showOperation: showOperation,
+          likedPlaylist: likedTracks,
+          addNext: addTrack,
+          removeTrack: removeTrack,
+          moveTrack: moveTrack,
+        ),
+      );
+      Overlay.of(context).insert(playlistOverlayEntry!);
+    }
+  }
+
+  //
+  //
+  // Button's && Slider's functions
+  //
+  //
+
+  /// Reaction on animation edit buttons
+  void setAnimationSpeed(double speed) async {
+    setState(() {
+      transitionSpeed = speed;
+    });
+  }
+
+  /// Reaction on repeat button
   void repeatChange() {
     setState(() {
       isRepeatEnable = !isRepeatEnable;
     });
-    player2.isRepeat = isRepeatEnable;
+    player.isRepeat = isRepeatEnable;
   }
 
+  /// Reaction on like button
   void likeUnlike() async {
     if (isLiked) {
       try {
@@ -516,6 +380,7 @@ Error: ${error}
         likedTracks.remove((nowPlayingTrack as YandexMusicTrack).track.id);
         showOperation(StateIndicatorOperation.success);
       } catch (e) {
+        log.warning('Failed to send like track POST', e);
         showOperation(StateIndicatorOperation.error);
       }
     } else {
@@ -531,66 +396,370 @@ Error: ${error}
 
         showOperation(StateIndicatorOperation.success);
       } catch (e) {
+        log.warning('Failed to send unlike track POST', e);
         showOperation(StateIndicatorOperation.error);
       }
     }
   }
 
+  /// Reaction on shuffle button
+  void shuffle() async {
+    bool enable = !isShuffleEnable;
+    List<PlayerTrack> lcpl = [];
+
+    if (enable) {
+      backupPlaylist.clear();
+      backupPlaylist.addAll([...currentPlaylist]);
+      final currentIndex = backupPlaylist.indexOf(nowPlayingTrack);
+
+      if (currentIndex == -1) return;
+
+      final fixedPart = backupPlaylist.sublist(0, currentIndex + 1);
+      final queue = backupPlaylist.sublist(currentIndex + 1);
+      final shuffledQueue = shuffleList(queue);
+
+      List<PlayerTrack> tcp = []
+        ..addAll(fixedPart)
+        ..addAll(shuffledQueue);
+
+      await player.updatePlaylist(tcp);
+      setState(() {
+        currentPlaylist = tcp;
+      });
+    }
+
+    if (!enable) {
+      lcpl = [...backupPlaylist];
+      setState(() {
+        currentPlaylist = lcpl;
+      });
+      await player.updatePlaylist(lcpl);
+    }
+    updatePlaylist();
+    setState(() {
+      isShuffleEnable = enable;
+    });
+  }
+
+  /// Reaction on change track buttons
+  void changeTrack({
+    bool next = false,
+    bool previous = false,
+    bool playpause = false,
+    bool reload = false,
+    PlayerTrack? custom,
+  }) async {
+    // TODO: update
+    if (custom != null) {
+      setState(() {
+        nowPlayingTrack = custom;
+      });
+      bool exists = await File(custom.filepath).exists();
+      if (!exists && custom is! LocalTrack) {
+        showOperation(StateIndicatorOperation.loading);
+        await netPlayer.playYandex(nowPlayingTrack);
+        cacheFiles();
+        return;
+      } else if (!exists && custom is LocalTrack) {
+        showOperation(StateIndicatorOperation.error);
+        return;
+      }
+      await player.playCustom(custom);
+    } else if (next) {
+      PlayerTrack next =
+          currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) + 1) %
+              currentPlaylist.length];
+      setState(() {
+        nowPlayingTrack = next;
+      });
+      bool exists = await File(next.filepath).exists();
+      if (!exists && next is! LocalTrack) {
+        showOperation(StateIndicatorOperation.loading);
+        await netPlayer.playYandex(next);
+        cacheFiles();
+        return;
+      } else if (!exists && next is LocalTrack) {
+        showOperation(StateIndicatorOperation.error);
+        changeTrack(next: true);
+        return;
+      }
+      await player.playNext(forceNext: true);
+    } else if (previous) {
+      PlayerTrack next =
+          currentPlaylist[(currentPlaylist.indexOf(nowPlayingTrack) - 1) %
+              currentPlaylist.length];
+      setState(() {
+        nowPlayingTrack = next;
+      });
+      bool exists = await File(next.filepath).exists();
+      if (!exists && next is! LocalTrack) {
+        showOperation(StateIndicatorOperation.loading);
+        await netPlayer.playYandex(next);
+        cacheFiles();
+        return;
+      } else if (!exists && next is LocalTrack) {
+        showOperation(StateIndicatorOperation.error);
+        changeTrack(previous: true);
+        return;
+      }
+      await player.playPrevious();
+    } else if (reload) {
+      PlayerTrack next = nowPlayingTrack;
+      await player.playCustom(next);
+    } else if (playpause) {
+      setState(() {
+        isPlaying = !isPlaying;
+      });
+
+      isPlaying ? await player.player.resume() : await player.player.pause();
+      player.isPlaying = isPlaying ? true : false;
+    }
+    cacheFiles();
+    saveLastTrack();
+    nativeControl.updateData(nowPlayingTrack);
+  }
+
+  /// Reaction on volume interactive slider
+  void changeVolume(value) async {
+    volume = value;
+    await player.setVolume(value);
+    await Database.setValue(DatabaseKeys.volume.value, value);
+    setState(() {
+      volume = value;
+    });
+  }
+
+  /// Reaction on setting closing button
+  void closeSettings() async {
+    bool? indicator = await Database.getValue(
+      DatabaseKeys.stateIndicatorState.value,
+    );
+    setState(() {
+      settingsView = false;
+      if (openPlaylistNextTime) {
+        openPlaylistNextTime = false;
+        if (!isPlaylistOpened) {
+          togglePlaylist();
+        }
+      }
+      stateIndicator = indicator ?? stateIndicator;
+    });
+  }
+
+  /// Reaction on progress interactive slider
+  void updateProgress(value) async {
+    setState(() {
+      isSliderActive = true;
+    });
+    try {
+      final seconds = await getSecondsByValue(value);
+      await player.seek(Duration(seconds: seconds));
+    } catch (e) {
+      log.warning('Progress update failed ', e);
+    }
+  }
+
+  /// A function that protects the slider's progress from external changes while the user selects the track position.
+  void updateSlider() async {
+    setState(() {
+      isSliderActive = false;
+    });
+  }
+
+  //
+  //
+  // Initializing functions
+  //
+  //
+
+  /// Load keys from database
   void loadDatabase() async {
     double? dbVolume = await Database.getValue(DatabaseKeys.volume.value);
-    dbVolume ??= volume;
-    changeVolume(dbVolume);
-    await player2.setVolume(dbVolume);
-    playAnimation();
     double? transition = await Database.getValue(
       DatabaseKeys.transitionSpeed.value,
     );
+    bool? indicator = await Database.getValue(
+      DatabaseKeys.stateIndicatorState.value,
+    );
+    dbVolume ??= volume;
     transition ??= transitionSpeed;
+    stateIndicator = indicator ?? stateIndicator;
+
+    changeVolume(dbVolume);
+    await player.setVolume(dbVolume);
+    playAnimation();
     setAnimationSpeed(transition);
   }
 
-  void setAnimationSpeed(double speed) async {
-    setState(() {
-      transitionSpeed = speed;
+  /// Initializing player listeners
+  void playerListeners() {
+    player.playedNotifier.addListener(() {
+      final duration = player.durationNotifier.value;
+      final position = player.playedNotifier.value;
+      String durationLocal = '';
+      double currentPos = 0.0;
+
+      int durationTimeInMinutes = duration.inSeconds ~/ 60;
+      int durationTimeInSeconds = duration.inSeconds % 60;
+
+      durationLocal += '$durationTimeInMinutes:';
+
+      if (durationTimeInSeconds < 10) {
+        durationLocal += '0$durationTimeInSeconds';
+      } else {
+        durationLocal += '$durationTimeInSeconds';
+      }
+
+      currentPos = position.inMicroseconds / duration.inMicroseconds * 100.0;
+      if (currentPos > 100.0) {
+        currentPos = 100.0;
+      }
+
+      int timeInMinutes = position.inSeconds ~/ 60;
+      int timeInSeconds = position.inSeconds % 60;
+
+      String timing = '';
+
+      timing += '$timeInMinutes:';
+
+      if (timeInSeconds < 10) {
+        timing += '0$timeInSeconds';
+      } else {
+        timing += '$timeInSeconds';
+      }
+
+      if (mounted) {
+        setState(() {
+          currentPosition = timing;
+          totalSongDuration = durationLocal;
+          songProgress = currentPos;
+          if (isSliderActive) {
+            positionController.value = currentPos / 100;
+          }
+        });
+      }
+    });
+    player.trackNotifier.addListener(() {
+      nowPlayingTrack = player.trackNotifier.value;
+      saveLastTrack();
     });
   }
 
-  void playAnimation() async {
-    setState(() {
-      animationInitiator = Uint8List(0);
-    });
+  /// Initializing liked tracks
+  void updateLiked() async {
+    try {
+      List<Track2> result = await widget.yandexMusic.usertracks.getLiked();
+      likedTracks.clear();
+
+      for (Track2 track in result) {
+        likedTracks.add(track.trackID);
+      }
+      showOperation(StateIndicatorOperation.success);
+    } catch (e) {
+      log.warning('Failed to update liked tracks ', e);
+      showOperation(StateIndicatorOperation.error);
+    }
   }
 
-  /// Playlist functions
+  /// Restoring last track from database
+  void restoreLastTrack() async {
+    String? resl = await Database.getValue(DatabaseKeys.lastTrack.value);
+    if (resl != null) {
+      bool exist = false;
+      PlayerTrack? tracks;
+      for (PlayerTrack track in currentPlaylist) {
+        if (track.filepath == resl) {
+          exist = true;
+          tracks = track;
+          break;
+        }
+      }
+      if (exist) {
+        nowPlayingTrack = tracks!;
+        bool exists = await File(nowPlayingTrack.filepath).exists();
+
+        if (exists) {
+          try {
+            log.info('Trying to set source for last track...');
+            await player.playCustom(nowPlayingTrack);
+          } catch (e) {
+            log.shout(
+              'Failed to set local source (file exists: $exists). Attempting to set network source...',
+            );
+            netPlayer.playYandex(nowPlayingTrack);
+          }
+        } else {
+          log.info(
+            'The track was NOT found locally. Trying to set network source...',
+          );
+          netPlayer.playYandex(nowPlayingTrack);
+        }
+        playAnimation();
+      }
+    }
+  }
+
+  /// Initializing all players
+  void initPlayers() async {
+    player = Player(
+      startVolume: volume,
+      playlist: currentPlaylist,
+      nowPlayingTrack: nowPlayingTrack,
+    );
+    log.info('Trying to initialize the player instance...');
+    player.init();
+    log.fine('Player instance initialized successfully');
+    bool exists = await File(nowPlayingTrack.filepath).exists();
+    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
+    log.info('Trying to set source of track...');
+    if (exists) {
+      try {
+        log.info('The track was found locally. Trying to set source...');
+        player.player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
+      } catch (e) {
+        log.shout(
+          'Failed to set local source (file exists: $exists). Attempting to set network source',
+        );
+        netPlayer.playYandex(nowPlayingTrack);
+      }
+    } else {
+      log.info(
+        'The track was NOT found locally. Trying to set network source...',
+      );
+      netPlayer.playYandex(nowPlayingTrack);
+    }
+  }
 
   @override
   void initState() {
     // Init playlists
 
     super.initState();
+
     currentPlaylist = [...widget.playlist.tracks];
     backupPlaylist = [...widget.playlist.tracks];
     nowPlayingTrack = currentPlaylist[0];
     restoreLastTrack();
     // Classes
+    log.info('Trying to initialize players...');
+    initPlayers();
+    log.info('Trying to initialize database...');
+    Database.init();
+    log.fine('Database initialized successfully');
 
-    player2 = Player(
-      startVolume: volume,
-      playlist: currentPlaylist,
-      nowPlayingTrack: nowPlayingTrack,
-    );
-    player2.init();
-    player2.player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
-    netPlayer = NetPlayer(player: player2, yandexMusic: widget.yandexMusic);
+    log.info('Trying to initialize native controls...');
+
     nativeControl = NativeControl(
-      onPlay: player2.playPause,
-      onPause: player2.playPause,
-      onNext: player2.playNext,
-      onPrevious: player2.playPrevious,
+      onPlay: player.playPause,
+      onPause: player.playPause,
+      onNext: player.playNext,
+      onPrevious: player.playPrevious,
       onSeek: () {},
     );
+
     nativeControl.init();
-    Database.init();
+    log.fine('Native controls initialized successfully');
+
     // Controllers
 
     playlistAnimationController = AnimationController(
@@ -609,21 +778,26 @@ Error: ${error}
 
     playerListeners();
     loadDatabase();
-
+    Logger.root.level = Level.ALL;
+    Logger.root.onRecord.listen((record) {
+      print(
+        '${record.level.name}: ${record.time.toIso8601String()}: ${record.message} ${record.error ?? ''}',
+      );
+    });
     updateLiked();
   }
 
   @override
   void dispose() {
-    player2.player.onPositionChanged.drain();
-    player2.player.stop();
-    player2.player.dispose();
-    player2.onCompleteSubscription?.cancel();
-    player2.onDurationChanged?.cancel();
-    player2.onPlayedChanged?.cancel();
-    player2.trackNotifier.dispose();
-    player2.playedNotifier.dispose();
-    player2.durationNotifier.dispose();
+    player.player.onPositionChanged.drain();
+    player.player.stop();
+    player.player.dispose();
+    player.onCompleteSubscription?.cancel();
+    player.onDurationChanged?.cancel();
+    player.onPlayedChanged?.cancel();
+    player.trackNotifier.dispose();
+    player.playedNotifier.dispose();
+    player.durationNotifier.dispose();
     playlistAnimationController.dispose();
     super.dispose();
   }
@@ -649,412 +823,500 @@ Error: ${error}
         transitionBuilder: (Widget child, Animation<double> animation) {
           return FadeTransition(opacity: animation, child: child);
         },
-        child: Stack(
-          children: [
-            Container(
-              height: MediaQuery.of(context).size.height,
-              width: MediaQuery.of(context).size.width,
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image:
-                      (nowPlayingTrack is LocalTrack &&
-                          nowPlayingTrack.coverByted != Uint8List(0))
-                      ? MemoryImage(nowPlayingTrack.coverByted)
-                      : CachedNetworkImageProvider(
-                          'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
-                        ),
-                  fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.5),
-                    BlendMode.darken,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Stack(
+            children: [
+              Container(
+                height: MediaQuery.of(context).size.height,
+                width: MediaQuery.of(context).size.width,
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image:
+                        (nowPlayingTrack is LocalTrack &&
+                            nowPlayingTrack.coverByted != Uint8List(0))
+                        ? MemoryImage(nowPlayingTrack.coverByted)
+                        : CachedNetworkImageProvider(
+                            'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                          ),
+                    fit: BoxFit.cover,
+                    colorFilter: ColorFilter.mode(
+                      Colors.black.withOpacity(0.5),
+                      BlendMode.darken,
+                    ),
+                  ),
+                  gradient: LinearGradient(
+                    colors: [
+                      Color.fromRGBO(24, 24, 26, 1),
+                      Color.fromRGBO(18, 18, 20, 1),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-                gradient: LinearGradient(
-                  colors: [
-                    Color.fromRGBO(24, 24, 26, 1),
-                    Color.fromRGBO(18, 18, 20, 1),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: ClipRect(
-                child: AnimatedSwitcher(
-                  duration: Duration(
-                    milliseconds: (650 * transitionSpeed).round(),
-                  ),
-                  transitionBuilder:
-                      (Widget child, Animation<double> animation) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
-                  child: BackdropFilter(
-                    key: ValueKey((nowPlayingTrack, animationInitiator)),
-                    filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
-                    child: Container(
-                      color: Colors.transparent,
-                      child: AnimatedPadding(
-                        duration: Duration(
-                          milliseconds: (750 * transitionSpeed).round(),
-                        ),
-                        curve: Curves.ease,
-                        padding: EdgeInsets.only(left: playerPadding),
-                        child: Container(
-                          color: Colors.transparent,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                child: ClipRect(
+                  child: AnimatedSwitcher(
+                    duration: Duration(
+                      milliseconds: (650 * transitionSpeed).round(),
+                    ),
+                    transitionBuilder:
+                        (Widget child, Animation<double> animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          );
+                        },
+                    child: BackdropFilter(
+                      key: ValueKey((nowPlayingTrack, animationInitiator)),
+                      filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
+                      child: Container(
+                        color: Colors.transparent,
+                        child: AnimatedPadding(
+                          duration: Duration(
+                            milliseconds: (750 * transitionSpeed).round(),
+                          ),
+                          curve: Curves.ease,
+                          padding: EdgeInsets.only(left: playerPadding),
+                          child: Container(
+                            color: Colors.transparent,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
 
-                            children: [
-                              Container(
-                                height: 270,
-                                width: 270,
+                              children: [
+                                Container(
+                                  height: 270,
+                                  width: 270,
 
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(5),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: albumArtShadowColor,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: albumArtShadowColor,
 
-                                      blurRadius: 20,
-                                      offset: Offset(1, -1),
+                                        blurRadius: 20,
+                                        offset: Offset(1, -1),
+                                      ),
+                                    ],
+                                  ),
+                                  child:
+                                      (nowPlayingTrack is LocalTrack &&
+                                          nowPlayingTrack.coverByted !=
+                                              Uint8List(0))
+                                      ? Image.memory(
+                                          nowPlayingTrack.coverByted,
+                                          height: 270,
+                                          width: 270,
+                                        )
+                                      : CachedNetworkImage(
+                                          key: ValueKey<PlayerTrack>(
+                                            nowPlayingTrack,
+                                          ),
+
+                                          imageUrl:
+                                              'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                                          progressIndicatorBuilder:
+                                              (
+                                                context,
+                                                url,
+                                                downloadProgress,
+                                              ) => CircularProgressIndicator(
+                                                value:
+                                                    downloadProgress.progress,
+                                                color: Color.fromARGB(
+                                                  31,
+                                                  255,
+                                                  255,
+                                                  255,
+                                                ),
+                                              ),
+                                          errorWidget: (context, url, error) =>
+                                              Icon(Icons.error),
+                                          height: 270,
+                                          width: 270,
+                                        ),
+                                ),
+                                const SizedBox(height: 20),
+
+                                SizedBox(
+                                  height: 45,
+                                  child: Text(
+                                    key: ValueKey<PlayerTrack>(nowPlayingTrack),
+                                    nowPlayingTrack.title,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'noto',
+                                      decoration: TextDecoration.none,
+                                      color: Colors.white,
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+
+                                Text(
+                                  key: ValueKey<PlayerTrack>(nowPlayingTrack),
+                                  nowPlayingTrack.albums.join(','),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'noto',
+                                    fontSize: 18,
+                                    decoration: TextDecoration.none,
+                                    fontWeight: FontWeight.w300,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  nowPlayingTrack.artists.isNotEmpty
+                                      ? nowPlayingTrack.artists.join(",")
+                                      : 'Unknown artist',
+                                  style: TextStyle(
+                                    color: const Color.fromARGB(
+                                      200,
+                                      255,
+                                      255,
+                                      255,
+                                    ),
+                                    fontSize: 14,
+                                    fontFamily: 'noto',
+                                    decoration: TextDecoration.none,
+                                    fontWeight: FontWeight.w100,
+                                  ),
+                                ),
+
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      currentPosition,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontFamily: 'noto',
+                                        fontSize: 15,
+                                        decoration: TextDecoration.none,
+                                        fontWeight: FontWeight.w300,
+                                      ),
+                                    ),
+
+                                    SizedBox(
+                                      width: 325,
+
+                                      child: InteractiveSlider(
+                                        controller: positionController,
+                                        key: ValueKey<double>(volume),
+                                        unfocusedHeight: 5,
+                                        focusedHeight: 10,
+                                        min: 0.0,
+                                        max: 100.0,
+                                        onProgressUpdated: (value) {
+                                          isSliderActive = true;
+                                          updateProgress(value);
+                                        },
+                                        onFocused: (value) {
+                                          updateSlider();
+                                        },
+
+                                        brightness: Brightness.light,
+                                        initialProgress: songProgress,
+                                        iconColor: Colors.white,
+                                        gradient: LinearGradient(
+                                          colors: [Colors.white, Colors.white],
+                                        ),
+                                        shapeBorder: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.all(
+                                            Radius.circular(8),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    Text(
+                                      totalSongDuration,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontFamily: 'noto',
+
+                                        decoration: TextDecoration.none,
+                                        fontWeight: FontWeight.w300,
+                                      ),
                                     ),
                                   ],
                                 ),
-                                child:
-                                    (nowPlayingTrack is LocalTrack &&
-                                        nowPlayingTrack.coverByted !=
-                                            Uint8List(0))
-                                    ? Image.memory(
-                                        nowPlayingTrack.coverByted,
-                                        height: 270,
-                                        width: 270,
-                                      )
-                                    : CachedNetworkImage(
-                                        key: ValueKey<PlayerTrack>(
-                                          nowPlayingTrack,
-                                        ),
-
-                                        imageUrl:
-                                            'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
-                                        progressIndicatorBuilder:
-                                            (context, url, downloadProgress) =>
-                                                CircularProgressIndicator(
-                                                  value:
-                                                      downloadProgress.progress,
-                                                  color: Color.fromARGB(
-                                                    31,
-                                                    255,
-                                                    255,
-                                                    255,
-                                                  ),
-                                                ),
-                                        errorWidget: (context, url, error) =>
-                                            Icon(Icons.error),
-                                        height: 270,
-                                        width: 270,
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Material(
+                                      color: Colors.transparent,
+                                      borderRadius: BorderRadius.all(
+                                        Radius.circular(30),
                                       ),
-                              ),
-                              const SizedBox(height: 20),
 
-                              SizedBox(
-                                height: 45,
-                                child: Text(
-                                  key: ValueKey<PlayerTrack>(nowPlayingTrack),
-                                  nowPlayingTrack.title,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontFamily: 'noto',
-                                    decoration: TextDecoration.none,
-                                    color: Colors.white,
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-
-                              Text(
-                                key: ValueKey<PlayerTrack>(nowPlayingTrack),
-
-                                nowPlayingTrack.albums.join(','),
-
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'noto',
-                                  fontSize: 18,
-                                  decoration: TextDecoration.none,
-                                  fontWeight: FontWeight.w300,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                nowPlayingTrack.artists.join(","),
-                                style: TextStyle(
-                                  color: const Color.fromARGB(
-                                    200,
-                                    255,
-                                    255,
-                                    255,
-                                  ),
-                                  fontSize: 14,
-                                  fontFamily: 'noto',
-                                  decoration: TextDecoration.none,
-                                  fontWeight: FontWeight.w100,
-                                ),
-                              ),
-
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    currentPosition,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontFamily: 'noto',
-                                      fontSize: 15,
-                                      decoration: TextDecoration.none,
-                                      fontWeight: FontWeight.w300,
-                                    ),
-                                  ),
-
-                                  SizedBox(
-                                    width: 325,
-
-                                    child: InteractiveSlider(
-                                      controller: positionController,
-                                      key: ValueKey<double>(volume),
-                                      unfocusedHeight: 5,
-                                      focusedHeight: 10,
-                                      min: 0.0,
-                                      max: 100.0,
-                                      onProgressUpdated: (value) {
-                                        isSliderActive = true;
-                                        updateProgress(value);
-                                      },
-                                      onFocused: (value) {
-                                        updateSlider();
-                                      },
-
-                                      brightness: Brightness.light,
-                                      initialProgress: songProgress,
-                                      iconColor: Colors.white,
-                                      gradient: LinearGradient(
-                                        colors: [Colors.white, Colors.white],
-                                      ),
-                                      shapeBorder: RoundedRectangleBorder(
+                                      child: InkWell(
                                         borderRadius: BorderRadius.all(
-                                          Radius.circular(8),
+                                          Radius.circular(30),
+                                        ),
+                                        onTap: () async {
+                                          changeTrack(previous: true);
+                                        },
+
+                                        child: Container(
+                                          height: 40,
+                                          width: 40,
+
+                                          decoration: buttonDecoration(),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.skip_previous,
+                                                color: Colors.white,
+                                                size: 24,
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
 
-                                  Text(
-                                    totalSongDuration,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontFamily: 'noto',
+                                    const SizedBox(width: 15),
 
-                                      decoration: TextDecoration.none,
-                                      fontWeight: FontWeight.w300,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(30),
-                                    ),
-
-                                    child: InkWell(
+                                    Material(
+                                      color: Colors.transparent,
                                       borderRadius: BorderRadius.all(
                                         Radius.circular(30),
                                       ),
-                                      onTap: () async {
-                                        changeTrack(previous: true);
-                                      },
 
-                                      child: Container(
-                                        height: 40,
-                                        width: 40,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.all(
+                                          Radius.circular(30),
+                                        ),
+                                        onTap: () async {
+                                          changeTrack(playpause: true);
+                                        },
 
-                                        decoration: buttonDecoration(),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.skip_previous,
-                                              color: Colors.white,
-                                              size: 24,
-                                            ),
-                                          ],
+                                        child: Container(
+                                          height: 50,
+                                          width: 50,
+
+                                          decoration: buttonDecoration(),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                isPlaying
+                                                    ? Icons.pause
+                                                    : Icons.play_arrow,
+                                                color: Colors.white,
+
+                                                size: 28,
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
 
-                                  const SizedBox(width: 15),
+                                    const SizedBox(width: 15),
 
-                                  Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(30),
-                                    ),
-
-                                    child: InkWell(
+                                    Material(
+                                      color: Colors.transparent,
                                       borderRadius: BorderRadius.all(
                                         Radius.circular(30),
                                       ),
-                                      onTap: () async {
-                                        changeTrack(playpause: true);
-                                      },
 
-                                      child: Container(
-                                        height: 50,
-                                        width: 50,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.all(
+                                          Radius.circular(30),
+                                        ),
+                                        onTap: () async {
+                                          changeTrack(next: true);
+                                        },
+                                        child: Container(
+                                          height: 40,
+                                          width: 40,
 
-                                        decoration: buttonDecoration(),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              isPlaying
-                                                  ? Icons.pause
-                                                  : Icons.play_arrow,
-                                              color: Colors.white,
-
-                                              size: 28,
-                                            ),
-                                          ],
+                                          decoration: buttonDecoration(),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.skip_next,
+                                                color: Colors.white,
+                                                size: 24,
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-
-                                  const SizedBox(width: 15),
-
-                                  Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(30),
-                                    ),
-
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.all(
-                                        Radius.circular(30),
-                                      ),
-                                      onTap: () async {
-                                        changeTrack(next: true);
-                                      },
-                                      child: Container(
-                                        height: 40,
-                                        width: 40,
-
-                                        decoration: buttonDecoration(),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.skip_next,
-                                              color: Colors.white,
-                                              size: 24,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              SizedBox(
-                                width: 300,
-
-                                child: InteractiveSlider(
-                                  startIcon: const Icon(Icons.volume_down),
-                                  endIcon: const Icon(Icons.volume_up),
-                                  min: 0.0,
-                                  max: 1.0,
-                                  brightness: Brightness.light,
-                                  initialProgress: volume,
-                                  iconColor: Colors.white,
-                                  gradient: LinearGradient(
-                                    colors: [Colors.white, Colors.white],
-                                  ),
-                                  onChanged: (value) => changeVolume(value),
+                                  ],
                                 ),
-                              ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  functionPlayerButton(
-                                    Icons.featured_play_list_outlined,
-                                    Icons.featured_play_list_outlined,
-                                    isPlaylistOpened,
-                                    togglePlaylist,
+
+                                SizedBox(
+                                  width: 330,
+
+                                  child: InteractiveSlider(
+                                    startIcon: const Icon(Icons.volume_down),
+                                    endIcon: const Icon(Icons.volume_up),
+                                    min: 0.0,
+                                    max: 1.0,
+                                    brightness: Brightness.light,
+                                    initialProgress: volume,
+                                    iconColor: Colors.white,
+                                    gradient: LinearGradient(
+                                      colors: [Colors.white, Colors.white],
+                                    ),
+                                    onChanged: (value) => changeVolume(value),
                                   ),
-                                  const SizedBox(width: 15),
-                                  functionPlayerButton(
-                                    Icons.shuffle,
-                                    Icons.shuffle_outlined,
-                                    isShuffleEnable,
-                                    () {
-                                      shuffle();
-                                    },
-                                  ),
-                                  const SizedBox(width: 15),
-                                  if (nowPlayingTrack is YandexMusicTrack)
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
                                     functionPlayerButton(
-                                      Icons.favorite_outlined,
-                                      Icons.favorite_outlined,
-                                      likedTracks.contains(
-                                        (nowPlayingTrack as YandexMusicTrack)
-                                            .track
-                                            .id,
-                                      ),
-                                      () async {
-                                        likeUnlike();
+                                      Icons.featured_play_list_outlined,
+                                      Icons.featured_play_list_outlined,
+                                      isPlaylistOpened,
+                                      togglePlaylist,
+                                    ),
+                                    const SizedBox(width: 22),
+                                    functionPlayerButton(
+                                      Icons.shuffle,
+                                      Icons.shuffle_outlined,
+                                      isShuffleEnable,
+                                      () {
+                                        shuffle();
                                       },
                                     ),
-                                  if (nowPlayingTrack is! YandexMusicTrack)
-                                    const SizedBox(width: 35),
+                                    const SizedBox(width: 22),
+                                    if (nowPlayingTrack is YandexMusicTrack)
+                                      functionPlayerButton(
+                                        Icons.favorite_outlined,
+                                        Icons.favorite_outlined,
+                                        likedTracks.contains(
+                                          (nowPlayingTrack as YandexMusicTrack)
+                                              .track
+                                              .id,
+                                        ),
+                                        () async {
+                                          likeUnlike();
+                                        },
+                                      ),
+                                    if (nowPlayingTrack is! YandexMusicTrack)
+                                      const SizedBox(width: 35),
 
-                                  const SizedBox(width: 15),
-                                  functionPlayerButton(
-                                    Icons.repeat_one_outlined,
-                                    Icons.repeat_one_outlined,
-                                    isRepeatEnable,
-                                    () => repeatChange(),
-                                  ),
-                                  const SizedBox(width: 15),
-                                  Material(
-                                    color: Color.fromARGB(31, 255, 255, 255),
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(30),
+                                    const SizedBox(width: 22),
+                                    functionPlayerButton(
+                                      Icons.repeat_one_outlined,
+                                      Icons.repeat_one_outlined,
+                                      isRepeatEnable,
+                                      () => repeatChange(),
                                     ),
-                                    child: InkWell(
+                                    const SizedBox(width: 22),
+                                    Material(
+                                      color: Color.fromARGB(31, 255, 255, 255),
                                       borderRadius: BorderRadius.all(
                                         Radius.circular(30),
                                       ),
-                                      onTap: () {},
-                                      child: PopupMenuButton(
+                                      child: InkWell(
                                         borderRadius: BorderRadius.all(
-                                          Radius.circular(15),
+                                          Radius.circular(30),
                                         ),
-                                        iconColor: Colors.white.withOpacity(
-                                          0.6,
-                                        ),
+                                        onTap: () {},
+                                        child: PopupMenuButton(
+                                          borderRadius: BorderRadius.all(
+                                            Radius.circular(15),
+                                          ),
+                                          iconColor: Colors.white.withOpacity(
+                                            0.6,
+                                          ),
 
-                                        offset: Offset(100, -60),
-                                        color: Color.fromARGB(25, 59, 59, 59),
-                                        itemBuilder: (context) => [
-                                          if (Platform.isLinux)
+                                          offset: Offset(100, -60),
+                                          color: Color.fromARGB(25, 59, 59, 59),
+                                          itemBuilder: (context) => [
+                                            if (Platform.isLinux)
+                                              PopupMenuItem(
+                                                height: 45,
+                                                child: StatefulBuilder(
+                                                  builder:
+                                                      (
+                                                        BuildContext context,
+                                                        StateSetter
+                                                        setMenuState,
+                                                      ) {
+                                                        return Row(
+                                                          children: [
+                                                            Text(
+                                                              'Playback speed',
+                                                              style: TextStyle(
+                                                                color:
+                                                                    popupTextColor,
+                                                              ),
+                                                            ),
+                                                            SizedBox(width: 15),
+                                                            IconButton(
+                                                              onPressed: () async {
+                                                                setMenuState(() {
+                                                                  playerSpeed =
+                                                                      playerSpeed -
+                                                                      0.1;
+                                                                });
+                                                                print(
+                                                                  'Player changed speed to: $playerSpeed',
+                                                                );
+                                                                await player
+                                                                    .player
+                                                                    .setPlaybackRate(
+                                                                      playerSpeed,
+                                                                    );
+                                                                setState(() {});
+                                                              },
+                                                              icon: Icon(
+                                                                Icons.remove,
+                                                                color:
+                                                                    popupIconsColor,
+                                                              ),
+                                                            ),
+                                                            Text(
+                                                              playerSpeed
+                                                                  .toStringAsFixed(
+                                                                    1,
+                                                                  ),
+                                                              style: TextStyle(
+                                                                color:
+                                                                    popupTextColor,
+                                                              ),
+                                                            ),
+                                                            IconButton(
+                                                              onPressed: () async {
+                                                                setMenuState(() {
+                                                                  playerSpeed =
+                                                                      playerSpeed +
+                                                                      0.1;
+                                                                });
+                                                                await player
+                                                                    .player
+                                                                    .setPlaybackRate(
+                                                                      playerSpeed,
+                                                                    );
+                                                                print(
+                                                                  'Player changed speed to: $playerSpeed',
+                                                                );
+                                                                setState(() {});
+                                                              },
+                                                              icon: Icon(
+                                                                Icons.add,
+                                                                color:
+                                                                    popupIconsColor,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        );
+                                                      },
+                                                ),
+                                              ),
                                             PopupMenuItem(
                                               height: 45,
                                               child: StatefulBuilder(
@@ -1066,7 +1328,7 @@ Error: ${error}
                                                       return Row(
                                                         children: [
                                                           Text(
-                                                            'Playback speed',
+                                                            'Transition speed',
                                                             style: TextStyle(
                                                               color:
                                                                   popupTextColor,
@@ -1076,19 +1338,21 @@ Error: ${error}
                                                           IconButton(
                                                             onPressed: () async {
                                                               setMenuState(() {
-                                                                playerSpeed =
-                                                                    playerSpeed -
+                                                                transitionSpeed =
+                                                                    transitionSpeed -
                                                                     0.1;
                                                               });
-                                                              print(
-                                                                'Player changed speed to: $playerSpeed',
-                                                              );
-                                                              await player2
-                                                                  .player
-                                                                  .setPlaybackRate(
-                                                                    playerSpeed,
-                                                                  );
+
                                                               setState(() {});
+                                                              await Database.setValue(
+                                                                DatabaseKeys
+                                                                    .transitionSpeed
+                                                                    .value,
+                                                                transitionSpeed,
+                                                              );
+                                                              setAnimationSpeed(
+                                                                transitionSpeed,
+                                                              );
                                                             },
                                                             icon: Icon(
                                                               Icons.remove,
@@ -1097,7 +1361,7 @@ Error: ${error}
                                                             ),
                                                           ),
                                                           Text(
-                                                            playerSpeed
+                                                            transitionSpeed
                                                                 .toStringAsFixed(
                                                                   1,
                                                                 ),
@@ -1109,19 +1373,20 @@ Error: ${error}
                                                           IconButton(
                                                             onPressed: () async {
                                                               setMenuState(() {
-                                                                playerSpeed =
-                                                                    playerSpeed +
+                                                                transitionSpeed =
+                                                                    transitionSpeed +
                                                                     0.1;
                                                               });
-                                                              await player2
-                                                                  .player
-                                                                  .setPlaybackRate(
-                                                                    playerSpeed,
-                                                                  );
-                                                              print(
-                                                                'Player changed speed to: $playerSpeed',
-                                                              );
                                                               setState(() {});
+                                                              await Database.setValue(
+                                                                DatabaseKeys
+                                                                    .transitionSpeed
+                                                                    .value,
+                                                                transitionSpeed,
+                                                              );
+                                                              setAnimationSpeed(
+                                                                transitionSpeed,
+                                                              );
                                                             },
                                                             icon: Icon(
                                                               Icons.add,
@@ -1134,140 +1399,63 @@ Error: ${error}
                                                     },
                                               ),
                                             ),
-                                          PopupMenuItem(
-                                            height: 45,
-                                            onTap: () {
-                                              setState(() {
-                                                playlistAnimationController
-                                                    .reverse()
-                                                    .then((_) {
-                                                      playlistOverlayEntry
-                                                          ?.remove();
-                                                      playlistOverlayEntry =
-                                                          null;
-                                                      Navigator.pop(context);
-                                                    });
-                                              });
-                                            },
-                                            child: Row(
-                                              children: [
-                                                Text(
-                                                  'Exit',
-                                                  style: TextStyle(
-                                                    color: popupTextColor,
+                                            PopupMenuItem(
+                                              height: 45,
+                                              onTap: () {
+                                                setState(() {
+                                                  settingsView = true;
+                                                  if (isPlaylistOpened) {
+                                                    togglePlaylist();
+                                                    openPlaylistNextTime = true;
+                                                  }
+                                                });
+                                              },
+                                              child: Row(
+                                                children: [
+                                                  Text(
+                                                    'Settings',
+                                                    style: TextStyle(
+                                                      color: popupTextColor,
+                                                    ),
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                          PopupMenuItem(
-                                            enabled: false,
-                                            height: 5,
-                                            child: Container(
-                                              height: 1,
-                                              width: double.infinity,
-                                              color: popupTextColor,
-                                            ),
-                                          ),
 
-                                          PopupMenuItem(
-                                            height: 45,
-                                            child: StatefulBuilder(
-                                              builder:
-                                                  (
-                                                    BuildContext context,
-                                                    StateSetter setMenuState,
-                                                  ) {
-                                                    return Row(
-                                                      children: [
-                                                        Text(
-                                                          'Transition speed',
-                                                          style: TextStyle(
-                                                            color:
-                                                                popupTextColor,
-                                                          ),
-                                                        ),
-                                                        SizedBox(width: 15),
-                                                        IconButton(
-                                                          onPressed: () async {
-                                                            setMenuState(() {
-                                                              transitionSpeed =
-                                                                  transitionSpeed -
-                                                                  0.1;
-                                                            });
-
-                                                            setState(() {});
-                                                            await Database.setValue(
-                                                              DatabaseKeys
-                                                                  .transitionSpeed
-                                                                  .value,
-                                                              transitionSpeed,
-                                                            );
-                                                            setAnimationSpeed(
-                                                              transitionSpeed,
-                                                            );
-                                                          },
-                                                          icon: Icon(
-                                                            Icons.remove,
-                                                            color:
-                                                                popupIconsColor,
-                                                          ),
-                                                        ),
-                                                        Text(
-                                                          transitionSpeed
-                                                              .toStringAsFixed(
-                                                                1,
-                                                              ),
-                                                          style: TextStyle(
-                                                            color:
-                                                                popupTextColor,
-                                                          ),
-                                                        ),
-                                                        IconButton(
-                                                          onPressed: () async {
-                                                            setMenuState(() {
-                                                              transitionSpeed =
-                                                                  transitionSpeed +
-                                                                  0.1;
-                                                            });
-                                                            setState(() {});
-                                                            await Database.setValue(
-                                                              DatabaseKeys
-                                                                  .transitionSpeed
-                                                                  .value,
-                                                              transitionSpeed,
-                                                            );
-                                                            setAnimationSpeed(
-                                                              transitionSpeed,
-                                                            );
-                                                          },
-                                                          icon: Icon(
-                                                            Icons.add,
-                                                            color:
-                                                                popupIconsColor,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    );
-                                                  },
+                                            PopupMenuItem(
+                                              height: 45,
+                                              onTap: () {
+                                                setState(() {
+                                                  playlistAnimationController
+                                                      .reverse()
+                                                      .then((_) {
+                                                        playlistOverlayEntry
+                                                            ?.remove();
+                                                        playlistOverlayEntry =
+                                                            null;
+                                                        Navigator.pop(context);
+                                                      });
+                                                });
+                                              },
+                                              child: Row(
+                                                children: [
+                                                  Text(
+                                                    'Exit',
+                                                    style: TextStyle(
+                                                      color: popupTextColor,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                          PopupMenuItem(
-                                            enabled: false,
-                                            height: 5,
-                                            child: Container(
-                                              height: 1,
-                                              width: double.infinity,
-                                              color: popupTextColor,
-                                            ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -1275,14 +1463,51 @@ Error: ${error}
                   ),
                 ),
               ),
-            ),
-            if (stateIndicator)
-              Positioned(
-                top: 15,
-                right: 15,
-                child: StateIndicator(operation: operation),
+              if (stateIndicator)
+                Positioned(
+                  top: 15,
+                  right: 15,
+                  child: StateIndicator(operation: operation),
+                ),
+              AnimatedSwitcher(
+                duration: Duration(milliseconds: 300),
+                child: settingsView
+                    ? GestureDetector(
+                        onTap: () => closeSettings(),
+                        child: Container(
+                          color: Colors.black.withOpacity(0.3),
+                          child: Stack(
+                            children: [
+                              GestureDetector(
+                                onTap: () {},
+                                child: Settings(closeView: closeSettings),
+                              ),
+                              Positioned(
+                                right: 0,
+                                child: IconButton(
+                                  onPressed: () => setState(() {
+                                    settingsView = false;
+                                    if (openPlaylistNextTime) {
+                                      openPlaylistNextTime = false;
+                                      if (!isPlaylistOpened) {
+                                        togglePlaylist();
+                                      }
+                                    }
+                                  }),
+                                  icon: Icon(
+                                    Icons.close,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : SizedBox.shrink(key: ValueKey('empty')),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );

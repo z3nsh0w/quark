@@ -15,6 +15,8 @@ class NetPlayer {
         (track as YandexMusicTrack).track.id,
       );
       await player.playNetTrack(link, track);
-    } catch (e) {}
+    } catch (e) {
+      
+    }
   }
 }

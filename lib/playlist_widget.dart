@@ -1,11 +1,11 @@
 import 'dart:ui';
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '/widgets/state_indicator.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quark/objects/track.dart';
+import 'package:quark/services/database.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -68,6 +68,7 @@ class PlaylistOverlay extends StatefulWidget {
   ])
   addNext;
   final Function(PlayerTrack track) removeTrack;
+  final Function(int oldIndex, int newIndex) moveTrack;
 
   const PlaylistOverlay({
     super.key,
@@ -82,6 +83,7 @@ class PlaylistOverlay extends StatefulWidget {
     required this.likedPlaylist,
     required this.addNext,
     required this.removeTrack,
+    required this.moveTrack,
   });
 
   @override
@@ -161,7 +163,10 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
       final currentQuery = search;
 
       _searchDebounceTimer = Timer(_searchDebounceDuration, () async {
-        if (search.isEmpty || currentQuery != search) {
+        bool? enabled = await Database.getValue(
+          DatabaseKeys.yandexMusicSearch.value,
+        );
+        if (search.isEmpty || currentQuery != search || enabled == false) {
           return;
         }
 
@@ -207,7 +212,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
 
   // WIDGET FUNCTIONS
 
-  Future<void> likeUnlike(int index) async {
+  void likeUnlike(int index) async {
     if (widget.likedPlaylist.contains(
       (playlistView[index] as YandexMusicTrack).track.id,
     )) {
@@ -241,14 +246,14 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     }
   }
 
-  Future<void> removeTrackFromPlaylist(int index) async {
+  void removeTrackFromPlaylist(int index) async {
     widget.removeTrack(playlistView[index]);
     setState(() {
       playlistView.remove(playlistView[index]);
     });
   }
 
-  Future<void> addNextQueue(int index) async {
+  void addNextQueue(int index) async {
     PlayerTrack track = playlistView[index];
     if (track is LocalTrack) {
       LocalTrack tr = LocalTrack(
@@ -283,7 +288,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     }
   }
 
-  Future<void> addBottomQueue(int index) async {
+  void addBottomQueue(int index) async {
     PlayerTrack track = playlistView[index];
     if (track is LocalTrack) {
       LocalTrack tr = LocalTrack(
@@ -317,7 +322,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     }
   }
 
-  Future<void> findSimilar(int index) async {
+  void findSimilar(int index) async {
     try {
       _searchController.text = 'Similar: ${playlistView[index].title}';
       List<PlayerTrack> filtered = [];
@@ -351,6 +356,18 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     } catch (e) {
       print(e);
       widget.showOperation(StateIndicatorOperation.error);
+    }
+  }
+
+  void moveTrack(int oldIndex, int newIndex) async {
+    if (_searchController.text == '') {
+      setState(() {
+        final element = playlistView[oldIndex];
+        playlistView.remove(element);
+        playlistView.insert(newIndex < oldIndex ? newIndex : newIndex-1, element);
+      });
+      widget.moveTrack(oldIndex, newIndex);
+      // #TODO: syncing yandex music reord
     }
   }
 
@@ -394,198 +411,220 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                             child: playlistSearch(_searchController, search),
                           ),
                           Expanded(
-                            child: ListView.builder(
+                            child: ReorderableListView.builder(
                               itemCount: playlistView.length,
-                              itemBuilder: (context, index) {
-                                return ListTile(
-                                  trailing: PopupMenuButton(
-                                    iconColor: Colors.white.withOpacity(0.6),
-                                    elevation: 1000,
-                                    offset: Offset(70, 0),
-                                    color: Color.fromARGB(20, 255, 255, 255),
-                                    onCanceled: () {
-                                      menuOpened = false;
-                                    },
-                                    itemBuilder: (context) {
-                                      if (menuOpened) {
-                                        return [];
-                                      } else {
-                                        menuOpened = true;
-                                        return [
-                                          if (playlistView[index]
-                                              is YandexMusicTrack)
-                                            PopupMenuItem(
-                                              onTap: () async {
-                                                await likeUnlike(index);
-                                              },
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons.favorite,
-                                                    size: popupIconSize,
-                                                    color: popupIconsColor,
-                                                  ),
-                                                  SizedBox(
-                                                    width: popupSpaceBetween,
-                                                  ),
-                                                  Text(
-                                                    widget.likedPlaylist.contains(
-                                                          (playlistView[index]
-                                                                  as YandexMusicTrack)
-                                                              .track
-                                                              .id,
-                                                        )
-                                                        ? 'Unlike'
-                                                        : 'Like',
-                                                    style: TextStyle(
-                                                      fontFamily: 'noto',
-                                                      color: popupTextColor,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          PopupMenuItem(
-                                            onTap: () async {
-                                              await removeTrackFromPlaylist(
-                                                index,
-                                              );
-                                            },
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  Icons.delete_sweep_rounded,
+                              onReorder: (int oldIndex, int newIndex) async {
+                                moveTrack(oldIndex, newIndex);
+                              },
 
-                                                  size: popupIconSize,
-                                                  color: popupIconsColor,
-                                                ),
-                                                SizedBox(
-                                                  width: popupSpaceBetween,
-                                                ),
-                                                Text(
-                                                  'Remove from playlist',
-                                                  style: TextStyle(
-                                                    fontFamily: 'noto',
-                                                    color: popupTextColor,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            onTap: () async {
-                                              await addNextQueue(index);
-                                            },
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  CupertinoIcons
-                                                      .arrow_up_to_line,
-
-                                                  size: popupIconSize,
-                                                  color: popupIconsColor,
-                                                ),
-                                                SizedBox(
-                                                  width: popupSpaceBetween,
-                                                ),
-                                                Text(
-                                                  'Play next',
-                                                  style: TextStyle(
-                                                    fontFamily: 'noto',
-                                                    color: popupTextColor,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            onTap: () async {
-                                              await addBottomQueue(index);
-                                            },
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  CupertinoIcons
-                                                      .arrow_up_to_line,
-                                                  size: popupIconSize,
-                                                  color: popupIconsColor,
-                                                ),
-                                                SizedBox(
-                                                  width: popupSpaceBetween,
-                                                ),
-                                                Text(
-                                                  'Add to bottom of queue',
-                                                  style: TextStyle(
-                                                    fontFamily: 'noto',
-                                                    color: popupTextColor,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          if (playlistView[index]
-                                              is YandexMusicTrack)
-                                            PopupMenuItem(
-                                              onTap: () async {
-                                                await findSimilar(index);
-                                              },
-                                              enabled: playlistView[index]
-                                                  .albums
-                                                  .isNotEmpty,
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    CupertinoIcons.search,
-                                                    size: popupIconSize,
-                                                    color: popupIconsColor,
-                                                  ),
-                                                  SizedBox(
-                                                    width: popupSpaceBetween,
-                                                  ),
-                                                  Text(
-                                                    'Find similar',
-                                                    style: TextStyle(
-                                                      fontFamily: 'noto',
-                                                      color: popupTextColor,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          if (playlistView[index]
-                                              .albums
-                                              .isEmpty)
-                                            PopupMenuItem(
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    CupertinoIcons.pencil,
-                                                    size: popupIconSize,
-                                                    color: popupIconsColor,
-                                                  ),
-                                                  SizedBox(
-                                                    width: popupSpaceBetween,
-                                                  ),
-                                                  Text(
-                                                    'Edit',
-                                                    style: TextStyle(
-                                                      fontFamily: 'noto',
-                                                      color: popupTextColor,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                        ];
-                                      }
-                                    },
-                                  ),
-                                  onTap: () {
-                                    widget.changeTrack(
-                                      custom: playlistView[index],
+                              buildDefaultDragHandles: false,
+                              proxyDecorator:
+                                  (
+                                    Widget child,
+                                    int index,
+                                    Animation<double> animation,
+                                  ) {
+                                    return Material(
+                                      color: Colors.transparent,
+                                      child: child,
                                     );
                                   },
-                                  title: songElement(playlistView[index]),
+
+                              itemBuilder: (context, index) {
+                                return ReorderableDragStartListener(
+                                  key: Key('$index'),
+                                  index: index,
+                                  enabled: _searchController.text == '' ? true : false,
+                                  child: ListTile(
+                                    trailing: PopupMenuButton(
+                                      iconColor: Colors.white.withOpacity(0.6),
+                                      elevation: 1000,
+                                      offset: Offset(70, 0),
+                                      color: Color.fromARGB(20, 255, 255, 255),
+                                      onCanceled: () {
+                                        menuOpened = false;
+                                      },
+                                      itemBuilder: (context) {
+                                        if (menuOpened) {
+                                          return [];
+                                        } else {
+                                          menuOpened = true;
+                                          return [
+                                            if (playlistView[index]
+                                                is YandexMusicTrack)
+                                              PopupMenuItem(
+                                                onTap: () async {
+                                                  likeUnlike(index);
+                                                },
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.favorite,
+                                                      size: popupIconSize,
+                                                      color: popupIconsColor,
+                                                    ),
+                                                    SizedBox(
+                                                      width: popupSpaceBetween,
+                                                    ),
+                                                    Text(
+                                                      widget.likedPlaylist.contains(
+                                                            (playlistView[index]
+                                                                    as YandexMusicTrack)
+                                                                .track
+                                                                .id,
+                                                          )
+                                                          ? 'Unlike'
+                                                          : 'Like',
+                                                      style: TextStyle(
+                                                        fontFamily: 'noto',
+                                                        color: popupTextColor,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            PopupMenuItem(
+                                              onTap: () async {
+                                                removeTrackFromPlaylist(
+                                                  index,
+                                                );
+                                              },
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.delete_sweep_rounded,
+
+                                                    size: popupIconSize,
+                                                    color: popupIconsColor,
+                                                  ),
+                                                  SizedBox(
+                                                    width: popupSpaceBetween,
+                                                  ),
+                                                  Text(
+                                                    'Remove from playlist',
+                                                    style: TextStyle(
+                                                      fontFamily: 'noto',
+                                                      color: popupTextColor,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              onTap: () async {
+                                                addNextQueue(index);
+                                              },
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    CupertinoIcons
+                                                        .arrow_up_to_line,
+
+                                                    size: popupIconSize,
+                                                    color: popupIconsColor,
+                                                  ),
+                                                  SizedBox(
+                                                    width: popupSpaceBetween,
+                                                  ),
+                                                  Text(
+                                                    'Play next',
+                                                    style: TextStyle(
+                                                      fontFamily: 'noto',
+                                                      color: popupTextColor,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              onTap: () async {
+                                                addBottomQueue(index);
+                                              },
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    CupertinoIcons
+                                                        .arrow_up_to_line,
+                                                    size: popupIconSize,
+                                                    color: popupIconsColor,
+                                                  ),
+                                                  SizedBox(
+                                                    width: popupSpaceBetween,
+                                                  ),
+                                                  Text(
+                                                    'Add to bottom of queue',
+                                                    style: TextStyle(
+                                                      fontFamily: 'noto',
+                                                      color: popupTextColor,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (playlistView[index]
+                                                is YandexMusicTrack)
+                                              PopupMenuItem(
+                                                onTap: () async {
+                                                  findSimilar(index);
+                                                },
+                                                enabled: playlistView[index]
+                                                    .albums
+                                                    .isNotEmpty,
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      CupertinoIcons.search,
+                                                      size: popupIconSize,
+                                                      color: popupIconsColor,
+                                                    ),
+                                                    SizedBox(
+                                                      width: popupSpaceBetween,
+                                                    ),
+                                                    Text(
+                                                      'Find similar',
+                                                      style: TextStyle(
+                                                        fontFamily: 'noto',
+                                                        color: popupTextColor,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (playlistView[index]
+                                                .albums
+                                                .isEmpty)
+                                              PopupMenuItem(
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      CupertinoIcons.pencil,
+                                                      size: popupIconSize,
+                                                      color: popupIconsColor,
+                                                    ),
+                                                    SizedBox(
+                                                      width: popupSpaceBetween,
+                                                    ),
+                                                    Text(
+                                                      'Edit',
+                                                      style: TextStyle(
+                                                        fontFamily: 'noto',
+                                                        color: popupTextColor,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                          ];
+                                        }
+                                      },
+                                    ),
+                                    onTap: () {
+                                      widget.changeTrack(
+                                        custom: playlistView[index],
+                                      );
+                                    },
+                                    title: songElement(playlistView[index]),
+                                  ),
                                 );
                               },
                             ),
@@ -683,7 +722,6 @@ Widget appBar(
         icon: Icon(Icons.search),
         color: Colors.white.withOpacity(0.8),
       ),
-      // SizedBox(width: 5,),
       Text(
         playlistName,
         style: TextStyle(
@@ -696,11 +734,6 @@ Widget appBar(
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // IconButton(
-          //   onPressed: refreshPlaylist,
-          //   icon: Icon(Icons.refresh),
-          //   color: Colors.white.withOpacity(0.8),
-          // ),
           IconButton(
             onPressed: togglePlaylist,
             icon: Icon(Icons.close),

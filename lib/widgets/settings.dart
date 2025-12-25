@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 import 'dart:async';
 import 'state_indicator.dart';
 import '../services/database.dart';
@@ -20,57 +21,83 @@ class _SettingsState extends State<Settings> {
     return Center(
       child: Container(
         width: min(size.width * 0.92, 800),
-        height: min(size.height * 0.92, 660),
+        height: min(size.height * 0.92, 460),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.all(Radius.circular(15)),
-          color: Color.fromARGB(30, 255, 255, 255),
+          color: Color.fromARGB(0, 255, 255, 255),
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 25),
-              Center(
-                child: Text(
-                  'Preferences',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.all(Radius.circular(15)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
+            child: Container(
+              width: min(size.width * 0.92, 1040),
+              height: min(size.height * 0.92, 1036),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1,
+                ),
+                borderRadius: const BorderRadius.all(Radius.circular(20)),
+                gradient: LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.15),
+                    Colors.white.withOpacity(0.05),
+                  ],
                 ),
               ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 25),
+                    Center(
+                      child: Text(
+                        'Preferences',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
 
-              Padding(
-                padding: EdgeInsetsGeometry.only(left: 35),
-                child: Text(
-                  'Main',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+                    Padding(
+                      padding: EdgeInsetsGeometry.only(left: 35),
+                      child: Text(
+                        'Main',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _LocalSettings(),
+
+                    const SizedBox(height: 15),
+
+                    Padding(
+                      padding: EdgeInsetsGeometry.only(left: 35),
+                      child: Text(
+                        'Yandex Music',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _YandexMusicSettings(),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              _LocalSettings(),
-
-              const SizedBox(height: 15),
-
-              Padding(
-                padding: EdgeInsetsGeometry.only(left: 35),
-                child: Text(
-                  'Yandex Music',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _YandexMusicSettings(),
-            ],
+            ),
           ),
         ),
       ),
@@ -87,6 +114,8 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
   bool stateIndicatorState = true;
   bool gradientAsBackground = false;
   bool windowManagerPlugin = false;
+  int clicks = 0;
+  String restoreText = 'Restore';
 
   void initDatabase() async {
     bool? indicator = await Database.getValue(
@@ -103,7 +132,13 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
     });
   }
 
-  void setSetting(DatabaseKeys setting, dynamic value) async {}
+  void restoreDefaults() async {
+    await Database.clear();
+  }
+
+  void setIndicator(bool value) async {
+    await Database.setValue(DatabaseKeys.stateIndicatorState.value, value);
+  }
 
   @override
   void initState() {
@@ -119,352 +154,73 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
     return Center(
       child: Column(
         children: [
-          Container(
-            width: maxWidth,
-            height: 50,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(10),
-                topRight: Radius.circular(10),
+          button(
+            'Restore defaults',
+            'Reset player settings to factory defaults. After resetting, it is recommended to restart the player.',
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  if (clicks < 2) {
+                    setState(() {
+                      restoreText = 'Again';
+                      clicks += 1;
+                    });
+                  } else {
+                    restoreDefaults();
+                    setState(() {
+                      restoreText = 'Restore';
+                      clicks = 0;
+                    });
+                  }
+                },
+                child: Container(
+                  height: 30,
+                  width: 50,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Center(
+                    child: Text(
+                      restoreText,
+                      style: TextStyle(
+                        color: const Color.fromARGB(255, 255, 0, 0),
+                        fontSize: 12,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              color: Color.fromRGBO(44, 44, 44, 1),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(width: 15),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Clear Database',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        'Reset player settings to factory defaults. Recommended if you are experiencing any problems.',
-                        style: TextStyle(
-                          color: const Color.fromARGB(125, 255, 255, 255),
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: EdgeInsets.only(right: rightPadding),
-                  child: Row(
-                    children: [
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {},
-                          child: Container(
-                            height: 30,
-                            width: 50,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Drop',
-                                style: TextStyle(
-                                  color: const Color.fromARGB(255, 255, 0, 0),
-                                  fontSize: 12,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 5),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            maxWidth,
+            rightPadding,
+            ButtonPosition.start,
           ),
           SizedBox(height: 1),
 
-          Container(
-            width: maxWidth,
-            height: 50,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.only(),
-              color: Color.fromRGBO(44, 44, 44, 1),
+          button(
+            'State indicator',
+            'Turn on/off the status indicator that notifies you when network operations are being performed.',
+            Switch(
+              value: stateIndicatorState,
+              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              inactiveThumbColor: Colors.grey[300],
+              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              activeThumbColor: Colors.white,
+              onChanged: (a) {
+                setState(() {
+                  stateIndicatorState = a;
+                });
+                setIndicator(a);
+              },
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(width: 15),
 
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'State indicator',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        'Turn on/off the status indicator that notifies you when network operations are being performed.',
-                        style: TextStyle(
-                          color: const Color.fromARGB(125, 255, 255, 255),
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: EdgeInsets.only(right: rightPadding),
-                  child: Row(
-                    children: [
-                      Switch(
-                        value: stateIndicatorState,
-                        activeTrackColor: Color.fromRGBO(77, 77, 77, 1),
-                        inactiveThumbColor: Colors.grey[300],
-                        inactiveTrackColor: const Color.fromARGB(
-                          255,
-                          34,
-                          34,
-                          34,
-                        ),
-                        activeThumbColor: Colors.white,
-                        onChanged: (a) {
-                          setState(() {
-                            stateIndicatorState = a;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            maxWidth,
+            rightPadding,
+            ButtonPosition.end,
           ),
           SizedBox(height: 1),
-
-          Container(
-            width: maxWidth,
-            height: 50,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.only(),
-              color: Color.fromRGBO(44, 44, 44, 1),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(width: 15),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Local Playlists mode (Beta)',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        'You can display all your local folders with tracks as playlists, with the same appearance as in Yandex Music.',
-                        style: TextStyle(
-                          color: const Color.fromARGB(125, 255, 255, 255),
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: EdgeInsets.only(right: rightPadding),
-                  child: Row(
-                    children: [
-                      Switch(
-                        value: stateIndicatorState,
-                        activeTrackColor: Color.fromRGBO(77, 77, 77, 1),
-                        inactiveThumbColor: Colors.grey[300],
-                        inactiveTrackColor: const Color.fromARGB(
-                          255,
-                          34,
-                          34,
-                          34,
-                        ),
-                        activeThumbColor: Colors.white,
-                        onChanged: (a) {
-                          setState(() {
-                            stateIndicatorState = a;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 1),
-
-          Container(
-            width: maxWidth,
-            height: 50,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.only(),
-              color: Color.fromRGBO(44, 44, 44, 1),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(width: 15),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Gradient as background',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        'Instead of a blurred cover, you will see a gradient in the background, based on the accent colors of the cover..',
-                        style: TextStyle(
-                          color: const Color.fromARGB(125, 255, 255, 255),
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: EdgeInsets.only(right: rightPadding),
-                  child: Row(
-                    children: [
-                      Switch(
-                        value: gradientAsBackground,
-                        activeTrackColor: Color.fromRGBO(77, 77, 77, 1),
-                        inactiveThumbColor: Colors.grey[300],
-                        inactiveTrackColor: const Color.fromARGB(
-                          255,
-                          34,
-                          34,
-                          34,
-                        ),
-                        activeThumbColor: Colors.white,
-                        onChanged: (a) {
-                          setState(() {
-                            gradientAsBackground = a;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 1),
-
-          Container(
-            width: maxWidth,
-            height: 50,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(10),
-                bottomRight: Radius.circular(10),
-              ),
-              color: Color.fromRGBO(44, 44, 44, 1),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(width: 15),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Window_manager plugin',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        'Removes the window frame and enables dragging the player across its area. Turn it off if you encounter any problems.',
-                        style: TextStyle(
-                          color: const Color.fromARGB(125, 255, 255, 255),
-                          fontSize: 12,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: EdgeInsets.only(right: rightPadding),
-                  child: Row(
-                    children: [
-                      Switch(
-                        value: windowManagerPlugin,
-                        activeTrackColor: Color.fromRGBO(77, 77, 77, 1),
-                        inactiveThumbColor: Colors.grey[300],
-                        inactiveTrackColor: const Color.fromARGB(
-                          255,
-                          34,
-                          34,
-                          34,
-                        ),
-                        activeThumbColor: Colors.white,
-                        onChanged: (a) {
-                          setState(() {
-                            windowManagerPlugin = a;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -477,8 +233,21 @@ class _YandexMusicSettings extends StatefulWidget {
 }
 
 class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
-  bool search = false;
-  bool yandexMusicPreload = false;
+  bool search = true;
+  bool yandexMusicPreload = true;
+  String quality = 'MP3 (320kbps)';
+  List<String> qualityList = [
+    'Lossless (Max)',
+    'Normal (256kbps)',
+    'Low (64kbps)',
+    'MP3 (320kbps)',
+  ];
+  Map<String, String> qualityMap = {
+    'lossless': 'Lossless (Max)',
+    'nq': 'Normal (256kbps)',
+    'lq': 'Low (64kbps)',
+    'mp3': 'MP3 (320kbps)',
+  };
   Timer? searchDebounceTimer;
   StateIndicatorOperation operation = StateIndicatorOperation.none;
   TextEditingController controller = TextEditingController(text: '');
@@ -527,10 +296,44 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
     });
   }
 
+  void setQuality(String value) async {
+    final Map<String, String> qualityReverse = {
+      for (var entry in qualityMap.entries) entry.value: entry.key,
+    };
+    String? quality2 = qualityReverse[value];
+    await Database.setValue(
+      DatabaseKeys.yandexMusicTrackQuality.value,
+      quality2!,
+    );
+    setState(() {
+      quality = value;
+    });
+  }
+
+  void setSearch(bool value) async {
+    await Database.setValue(DatabaseKeys.yandexMusicSearch.value, value);
+  }
+
+  void setPreload(bool value) async {
+    await Database.setValue(DatabaseKeys.yandexMusicPreload.value, value);
+  }
+
   void initDatabase() async {
     final token = await Database.getValue(DatabaseKeys.yandexMusicToken.value);
+    final qualityl = await Database.getValue(
+      DatabaseKeys.yandexMusicTrackQuality.value,
+    );
+    final search2 = await Database.getValue(
+      DatabaseKeys.yandexMusicSearch.value,
+    );
+    final preload = await Database.getValue(
+      DatabaseKeys.yandexMusicPreload.value,
+    );
     setState(() {
       controller.text = token ?? '';
+      quality = qualityl != null ? qualityMap[qualityl]! : quality;
+      search = search2 ?? search;
+      yandexMusicPreload = preload ?? yandexMusicPreload;
     });
     yandexMusicChecker(token ?? '');
   }
@@ -545,61 +348,30 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final maxWidth = min(size.width * 0.92 * 0.92, 800 * 0.92);
-    final textFieldWidth = 250.0;
+    final textFieldWidth = min(size.width * 0.3, 250.0);
     final rightPadding = 7.5;
     return Center(
       child: Column(
         children: [
           button(
-            'Export library',
-            'Export the entire Yandex Music library to a folder',
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {},
-                child: Container(
-                  height: 30,
-                  width: 50,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Export',
-                      style: TextStyle(
-                        color: const Color.fromARGB(125, 255, 255, 255),
-                        fontSize: 12,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            maxWidth,
-            rightPadding,
-            ButtonPosition.start,
-          ),
-
-          SizedBox(height: 1),
-          button(
             'Search',
             'Add tracks found in Yandex Music to the track search in the playlist',
             Switch(
               value: search,
-              activeTrackColor: Color.fromRGBO(77, 77, 77, 1),
+              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
               inactiveThumbColor: Colors.grey[300],
-              inactiveTrackColor: const Color.fromARGB(255, 34, 34, 34),
+              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
               activeThumbColor: Colors.white,
               onChanged: (a) {
                 setState(() {
                   search = a;
                 });
+                setSearch(a);
               },
             ),
             maxWidth,
             rightPadding,
-            ButtonPosition.center,
+            ButtonPosition.start,
           ),
           SizedBox(height: 1),
 
@@ -608,14 +380,15 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
             "When the player starts, Yandex Music will initialize during the player's loading to speed up the process of interacting.",
             Switch(
               value: yandexMusicPreload,
-              activeTrackColor: Color.fromRGBO(77, 77, 77, 1),
+              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
               inactiveThumbColor: Colors.grey[300],
-              inactiveTrackColor: const Color.fromARGB(255, 34, 34, 34),
-              activeThumbColor: Colors.white,
+              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              activeThumbColor: const Color.fromARGB(255, 255, 255, 255),
               onChanged: (a) {
                 setState(() {
                   yandexMusicPreload = a;
                 });
+                setPreload(a);
               },
             ),
             maxWidth,
@@ -627,26 +400,24 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
             'Quality',
             "Quality of downloaded tracks.",
             DropdownButton<String>(
-              dropdownColor: const Color.fromRGBO(44, 44, 44, 1),
-              value: 'MP3 (320kbps)',
+              dropdownColor: const Color.fromRGBO(44, 44, 44, 0.2),
+              value: quality,
               borderRadius: BorderRadius.all(Radius.circular(5)),
               elevation: 16,
               focusColor: const Color.fromARGB(113, 255, 255, 255),
               style: const TextStyle(color: Color.fromARGB(255, 255, 255, 255)),
               underline: SizedBox.shrink(),
-              onChanged: (String? value) {},
-              items:
-                  [
-                    'Lossless (Max)',
-                    'Normal (256kbps)',
-                    'Low (64kbps)',
-                    'MP3 (320kbps)',
-                  ].map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
+              onChanged: (String? value) {
+                if (value != null) {
+                  setQuality(value);
+                }
+              },
+              items: qualityList.map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
             ),
             maxWidth,
             rightPadding,
@@ -682,7 +453,7 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
                           decoration: InputDecoration(
                             hintText: 'Enter token here',
                             hintStyle: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.white.withAlpha(178),
                               overflow: TextOverflow.ellipsis,
 
                               fontSize: 14,
@@ -690,21 +461,21 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
                               borderSide: BorderSide(
-                                color: Colors.white.withOpacity(0.3),
+                                color: Colors.white.withAlpha(155),
                                 width: 1,
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
                               borderSide: BorderSide(
-                                color: Colors.white.withOpacity(0.3),
+                                color: Colors.white.withAlpha(155),
                                 width: 1,
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
                               borderSide: BorderSide(
-                                color: Colors.white.withOpacity(0.3),
+                                color: Colors.white.withAlpha(155),
                                 width: 1.5,
                               ),
                             ),
@@ -759,7 +530,7 @@ Container button(
           buttonPosition == ButtonPosition.end ? 10 : 0,
         ),
       ),
-      color: Color.fromRGBO(44, 44, 44, 1),
+      color: Color.fromRGBO(44, 44, 44, 0.2),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
