@@ -27,7 +27,10 @@ dependencies:
   cached_network_image: ^3.4.1
   flutter_inappwebview: ^6.1.5
   audio_metadata_reader: ^1.4.2
-
+  animated_expand: ^1.0.2
+  wheel_slider: ^1.2.2
+  animations: ^2.1.1
+  
 dependency_overrides:
   yandex_music:
     path: ./lib/yandex_music

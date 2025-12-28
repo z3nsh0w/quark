@@ -5,6 +5,7 @@ import 'state_indicator.dart';
 import '../services/database.dart';
 import 'package:flutter/material.dart';
 import 'package:yandex_music/yandex_music.dart';
+import 'package:wheel_slider/wheel_slider.dart';
 
 class Settings extends StatefulWidget {
   final Function() closeView;
@@ -219,6 +220,56 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
             maxWidth,
             rightPadding,
             ButtonPosition.end,
+          ),
+          SizedBox(height: 1),
+          button(
+            'Change speed animation',
+            'malafia',
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  if (clicks < 2) {
+                    setState(() {
+                      restoreText = 'Again';
+                      clicks += 1;
+                    });
+                  } else {
+                    restoreDefaults();
+                    setState(() {
+                      restoreText = 'Restore';
+                      clicks = 0;
+                    });
+                  }
+                },
+                child: Container(
+                  child: WheelSlider.number(
+                    verticalListHeight: 60,
+                    verticalListWidth: 60,
+                    horizontal: false,
+                    isVibrate: true,
+                    interval: 0.1,
+                    perspective: 0.01,
+                    totalCount: 10,
+                    initValue: 1.0,
+                    currentIndex: 1.0,
+                    unSelectedNumberStyle: const TextStyle(
+                      fontSize: 12.0,
+                      color: Colors.white,
+                    ),
+                    onValueChanged: (val) {
+                      setState(() {
+                          
+                      });
+                    },
+                    hapticFeedbackType: HapticFeedbackType.heavyImpact,
+                  ),
+                ),
+              ),
+            ),
+            maxWidth,
+            rightPadding,
+            ButtonPosition.start,
           ),
           SizedBox(height: 1),
         ],

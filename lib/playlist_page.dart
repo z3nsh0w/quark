@@ -13,6 +13,9 @@ import 'package:yandex_music/yandex_music.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:interactive_slider/interactive_slider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:wheel_slider/wheel_slider.dart';
+import 'package:animated_expand/animated_expand.dart';
+import 'package:animations/animations.dart';
 
 // Local components&modules
 import 'player_widget.dart';
@@ -44,9 +47,9 @@ class _PlaylistPageState extends State<PlaylistPage>
   String currentPosition = '0:00';
   String totalSongDuration = '0:00';
 
-  double volume = 0.7;
+  double volume = 0.5;
   double songProgress = 0.0;
-  double transitionSpeed = 1;
+  double transitionSpeed = 1.0;
   double playerSpeed = 1;
   double playerPadding = 0.0;
   Uint8List animationInitiator = Uint8List(0);
@@ -89,10 +92,15 @@ class _PlaylistPageState extends State<PlaylistPage>
   /// NativeControl instance
   late NativeControl nativeControl;
 
-  Color popupIconsColor = const Color.fromARGB(255, 255, 255, 255).withAlpha(170); // TODO: MAKE ACCENT COLORS AS SETTINGS
+  Color popupIconsColor = const Color.fromARGB(
+    255,
+    255,
+    255,
+    255,
+  ).withAlpha(170); // TODO: MAKE ACCENT COLORS AS SETTINGS
   Color popupTextColor = Colors.white.withAlpha(220);
   Color albumArtShadowColor = Color.fromARGB(255, 21, 21, 21);
-
+  Color _childrenColor = Colors.blue;
   StateIndicatorOperation operation = StateIndicatorOperation.none;
 
   InteractiveSliderController positionController = InteractiveSliderController(
@@ -102,6 +110,11 @@ class _PlaylistPageState extends State<PlaylistPage>
   late AnimationController playlistAnimationController;
   late Animation<Offset> playlistOffsetAnimation;
   OverlayEntry? playlistOverlayEntry;
+
+  // EXPANDED btn controller
+  final expandController = ExpandController(
+    initialValue: ExpandState.collapsed,
+  );
 
   /// The name tells for itself
   Future<int> getSecondsByValue(double value) async {
@@ -212,7 +225,13 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     if (isShuffleEnable) {
       return;
     }
-    PlayerPlaylist pl = PlayerPlaylist(ownerUid: widget.playlist.ownerUid, kind: widget.playlist.kind, name: widget.playlist.name, tracks: currentPlaylist, source: widget.playlist.source);
+    PlayerPlaylist pl = PlayerPlaylist(
+      ownerUid: widget.playlist.ownerUid,
+      kind: widget.playlist.kind,
+      name: widget.playlist.name,
+      tracks: currentPlaylist,
+      source: widget.playlist.source,
+    );
     Map play = await serializePlaylist(pl);
     await Database.setValue(DatabaseKeys.lastPlaylist.value, play);
   }
@@ -730,6 +749,34 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
+  Widget get _expandedHeader => InkWell(
+    borderRadius: BorderRadius.circular(20),
+    onTap: expandController.collapse,
+    child: Padding(
+      padding: const EdgeInsets.only(top: 5, bottom: 5, right: 8, left: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(Icons.arrow_back, color: Colors.grey)],
+      ),
+    ),
+  );
+
+  Widget get _collapsedHeader => InkWell(
+    borderRadius: BorderRadius.circular(20),
+    onTap: expandController.expand,
+    child: SizedBox(
+      width: 35,
+      height: 35,
+      child: IconButton(
+        padding: EdgeInsets.all(0.0),
+        onPressed: () {
+          expandController.toggle();
+        },
+        icon: Icon(Icons.more_horiz, color: Colors.grey),
+      ),
+    ),
+  );
+
   @override
   void initState() {
     // Init playlists
@@ -883,58 +930,159 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                               mainAxisAlignment: MainAxisAlignment.center,
 
                               children: [
-                                Container(
-                                  height: 270,
-                                  width: 270,
+                                OpenContainer(
+                                  closedBuilder: (context, action) {
+                                    return Container(
+                                      height: 300,
+                                      width: 300,
 
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(5),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: albumArtShadowColor,
-
-                                        blurRadius: 20,
-                                        offset: Offset(1, -1),
-                                      ),
-                                    ],
-                                  ),
-                                  child:
-                                      (nowPlayingTrack is LocalTrack &&
-                                          nowPlayingTrack.coverByted !=
-                                              Uint8List(0))
-                                      ? Image.memory(
-                                          nowPlayingTrack.coverByted,
-                                          height: 270,
-                                          width: 270,
-                                        )
-                                      : CachedNetworkImage(
-                                          key: ValueKey<PlayerTrack>(
-                                            nowPlayingTrack,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: albumArtShadowColor,
+                                            blurRadius: 18,
+                                            offset: Offset(1, -1),
                                           ),
+                                        ],
+                                      ),
+                                      child:
+                                          (nowPlayingTrack is LocalTrack &&
+                                              nowPlayingTrack.coverByted !=
+                                                  Uint8List(0))
+                                          ? Image.memory(
+                                              nowPlayingTrack.coverByted,
+                                              height: 270,
+                                              width: 270,
+                                            )
+                                          : CachedNetworkImage(
+                                              key: ValueKey<PlayerTrack>(
+                                                nowPlayingTrack,
+                                              ),
 
-                                          imageUrl:
-                                              'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
-                                          progressIndicatorBuilder:
-                                              (
-                                                context,
-                                                url,
-                                                downloadProgress,
-                                              ) => CircularProgressIndicator(
-                                                value:
-                                                    downloadProgress.progress,
-                                                color: Color.fromARGB(
-                                                  31,
-                                                  255,
-                                                  255,
-                                                  255,
+                                              imageUrl:
+                                                  'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                                              progressIndicatorBuilder:
+                                                  (
+                                                    context,
+                                                    url,
+                                                    downloadProgress,
+                                                  ) =>
+                                                      CircularProgressIndicator(
+                                                        value: downloadProgress
+                                                            .progress,
+                                                        color: Color.fromARGB(
+                                                          31,
+                                                          255,
+                                                          255,
+                                                          255,
+                                                        ),
+                                                      ),
+                                              errorWidget:
+                                                  (context, url, error) =>
+                                                      Icon(Icons.error),
+                                              height: 270,
+                                              width: 270,
+                                            ),
+                                    );
+                                  },
+                                  openBuilder: (context, action) {
+                                    ImageProvider<Object> imageProvider;
+                                    if (nowPlayingTrack is LocalTrack &&
+                                        nowPlayingTrack.coverByted !=
+                                            Uint8List(0)) {
+                                      imageProvider = MemoryImage(
+                                        nowPlayingTrack.coverByted,
+                                      );
+                                    } else {
+                                      imageProvider = CachedNetworkImageProvider(
+                                        'https://${nowPlayingTrack.cover.replaceAll('%%', '800x800')}',
+                                      );
+                                    }
+
+                                    return Stack(
+                                      children: [
+                                        Positioned.fill(
+                                          child: ClipRect(
+                                            child: BackdropFilter(
+                                              filter: ImageFilter.blur(
+                                                sigmaX: 95,
+                                                sigmaY: 95,
+                                              ), 
+                                              child: Container(
+                                                color: Colors.black.withOpacity(
+                                                  0.5,
+                                                ),
+                                                child: Image(
+                                                  image: imageProvider,
+                                                  fit: BoxFit.cover,
+                                                  width: double.infinity,
+                                                  height: double.infinity,
                                                 ),
                                               ),
-                                          errorWidget: (context, url, error) =>
-                                              Icon(Icons.error),
-                                          height: 270,
-                                          width: 270,
+                                            ),
+                                          ),
                                         ),
+
+                                        Column(
+                                          children: [
+                                            SafeArea(
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  14,
+                                                ),
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black54,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: IconButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(context),
+                                                    icon: const Icon(
+                                                      Icons.close,
+                                                      color: Colors.white,
+                                                    ),
+                                                    splashRadius: 24,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Center(
+                                              child: Container(
+                                                height: 700,
+                                                width: 700,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withOpacity(1),
+                                                      blurRadius: 40,
+                                                      spreadRadius: -10,
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  child: Image(
+                                                    image: imageProvider,
+                                                    height: 700,
+                                                    width: 700,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
+
                                 const SizedBox(height: 20),
 
                                 SizedBox(
@@ -1195,11 +1343,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                       functionPlayerButton(
                                         Icons.favorite_outlined,
                                         Icons.favorite_outlined,
-                                        likedTracks.contains(
-                                          (nowPlayingTrack as YandexMusicTrack)
-                                              .track
-                                              .id,
-                                        ),
+                                        isLiked,
                                         () async {
                                           likeUnlike();
                                         },
@@ -1220,106 +1364,27 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                       borderRadius: BorderRadius.all(
                                         Radius.circular(30),
                                       ),
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.all(
-                                          Radius.circular(30),
-                                        ),
-                                        onTap: () {},
-                                        child: PopupMenuButton(
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(15),
-                                          ),
-                                          iconColor: Colors.white.withOpacity(
-                                            0.6,
-                                          ),
-
-                                          offset: Offset(100, -60),
-                                          color: Color.fromARGB(25, 59, 59, 59),
-                                          itemBuilder: (context) => [
+                                      child: AnimatedExpand(
+                                        duration: Duration(milliseconds: 500),
+                                        axis: Axis.horizontal,
+                                        controller: expandController,
+                                        expandedHeader: _expandedHeader,
+                                        collapsedHeader: _collapsedHeader,
+                                        onEnd: () {
+                                          if (expandController.isCollapsed) {
+                                            setState(
+                                              () => _childrenColor =
+                                                  _childrenColor == Colors.blue
+                                                  ? Colors.red
+                                                  : Colors.blue,
+                                            );
+                                          }
+                                        },
+                                        content: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
                                             if (Platform.isLinux)
-                                              PopupMenuItem(
-                                                height: 45,
-                                                child: StatefulBuilder(
-                                                  builder:
-                                                      (
-                                                        BuildContext context,
-                                                        StateSetter
-                                                        setMenuState,
-                                                      ) {
-                                                        return Row(
-                                                          children: [
-                                                            Text(
-                                                              'Playback speed',
-                                                              style: TextStyle(
-                                                                color:
-                                                                    popupTextColor,
-                                                              ),
-                                                            ),
-                                                            SizedBox(width: 15),
-                                                            IconButton(
-                                                              onPressed: () async {
-                                                                setMenuState(() {
-                                                                  playerSpeed =
-                                                                      playerSpeed -
-                                                                      0.1;
-                                                                });
-                                                                print(
-                                                                  'Player changed speed to: $playerSpeed',
-                                                                );
-                                                                await player
-                                                                    .player
-                                                                    .setPlaybackRate(
-                                                                      playerSpeed,
-                                                                    );
-                                                                setState(() {});
-                                                              },
-                                                              icon: Icon(
-                                                                Icons.remove,
-                                                                color:
-                                                                    popupIconsColor,
-                                                              ),
-                                                            ),
-                                                            Text(
-                                                              playerSpeed
-                                                                  .toStringAsFixed(
-                                                                    1,
-                                                                  ),
-                                                              style: TextStyle(
-                                                                color:
-                                                                    popupTextColor,
-                                                              ),
-                                                            ),
-                                                            IconButton(
-                                                              onPressed: () async {
-                                                                setMenuState(() {
-                                                                  playerSpeed =
-                                                                      playerSpeed +
-                                                                      0.1;
-                                                                });
-                                                                await player
-                                                                    .player
-                                                                    .setPlaybackRate(
-                                                                      playerSpeed,
-                                                                    );
-                                                                print(
-                                                                  'Player changed speed to: $playerSpeed',
-                                                                );
-                                                                setState(() {});
-                                                              },
-                                                              icon: Icon(
-                                                                Icons.add,
-                                                                color:
-                                                                    popupIconsColor,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        );
-                                                      },
-                                                ),
-                                              ),
-                                            PopupMenuItem(
-                                              height: 45,
-                                              child: StatefulBuilder(
+                                              StatefulBuilder(
                                                 builder:
                                                     (
                                                       BuildContext context,
@@ -1328,7 +1393,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                                       return Row(
                                                         children: [
                                                           Text(
-                                                            'Transition speed',
+                                                            'Playback speed',
                                                             style: TextStyle(
                                                               color:
                                                                   popupTextColor,
@@ -1338,21 +1403,19 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                                           IconButton(
                                                             onPressed: () async {
                                                               setMenuState(() {
-                                                                transitionSpeed =
-                                                                    transitionSpeed -
+                                                                playerSpeed =
+                                                                    playerSpeed -
                                                                     0.1;
                                                               });
-
+                                                              print(
+                                                                'Player changed speed to: $playerSpeed',
+                                                              );
+                                                              await player
+                                                                  .player
+                                                                  .setPlaybackRate(
+                                                                    playerSpeed,
+                                                                  );
                                                               setState(() {});
-                                                              await Database.setValue(
-                                                                DatabaseKeys
-                                                                    .transitionSpeed
-                                                                    .value,
-                                                                transitionSpeed,
-                                                              );
-                                                              setAnimationSpeed(
-                                                                transitionSpeed,
-                                                              );
                                                             },
                                                             icon: Icon(
                                                               Icons.remove,
@@ -1361,7 +1424,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                                             ),
                                                           ),
                                                           Text(
-                                                            transitionSpeed
+                                                            playerSpeed
                                                                 .toStringAsFixed(
                                                                   1,
                                                                 ),
@@ -1373,20 +1436,19 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                                           IconButton(
                                                             onPressed: () async {
                                                               setMenuState(() {
-                                                                transitionSpeed =
-                                                                    transitionSpeed +
+                                                                playerSpeed =
+                                                                    playerSpeed +
                                                                     0.1;
                                                               });
+                                                              await player
+                                                                  .player
+                                                                  .setPlaybackRate(
+                                                                    playerSpeed,
+                                                                  );
+                                                              print(
+                                                                'Player changed speed to: $playerSpeed',
+                                                              );
                                                               setState(() {});
-                                                              await Database.setValue(
-                                                                DatabaseKeys
-                                                                    .transitionSpeed
-                                                                    .value,
-                                                                transitionSpeed,
-                                                              );
-                                                              setAnimationSpeed(
-                                                                transitionSpeed,
-                                                              );
                                                             },
                                                             icon: Icon(
                                                               Icons.add,
@@ -1398,9 +1460,8 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                                       );
                                                     },
                                               ),
-                                            ),
-                                            PopupMenuItem(
-                                              height: 45,
+
+                                            InkWell(
                                               onTap: () {
                                                 setState(() {
                                                   settingsView = true;
@@ -1410,20 +1471,32 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                                   }
                                                 });
                                               },
-                                              child: Row(
-                                                children: [
-                                                  Text(
-                                                    'Settings',
-                                                    style: TextStyle(
-                                                      color: popupTextColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(30),
+                                              splashColor: Colors.white24,
+                                              highlightColor:
+                                                  Colors.transparent,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 7,
                                                     ),
-                                                  ),
-                                                ],
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.settings,
+                                                      size: 20,
+                                                      color: Colors.grey,
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
 
-                                            PopupMenuItem(
-                                              height: 45,
+                                            InkWell(
                                               onTap: () {
                                                 setState(() {
                                                   playlistAnimationController
@@ -1437,15 +1510,28 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                                       });
                                                 });
                                               },
-                                              child: Row(
-                                                children: [
-                                                  Text(
-                                                    'Exit',
-                                                    style: TextStyle(
-                                                      color: popupTextColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(30),
+                                              splashColor: Colors.white24,
+                                              highlightColor:
+                                                  Colors.transparent,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 7,
                                                     ),
-                                                  ),
-                                                ],
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.exit_to_app,
+                                                      size: 20,
+                                                      color: Colors.grey,
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ],
