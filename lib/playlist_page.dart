@@ -1,5 +1,6 @@
 // Flutter packages
 import 'dart:io';
+import 'dart:math';
 import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -9,11 +10,11 @@ import 'package:quark/objects/track.dart';
 
 // Additional packages
 import 'package:logging/logging.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:interactive_slider/interactive_slider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:wheel_slider/wheel_slider.dart';
 import 'package:animated_expand/animated_expand.dart';
 import 'package:animations/animations.dart';
 
@@ -52,10 +53,13 @@ class _PlaylistPageState extends State<PlaylistPage>
   double transitionSpeed = 1.0;
   double playerSpeed = 1;
   double playerPadding = 0.0;
+  double coverPadding = 0.0;
+
   Uint8List animationInitiator = Uint8List(0);
 
   bool settingsView = false;
 
+  bool isCoverOpened = false;
   bool isSliderActive = true;
   bool isPlaying = false;
   bool isLiked = false;
@@ -917,7 +921,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                       key: ValueKey((nowPlayingTrack, animationInitiator)),
                       filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
                       child: Container(
-                        color: Colors.transparent,
+                        color: const Color.fromRGBO(0, 0, 0, 0),
                         child: AnimatedPadding(
                           duration: Duration(
                             milliseconds: (750 * transitionSpeed).round(),
@@ -928,14 +932,11 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                             color: Colors.transparent,
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
-
                               children: [
                                 OpenContainer(
                                   closedBuilder: (context, action) {
+                                    isCoverOpened = !isCoverOpened;
                                     return Container(
-                                      height: 300,
-                                      width: 300,
-
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(12),
                                         boxShadow: [
@@ -987,6 +988,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                     );
                                   },
                                   openBuilder: (context, action) {
+                                    isCoverOpened = !isCoverOpened;
                                     ImageProvider<Object> imageProvider;
                                     if (nowPlayingTrack is LocalTrack &&
                                         nowPlayingTrack.coverByted !=
@@ -996,29 +998,30 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                       );
                                     } else {
                                       imageProvider = CachedNetworkImageProvider(
-                                        'https://${nowPlayingTrack.cover.replaceAll('%%', '800x800')}',
+                                        'https://${nowPlayingTrack.cover.replaceAll('%%', '1000x1000')}',
                                       );
                                     }
 
                                     return Stack(
                                       children: [
                                         Positioned.fill(
-                                          child: ClipRect(
-                                            child: BackdropFilter(
-                                              filter: ImageFilter.blur(
-                                                sigmaX: 95,
-                                                sigmaY: 95,
-                                              ), 
-                                              child: Container(
-                                                color: Colors.black.withOpacity(
-                                                  0.5,
-                                                ),
-                                                child: Image(
-                                                  image: imageProvider,
-                                                  fit: BoxFit.cover,
-                                                  width: double.infinity,
-                                                  height: double.infinity,
-                                                ),
+                                          child: Image(
+                                            image: imageProvider,
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            height: double.infinity,
+                                          ),
+                                        ),
+
+                                        ClipRect(
+                                          child: BackdropFilter(
+                                            filter: ImageFilter.blur(
+                                              sigmaX: 95,
+                                              sigmaY: 95,
+                                            ),
+                                            child: Container(
+                                              color: Colors.black.withOpacity(
+                                                0.5,
                                               ),
                                             ),
                                           ),
@@ -1048,33 +1051,51 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                                 ),
                                               ),
                                             ),
-                                            Center(
-                                              child: Container(
-                                                height: 700,
-                                                width: 700,
-                                                decoration: BoxDecoration(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: Colors.black
-                                                          .withOpacity(1),
-                                                      blurRadius: 40,
-                                                      spreadRadius: -10,
+                                            SizedBox(height: 40),
+
+                                            LayoutBuilder(
+                                              builder: (context, constraints) {
+
+                                                // layout size 78
+                                                double maxWidth =
+                                                    constraints.maxWidth;
+                                                double maxHeight =
+                                                   maxWidth;
+
+                                                // cover size 56
+                                                double targetCoverWidth = maxWidth * 0.95;
+                                                double targetCoverHeight = maxHeight; 
+
+                                                // clamped size
+                                                final double coverSize = min(targetCoverWidth, targetCoverHeight);
+                                                final double clampedSize = coverSize.clamp(200.0, 600.0);
+
+                                                // MediaQuery.of(context).size.width;
+                                                return Center(
+                                                  child: AnimatedContainer(
+                                                    curve: Curves.easeOutQuint,
+                                                    width: clampedSize,
+                                                    height: clampedSize,
+                                                    duration: Duration(
+                                                      milliseconds:
+                                                          (500 * transitionSpeed)
+                                                              .round(),
                                                     ),
-                                                  ],
-                                                ),
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  child: Image(
-                                                    image: imageProvider,
-                                                    height: 700,
-                                                    width: 700,
-                                                    fit: BoxFit.cover,
+                                                    child: ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                      child: Image(
+                                                        image: imageProvider,
+                                                        height: 700,
+                                                        width: 700,
+                                                        fit: BoxFit.cover,
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
-                                              ),
+                                                );
+                                              },
                                             ),
                                           ],
                                         ),
@@ -1302,10 +1323,8 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                     ),
                                   ],
                                 ),
-
                                 SizedBox(
                                   width: 330,
-
                                   child: InteractiveSlider(
                                     startIcon: const Icon(Icons.volume_down),
                                     endIcon: const Icon(Icons.volume_up),
