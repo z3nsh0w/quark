@@ -17,6 +17,10 @@ enum DatabaseKeys {
   stateIndicatorState('indicator_state'),
 
   /// ```Boolean```
+  /// Is the playlist opening area enabled?
+  playlistOpeningArea('playlist_opening_area'),
+
+  /// ```Boolean```
   /// Is the cover set as the background
   albumArtAsBackground('background_art'),
 

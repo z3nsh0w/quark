@@ -115,9 +115,11 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
   bool stateIndicatorState = true;
   bool gradientAsBackground = false;
   bool windowManagerPlugin = false;
+  bool playlistOpeningArea = true;
   int clicks = 0;
   String restoreText = 'Restore';
-  InteractiveSliderController transitionSpeedController = InteractiveSliderController(1.0);
+  InteractiveSliderController transitionSpeedController =
+      InteractiveSliderController(1.0);
 
   void initDatabase() async {
     bool? indicator = await Database.getValue(
@@ -130,11 +132,16 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
     double? transitionSpeed = await Database.getValue(
       DatabaseKeys.transitionSpeed.value,
     );
+    bool? playlistArea = await Database.getValue(
+      DatabaseKeys.playlistOpeningArea.value,
+    );
     setState(() {
       stateIndicatorState = indicator ?? stateIndicatorState;
       gradientAsBackground = gradient ?? gradientAsBackground;
       windowManagerPlugin = windowManager ?? windowManagerPlugin;
-      transitionSpeedController.value  = transitionSpeed ?? transitionSpeedController.value;
+      playlistOpeningArea = playlistArea ?? playlistOpeningArea;
+      transitionSpeedController.value =
+          transitionSpeed ?? transitionSpeedController.value;
     });
   }
 
@@ -144,6 +151,10 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
 
   void setIndicator(bool value) async {
     await Database.setValue(DatabaseKeys.stateIndicatorState.value, value);
+  }
+
+  void setPlaylistArea(bool value) async {
+    await Database.setValue(DatabaseKeys.playlistOpeningArea.value, value);
   }
 
   @override
@@ -217,7 +228,10 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
                 min: 0.0,
                 max: 2.5,
                 onProgressUpdated: (value) async {
-                  await Database.setValue(DatabaseKeys.transitionSpeed.value, value);
+                  await Database.setValue(
+                    DatabaseKeys.transitionSpeed.value,
+                    value,
+                  );
                 },
                 onFocused: (value) {},
 
@@ -229,6 +243,27 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
                   borderRadius: BorderRadius.all(Radius.circular(8)),
                 ),
               ),
+            ),
+            maxWidth,
+            rightPadding,
+            ButtonPosition.center,
+          ),
+          SizedBox(height: 1),
+          button(
+            'Playlist opening area',
+            'When you hover to the left side of the screen, the playlistView will automatically open.',
+            Switch(
+              value: playlistOpeningArea,
+              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              inactiveThumbColor: Colors.grey[300],
+              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              // activeThumbColor: Colors.white,
+              onChanged: (a) {
+                setState(() {
+                  playlistOpeningArea = a;
+                });
+                setPlaylistArea(a);
+              },
             ),
             maxWidth,
             rightPadding,

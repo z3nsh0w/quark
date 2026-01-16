@@ -3,11 +3,11 @@ import 'dart:io';
 import 'dart:ui';
 import 'dart:math';
 import 'dart:async';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:quark/objects/track.dart';
+import 'package:file_picker/file_picker.dart';
 
 // Additional packages
 import 'package:logging/logging.dart';
@@ -60,6 +60,7 @@ class _PlaylistPageState extends State<PlaylistPage>
   // The distance that will be between icons when animatedExpand is open
   double expandedIconGap = 22;
 
+  bool isManuallyOpenedPlaylist = false;
   bool isLiked = false;
   bool isPlaying = false;
   bool settingsView = false;
@@ -69,6 +70,7 @@ class _PlaylistPageState extends State<PlaylistPage>
   bool isShuffleEnable = false;
   bool isPlaylistOpened = false;
   bool isYandexUploading = false;
+  bool playlistOpeningArea = true;
   bool openPlaylistNextTime = false;
 
   final log = Logger('PlaylistPage');
@@ -354,6 +356,11 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
+  void manuallyClosedPlaylist() async {
+    togglePlaylist();
+    isManuallyOpenedPlaylist = false;
+  }
+
   void closeFullScreenCover() async {
     coverAnimationController.reverse().then((_) {
       coverOverlayEntry?.remove();
@@ -470,7 +477,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
         builder: (context) => PlaylistOverlay(
           playlistAnimationController: playlistAnimationController,
           playlistOffsetAnimation: playlistOffsetAnimation,
-          togglePlaylist: togglePlaylist,
+          togglePlaylist: manuallyClosedPlaylist,
           playlist: currentPlaylist,
           playlistName: widget.playlist.name,
           changeTrack: changeTrack,
@@ -483,7 +490,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
         ),
       );
       Overlay.of(context).insert(playlistOverlayEntry!);
-    }
+    } else {}
   }
 
   //
@@ -732,6 +739,9 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     double? transitionSpeed2 = await Database.getValue(
       DatabaseKeys.transitionSpeed.value,
     );
+    bool? playlistArea = await Database.getValue(
+      DatabaseKeys.playlistOpeningArea.value,
+    );
     setState(() {
       settingsView = false;
       if (openPlaylistNextTime) {
@@ -742,6 +752,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
       }
       transitionSpeed = transitionSpeed2 ?? transitionSpeed;
       stateIndicator = indicator ?? stateIndicator;
+      playlistOpeningArea = playlistArea ?? playlistOpeningArea;
     });
   }
 
@@ -780,9 +791,13 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     bool? indicator = await Database.getValue(
       DatabaseKeys.stateIndicatorState.value,
     );
+    bool? playlistArea = await Database.getValue(
+      DatabaseKeys.stateIndicatorState.value,
+    );
     dbVolume ??= volume;
     transition ??= transitionSpeed;
     stateIndicator = indicator ?? stateIndicator;
+    playlistOpeningArea = playlistArea ?? playlistOpeningArea;
 
     changeVolume(dbVolume);
     await player.setVolume(dbVolume);
@@ -970,10 +985,14 @@ YandexMusic client: ${widget.yandexMusic.accountID}
         );
     coverAnimationController = AnimationController(
       duration: Duration(milliseconds: (500 * transitionSpeed).round()),
+      reverseDuration: Duration(milliseconds: (400 * transitionSpeed).round()),
       vsync: this,
     );
     coverDoubleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: coverAnimationController, curve: Curves.ease),
+      CurvedAnimation(
+        parent: coverAnimationController,
+        curve: Curves.easeOutQuint,
+      ),
     );
 
     // Update UI
@@ -990,6 +1009,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     Future.delayed(Duration(milliseconds: 150), () {
       if (MediaQuery.of(context).size.width > 800) {
         togglePlaylist();
+        isManuallyOpenedPlaylist = true;
       }
     });
   }
@@ -1126,30 +1146,41 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                     (nowPlayingTrack is LocalTrack &&
                                         nowPlayingTrack.coverByted !=
                                             Uint8List(0))
-                                    ? Image.memory(
-                                        nowPlayingTrack.coverByted,
-                                        height: 270,
-                                        width: 270,
+                                    ? ClipRRect(
+                                        borderRadius:
+                                            BorderRadiusGeometry.circular(10),
+                                        child: Image.memory(
+                                          nowPlayingTrack.coverByted,
+                                          height: 270,
+                                          width: 270,
+                                        ),
                                       )
-                                    : CachedNetworkImage(
-                                        imageUrl:
-                                            'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
-                                        progressIndicatorBuilder:
-                                            (context, url, downloadProgress) =>
-                                                CircularProgressIndicator(
-                                                  value:
-                                                      downloadProgress.progress,
-                                                  color: Color.fromARGB(
-                                                    31,
-                                                    255,
-                                                    255,
-                                                    255,
-                                                  ),
+                                    : ClipRRect(
+                                        borderRadius:
+                                            BorderRadiusGeometry.circular(10),
+                                        child: CachedNetworkImage(
+                                          imageUrl:
+                                              'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                                          progressIndicatorBuilder:
+                                              (
+                                                context,
+                                                url,
+                                                downloadProgress,
+                                              ) => CircularProgressIndicator(
+                                                value:
+                                                    downloadProgress.progress,
+                                                color: Color.fromARGB(
+                                                  31,
+                                                  255,
+                                                  255,
+                                                  255,
                                                 ),
-                                        errorWidget: (context, url, error) =>
-                                            Icon(Icons.error),
-                                        height: 270,
-                                        width: 270,
+                                              ),
+                                          errorWidget: (context, url, error) =>
+                                              Icon(Icons.error),
+                                          height: 270,
+                                          width: 270,
+                                        ),
                                       ),
                               ),
 
@@ -1398,7 +1429,14 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                     Icons.featured_play_list_outlined,
                                     Icons.featured_play_list_outlined,
                                     isPlaylistOpened,
-                                    togglePlaylist,
+                                    () {
+                                      togglePlaylist();
+                                      if (isPlaylistOpened) {
+                                        isManuallyOpenedPlaylist = true;
+                                      } else {
+                                        isManuallyOpenedPlaylist = false;
+                                      }
+                                    },
                                   ),
                                   SizedBox(
                                     width: expandController.isCollapsed
@@ -1606,6 +1644,25 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                       )
                     : SizedBox.shrink(key: ValueKey('empty')),
               ),
+              if (playlistOpeningArea)
+                Positioned(
+                  left: 0,
+                  child: MouseRegion(
+                    onEnter: (event) {
+                      print(event.localPosition.dx);
+                      if (event.localPosition.dx > 300 &&
+                          !isManuallyOpenedPlaylist) {
+                        togglePlaylist();
+                      } else if (event.localPosition.dx < 300) {
+                        togglePlaylist();
+                      }
+                    },
+                    child: SizedBox(
+                      height: size.height,
+                      width: isPlaylistOpened ? 450 : 50,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
