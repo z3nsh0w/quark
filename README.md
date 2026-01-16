@@ -5,7 +5,7 @@
 </p>
 
 <h1 align="center">
-  <strong>Lightweight, easy to use and beautiful audio player</strong>
+  <strong>Lightweight, multifunctional and beautiful audio player</strong>
 </h1>
 
 <div align="center">
@@ -18,21 +18,22 @@
 
 ## Features
 
-- **Universal Audio Formats Support**
-- **Yandex Music Integration**
-- **Slowing down/Speed up tracks (Linux only)**
 - **Beautiful Design**
+- **Yandex Music Integration**
+- **Universal Audio Formats Support**
+- **Slowing down/Speed up tracks (Linux only)**
+- **Synchronization of local and Yandex tracks**
 
 ### ⚠ Important Notes
 
 > [!WARNING]
 > **Windows**
-> To use player on Windows you need to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
->
-> To use the player in Windows versions lower than 10 1809, you could additionally install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
+> To use player on Windows you must to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
 > 
-> **For Linux Users:**
-> - Requires `libgtk-4-1` or `libqt6gui6` (usually pre-installed on popular distributions)
+>To use WebView authorization on Windows version below 10 1809, you need install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/), otherwise you will have to enter the Yandex Music token manually.
+> 
+> **Linux**
+> Requires `libgtk-4-1+` or `libqt6gui6` (usually pre-installed on popular distributions)
 
 ## Screenshots
 
@@ -41,13 +42,9 @@
   <img src="/assets/player_main_menu.png" alt="QUARK Player" width="45%">
 </p>
 
-## Development Team
 
-**Made by PDG**
+### Made by PDG
 - [@z3nsh0w](https://github.com/z3nsh0w)
 - [@aror](https://github.com/Aror1)
 
-## License
-
 **This project is licensed under MIT license. See the `LICENSE` file for details.**
----
