@@ -24,6 +24,7 @@ import '/widgets/yandex_playlists_widget.dart';
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const Quark());
 }
 
@@ -463,15 +464,16 @@ class _MainPageState extends State<MainPage> {
               right: 0,
               top: 0,
               child: IconButton(
-                onPressed: () {
-                  setState(() {
-                    settingsView = true;
-                  });
-                },
-                icon: Icon(
-                  Icons.settings,
-                  color: Color.fromRGBO(255, 255, 255, 0.8),
-                ),
+                  onPressed: () {
+                    setState(() {
+                      settingsView = true;
+                    });
+                  },
+                  icon: Icon(
+                    Icons.settings,
+                    color: Color.fromRGBO(255, 255, 255, 0.8),
+                  ),
+                
               ),
             ),
         ],

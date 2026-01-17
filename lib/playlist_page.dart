@@ -1440,7 +1440,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                   ),
                                   SizedBox(
                                     width: expandController.isCollapsed
-                                        ? 22
+                                        ? 24
                                         : expandedIconGap,
                                   ),
                                   functionPlayerButton(
@@ -1451,7 +1451,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                   ),
                                   SizedBox(
                                     width: expandController.isCollapsed
-                                        ? 22
+                                        ? 24
                                         : expandedIconGap,
                                   ),
                                   if (nowPlayingTrack is YandexMusicTrack)
@@ -1487,7 +1487,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
 
                                   SizedBox(
                                     width: expandController.isCollapsed
-                                        ? 22
+                                        ? 24
                                         : expandedIconGap,
                                   ),
                                   functionPlayerButton(
@@ -1498,7 +1498,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                   ),
                                   SizedBox(
                                     width: expandController.isCollapsed
-                                        ? 22
+                                        ? 24
                                         : expandedIconGap,
                                   ),
                                   Material(
@@ -1649,17 +1649,18 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                   left: 0,
                   child: MouseRegion(
                     onEnter: (event) {
-                      print(event.localPosition.dx);
-                      if (event.localPosition.dx > 300 &&
+                      if (event.localPosition.dx > 150 &&
                           !isManuallyOpenedPlaylist) {
                         togglePlaylist();
-                      } else if (event.localPosition.dx < 300) {
+                      } else if (event.localPosition.dx < 100) {
                         togglePlaylist();
                       }
                     },
                     child: SizedBox(
                       height: size.height,
-                      width: isPlaylistOpened ? 450 : 50,
+                      width: (isPlaylistOpened && !isManuallyOpenedPlaylist)
+                          ? size.width
+                          : 50,
                     ),
                   ),
                 ),
