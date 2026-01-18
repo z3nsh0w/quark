@@ -16,10 +16,11 @@ import 'playlist_page.dart';
 import '/services/files.dart';
 import '/widgets/settings.dart';
 import '/objects/playlist.dart';
-import 'services/old_database.dart';
+import 'services/database.dart';
 import '/widgets/yandex_login.dart';
 import '/widgets/yandex_playlists_widget.dart';
 
+// #TODO: fix bug while closing playtlist with iconbutton then if playlist was opened by mouseArea it wont close
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
 
 void main() async {
@@ -59,7 +60,7 @@ class _MainPageState extends State<MainPage> {
   /// Reacting on pick folder button
   Future<void> pickFolder() async {
     try {
-      final bool? recursiveFilesAdding = await Database.getValue(
+      final bool? recursiveFilesAdding = await Database.get(
         DatabaseKeys.recursiveFilesAdding.value,
       );
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
@@ -111,7 +112,7 @@ class _MainPageState extends State<MainPage> {
   /// Routing to playlist page
   Future<void> playlistRoute(PlayerPlaylist playlist) async {
     Map play = await serializePlaylist(playlist);
-    await Database.setValue(DatabaseKeys.lastPlaylist.value, play);
+    await Database.put(DatabaseKeys.lastPlaylist.value, play);
     lastPlaylist = playlist;
     Navigator.push(
       context,
@@ -124,9 +125,7 @@ class _MainPageState extends State<MainPage> {
 
   /// Reaction on playlist restore button
   Future<void> playlistRestore() async {
-    String? token = await Database.getValue(
-      DatabaseKeys.yandexMusicToken.value,
-    );
+    String? token = await Database.get(DatabaseKeys.yandexMusicToken.value);
 
     final playlist = await restoreLastPlaylistFromDatabase();
 
@@ -172,9 +171,7 @@ class _MainPageState extends State<MainPage> {
   /// Update playlists from yandex music
   Future<void> ymUpdate() async {
     try {
-      String? token = await Database.getValue(
-        DatabaseKeys.yandexMusicToken.value,
-      );
+      String? token = await Database.get(DatabaseKeys.yandexMusicToken.value);
       if (token != null) {
         yandexMusic = YandexMusic(token: token);
         log.warning('Trying to initialize yandex music instance...');
@@ -183,10 +180,15 @@ class _MainPageState extends State<MainPage> {
         inited = true;
 
         if (userPlaylists.isEmpty) {
-          yandexMusic.usertracks.getPlaylistsWithLikes().then((playlists) {
+          yandexMusic.usertracks.getPlaylistsWithLikes().then((
+            playlists,
+          ) async {
+            await Database.put(
+              DatabaseKeys.yandexMusicPlaylists.value,
+              playlists.map((toElement) => toElement.raw).toList(),
+            );
             setState(() {
               userPlaylists = playlists;
-
               playlistView = true;
             });
           });
@@ -194,9 +196,8 @@ class _MainPageState extends State<MainPage> {
           setState(() {
             playlistView = true;
           });
-          precacheTracks();
         }
-        precacheTracks();
+        await precacheTracks();
       } else {
         setState(() {
           loginView = true;
@@ -220,7 +221,7 @@ class _MainPageState extends State<MainPage> {
 
   /// Execute last playlist from database
   Future<PlayerPlaylist?> restoreLastPlaylistFromDatabase() async {
-    final executed = await Database.getValue(DatabaseKeys.lastPlaylist.value);
+    final executed = await Database.get(DatabaseKeys.lastPlaylist.value);
     if (executed != null) {
       lastPlaylist = await deserializePlaylist(
         (executed as Map).cast<String, dynamic>(),
@@ -276,14 +277,14 @@ class _MainPageState extends State<MainPage> {
       await restoreLastPlaylistFromDatabase();
     });
     Future.delayed(Duration(milliseconds: 15), () async {
-      bool? yandexPreload = await Database.getValue(
+      bool? yandexPreload = await Database.get(
         DatabaseKeys.yandexMusicPreload.value,
       );
 
       if (yandexPreload != false) {
         log.info('Yandex preloading is enabled. Trying to initialize...');
         try {
-          String? token = await Database.getValue(
+          String? token = await Database.get(
             DatabaseKeys.yandexMusicToken.value,
           );
           if (token != null) {
@@ -467,16 +468,15 @@ class _MainPageState extends State<MainPage> {
               right: 0,
               top: 0,
               child: IconButton(
-                  onPressed: () {
-                    setState(() {
-                      settingsView = true;
-                    });
-                  },
-                  icon: Icon(
-                    Icons.settings,
-                    color: Color.fromRGBO(255, 255, 255, 0.8),
-                  ),
-                
+                onPressed: () {
+                  setState(() {
+                    settingsView = true;
+                  });
+                },
+                icon: Icon(
+                  Icons.settings,
+                  color: Color.fromRGBO(255, 255, 255, 0.8),
+                ),
               ),
             ),
         ],

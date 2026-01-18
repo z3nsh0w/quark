@@ -26,7 +26,7 @@ import 'playlist_widget.dart';
 import '/services/player.dart';
 import '/objects/playlist.dart';
 import '/widgets/settings.dart';
-import 'services/old_database.dart';
+import 'services/database.dart';
 import '/services/net_player.dart';
 import '/services/native_control.dart';
 import '/widgets/state_indicator.dart';
@@ -138,10 +138,7 @@ class _PlaylistPageState extends State<PlaylistPage>
 
   /// Saving last track from database
   void saveLastTrack() async {
-    await Database.setValue(
-      DatabaseKeys.lastTrack.value,
-      nowPlayingTrack.filepath,
-    );
+    await Database.put(DatabaseKeys.lastTrack.value, nowPlayingTrack.filepath);
   }
 
   /// Top function for caching tracks in storage
@@ -174,7 +171,7 @@ class _PlaylistPageState extends State<PlaylistPage>
 
   /// Lower function for caching tracks in storage
   Future<void> _cacheFileInBackground(PlayerTrack track) async {
-    String? quality = await Database.getValue(
+    String? quality = await Database.get(
       DatabaseKeys.yandexMusicTrackQuality.value,
     );
     quality ??= 'mp3';
@@ -248,7 +245,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
       source: widget.playlist.source,
     );
     Map play = await serializePlaylist(pl);
-    await Database.setValue(DatabaseKeys.lastPlaylist.value, play);
+    await Database.put(DatabaseKeys.lastPlaylist.value, play);
   }
 
   //
@@ -316,10 +313,11 @@ YandexMusic client: ${widget.yandexMusic.accountID}
   }
 
   /// Reaction on playlist button
-  void togglePlaylist() async {
+  Future<void> togglePlaylist() async {
     if (isPlaylistOpened) {
       setState(() {
         isPlaylistOpened = false;
+        isManuallyOpenedPlaylist = false;
         playerPadding = 0.0;
       });
       await playlistAnimationController.reverse();
@@ -357,7 +355,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
   }
 
   void manuallyClosedPlaylist() async {
-    togglePlaylist();
+    await togglePlaylist();
     isManuallyOpenedPlaylist = false;
   }
 
@@ -725,7 +723,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
   void changeVolume(value) async {
     volume = value;
     await player.setVolume(value);
-    await Database.setValue(DatabaseKeys.volume.value, value);
+    await Database.put(DatabaseKeys.volume.value, value);
     setState(() {
       volume = value;
     });
@@ -733,13 +731,13 @@ YandexMusic client: ${widget.yandexMusic.accountID}
 
   /// Reaction on setting closing button
   void closeSettings() async {
-    bool? indicator = await Database.getValue(
+    bool? indicator = await Database.get(
       DatabaseKeys.stateIndicatorState.value,
     );
-    double? transitionSpeed2 = await Database.getValue(
+    double? transitionSpeed2 = await Database.get(
       DatabaseKeys.transitionSpeed.value,
     );
-    bool? playlistArea = await Database.getValue(
+    bool? playlistArea = await Database.get(
       DatabaseKeys.playlistOpeningArea.value,
     );
     setState(() {
@@ -784,14 +782,12 @@ YandexMusic client: ${widget.yandexMusic.accountID}
 
   /// Load keys from database
   void loadDatabase() async {
-    double? dbVolume = await Database.getValue(DatabaseKeys.volume.value);
-    double? transition = await Database.getValue(
-      DatabaseKeys.transitionSpeed.value,
-    );
-    bool? indicator = await Database.getValue(
+    double? dbVolume = await Database.get(DatabaseKeys.volume.value);
+    double? transition = await Database.get(DatabaseKeys.transitionSpeed.value);
+    bool? indicator = await Database.get(
       DatabaseKeys.stateIndicatorState.value,
     );
-    bool? playlistArea = await Database.getValue(
+    bool? playlistArea = await Database.get(
       DatabaseKeys.stateIndicatorState.value,
     );
     dbVolume ??= volume;
@@ -877,7 +873,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
 
   /// Restoring last track from database
   void restoreLastTrack() async {
-    String? resl = await Database.getValue(DatabaseKeys.lastTrack.value);
+    String? resl = await Database.get(DatabaseKeys.lastTrack.value);
     if (resl != null) {
       bool exist = false;
       PlayerTrack? tracks;
@@ -996,7 +992,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     );
 
     // Update UI
-    print(nowPlayingTrack.cover);
     playerListeners();
     loadDatabase();
     Logger.root.level = Level.ALL;
@@ -1429,8 +1424,8 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                     Icons.featured_play_list_outlined,
                                     Icons.featured_play_list_outlined,
                                     isPlaylistOpened,
-                                    () {
-                                      togglePlaylist();
+                                    () async {
+                                      await togglePlaylist();
                                       if (isPlaylistOpened) {
                                         isManuallyOpenedPlaylist = true;
                                       } else {
@@ -1544,7 +1539,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
 
                                           animatedExpandButton(() async {
                                             final bool? recursiveFilesAdding =
-                                                await Database.getValue(
+                                                await Database.get(
                                                   DatabaseKeys
                                                       .recursiveFilesAdding
                                                       .value,

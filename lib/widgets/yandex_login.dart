@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'dart:math';
 import 'dart:async';
-import '../services/old_database.dart';
+import '../services/database.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -54,22 +54,14 @@ class _YandexLoginState extends State<YandexLogin> {
         String displayName = await yandexMusic.account.getDisplayName();
         String fullName = await yandexMusic.account.getFullName();
         String login = await yandexMusic.account.getLogin();
-        await Database.setValue(DatabaseKeys.yandexMusicToken.value, value);
-        await Database.setValue(DatabaseKeys.yandexMusicToken.value, value);
-        await Database.setValue(
-          DatabaseKeys.yandexMusicUid.value,
-          yandexMusic.accountID,
-        );
-        await Database.setValue(DatabaseKeys.yandexMusicEmail.value, email);
-        await Database.setValue(
-          DatabaseKeys.yandexMusicDisplayName.value,
-          displayName,
-        );
-        await Database.setValue(
-          DatabaseKeys.yandexMusicFullName.value,
-          fullName,
-        );
-        await Database.setValue(DatabaseKeys.yandexMusicLogin.value, login);
+        await Database.putAll({
+          DatabaseKeys.yandexMusicToken.value: value,
+          DatabaseKeys.yandexMusicLogin.value: login,
+          DatabaseKeys.yandexMusicFullName.value: fullName,
+          DatabaseKeys.yandexMusicDisplayName.value: displayName,
+          DatabaseKeys.yandexMusicUid.value: yandexMusic.accountID,
+          DatabaseKeys.yandexMusicEmail.value: email,
+        });
         widget.closeView();
       } on YandexMusicException {
         setState(() {
@@ -334,30 +326,17 @@ class _YandexLoginState extends State<YandexLogin> {
                               String login = await yandexMusic.account
                                   .getLogin();
 
-                              Database.setValue(
-                                DatabaseKeys.yandexMusicToken.value,
-                                token,
-                              );
-                              Database.setValue(
-                                DatabaseKeys.yandexMusicUid.value,
-                                yandexMusic.accountID,
-                              );
-                              Database.setValue(
-                                DatabaseKeys.yandexMusicEmail.value,
-                                email,
-                              );
-                              Database.setValue(
-                                DatabaseKeys.yandexMusicDisplayName.value,
-                                displayName,
-                              );
-                              Database.setValue(
-                                DatabaseKeys.yandexMusicFullName.value,
-                                fullName,
-                              );
-                              Database.setValue(
-                                DatabaseKeys.yandexMusicLogin.value,
-                                login,
-                              );
+                              await Database.putAll({
+                                DatabaseKeys.yandexMusicToken.value: token,
+                                DatabaseKeys.yandexMusicLogin.value: login,
+                                DatabaseKeys.yandexMusicFullName.value:
+                                    fullName,
+                                DatabaseKeys.yandexMusicDisplayName.value:
+                                    displayName,
+                                DatabaseKeys.yandexMusicUid.value:
+                                    yandexMusic.accountID,
+                                DatabaseKeys.yandexMusicEmail.value: email,
+                              });
                               widget.closeView();
                             }
                           } catch (ex) {

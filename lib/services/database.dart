@@ -43,6 +43,10 @@ enum DatabaseKeys {
   /// Player accent color
   accentColor('accent_color'),
 
+  /// ```List<Map<String, dynamic>>```
+  /// Player accent color
+  yandexMusicPlaylists('yandex_music_playlists'),
+
   /// ```Boolean```
   /// Is the windowManager plugin enabled
   windowManager('window_manager_state'),
@@ -141,7 +145,7 @@ class Database {
     await _ensureInitialized();
   }
 
-  static Future<bool> setValue<T>(String key, T value) async {
+  static Future<bool> put<T>(String key, T value) async {
     final box = await _ensureInitialized();
     try {
       await box.put(key, value);
@@ -151,7 +155,17 @@ class Database {
     }
   }
 
-  static Future<dynamic> getValue(String key, {dynamic defaultValue}) async {
+  static Future<bool> putAll(Map<String, dynamic> values) async {
+    final box = await _ensureInitialized();
+    try {
+      await box.putAll(values);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<dynamic> get(String key, {dynamic defaultValue}) async {
     final box = await _ensureInitialized();
 
     if (!box.containsKey(key)) {

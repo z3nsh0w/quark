@@ -16,8 +16,10 @@ abstract class PlayerTrack {
     required this.artists,
     required this.albums,
     required this.filepath,
+    // # TODO: MAKE NOCOVER LOCALLY
+    // # TODO: Caching track images locally for native control support (link like file://)
     this.cover =
-        'raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png',
+        'raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/nocover.png',
     Uint8List? coverByted,
   }) : coverByted = coverByted ?? Uint8List(0);
 }

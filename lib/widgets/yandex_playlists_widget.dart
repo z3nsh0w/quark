@@ -13,6 +13,7 @@ class YandexPlaylists extends StatefulWidget {
   final Function(PlayerPlaylist playlist) playlistRouter;
 
   const YandexPlaylists({
+    super.key,
     required this.closeView,
     required this.yandexMusic,
     required this.playlistRouter,
@@ -170,26 +171,6 @@ class _YandexPlaylistsState extends State<YandexPlaylists> {
                                 ),
                               ),
                             ),
-                            if (false)
-                              Positioned(
-                                top: 10,
-                                right: 10,
-                                child: IconButton(
-                                  onPressed: () {},
-                                  icon: Transform.rotate(
-                                    angle: 40 * (3.14159 / 180),
-                                    child: Icon(
-                                      Icons.push_pin_rounded,
-                                      color: Color.fromRGBO(
-                                        255,
-                                        255,
-                                        255,
-                                        0.500,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
                           ],
                         ),
                       ),

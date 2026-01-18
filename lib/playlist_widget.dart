@@ -7,7 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quark/objects/track.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:quark/services/old_database.dart';
+import 'package:quark/services/database.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 Widget playlistSearch(
@@ -129,13 +129,13 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     }
   }
 
-  void search(String search, [bool? nonuser]) {
+  void search(String query, [bool? nonuser]) async {
     _searchDebounceTimer?.cancel();
     searchCancel?.cancel();
     searchCancel = null;
 
     var filtered = widget.playlist.where((track) {
-      final searchLower = search.toLowerCase();
+      final searchLower = query.toLowerCase();
       if (track.title.toLowerCase().contains(searchLower)) {
         return true;
       }
@@ -164,13 +164,13 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     });
 
     if (nonuser == null) {
-      final currentQuery = search;
+      final currentQuery = query;
 
       _searchDebounceTimer = Timer(_searchDebounceDuration, () async {
-        bool? enabled = await Database.getValue(
+        bool? enabled = await Database.get(
           DatabaseKeys.yandexMusicSearch.value,
         );
-        if (search.isEmpty || currentQuery != search || enabled == false) {
+        if (query.isEmpty || currentQuery != query || enabled == false) {
           return;
         }
 
@@ -179,12 +179,16 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
         try {
           var directory = await getApplicationCacheDirectory();
           var result = await widget.yandexMusic.search.search(
-            search,
-            withBestResults: false,
-            withLikesCount: false,
+            query,
+            withBestResults: true,
+            withLikesCount: true,
             pageSize: 10,
             cancelToken: searchCancel,
           );
+          List<Track> results = result.tracks;
+          if (result.bestTrack != null) {
+            results.insert(0, result.bestTrack!);
+          }
           for (var track in result.tracks) {
             YandexMusicTrack tr = YandexMusicTrack(
               filepath: '${directory.path}/cisum_xednay_krauq${track.id}.flac',
@@ -201,10 +205,22 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
             filtered.add(tr);
           }
 
-          if (currentQuery == search && currentQuery.isNotEmpty) {
+          if (currentQuery == query && currentQuery.isNotEmpty) {
             setState(() {
               playlistView = filtered;
             });
+          }
+        } on YandexMusicException catch (e) {
+          switch (e.type) {
+            case YandexMusicExceptionType.initialization:
+              try {
+                await widget.yandexMusic.init();
+                search(query, nonuser);
+              } catch (e) {
+                break;
+              }
+            default:
+              break;
           }
         } catch (e) {
           widget.showOperation(StateIndicatorOperation.error);
@@ -269,7 +285,6 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
       );
       tr.cover = track.cover;
       index = widget.addNext(tr);
-      print(index);
       setState(() {
         playlistView.insert(index, tr);
       });

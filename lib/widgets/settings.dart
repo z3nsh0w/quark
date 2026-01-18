@@ -2,7 +2,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'dart:async';
 import 'state_indicator.dart';
-import '../services/old_database.dart';
+import '../services/database.dart';
 import 'package:flutter/material.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:interactive_slider/interactive_slider.dart';
@@ -125,27 +125,27 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
 
   void initDatabase() async {
     try {
-      bool indicator = await Database.getValue(
+      bool indicator = await Database.get(
         DatabaseKeys.stateIndicatorState.value,
         defaultValue: true,
       );
-      bool gradient = await Database.getValue(
+      bool gradient = await Database.get(
         DatabaseKeys.gradientMode.value,
         defaultValue: false,
       );
-      bool windowManager = await Database.getValue(
+      bool windowManager = await Database.get(
         DatabaseKeys.windowManager.value,
         defaultValue: false,
       );
-      double transitionSpeed = await Database.getValue(
+      double transitionSpeed = await Database.get(
         DatabaseKeys.transitionSpeed.value,
         defaultValue: 1.0,
       );
-      bool playlistArea = await Database.getValue(
+      bool playlistArea = await Database.get(
         DatabaseKeys.playlistOpeningArea.value,
         defaultValue: true,
       );
-      bool recursiveFilesAdding2 = await Database.getValue(
+      bool recursiveFilesAdding2 = await Database.get(
         DatabaseKeys.recursiveFilesAdding.value,
         defaultValue: true,
       );
@@ -170,15 +170,15 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
   }
 
   void setIndicator(bool value) async {
-    await Database.setValue(DatabaseKeys.stateIndicatorState.value, value);
+    await Database.put(DatabaseKeys.stateIndicatorState.value, value);
   }
 
   void setPlaylistArea(bool value) async {
-    await Database.setValue(DatabaseKeys.playlistOpeningArea.value, value);
+    await Database.put(DatabaseKeys.playlistOpeningArea.value, value);
   }
 
   void setRecursive(bool value) async {
-    await Database.setValue(DatabaseKeys.recursiveFilesAdding.value, value);
+    await Database.put(DatabaseKeys.recursiveFilesAdding.value, value);
   }
 
   @override
@@ -285,7 +285,10 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
                 min: 0.0,
                 max: 2.5,
                 onProgressUpdated: (value) async {
-                  await Database.setValue(DatabaseKeys.transitionSpeed.value, value);
+                  await Database.put(
+                    DatabaseKeys.transitionSpeed.value,
+                    value,
+                  );
                 },
                 onFocused: (value) {},
 
@@ -394,22 +397,15 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
         String displayName = await yandexMusic.account.getDisplayName();
         String fullName = await yandexMusic.account.getFullName();
         String login = await yandexMusic.account.getLogin();
-        await Database.setValue(DatabaseKeys.yandexMusicToken.value, value);
-        await Database.setValue(DatabaseKeys.yandexMusicToken.value, value);
-        await Database.setValue(
-          DatabaseKeys.yandexMusicUid.value,
-          yandexMusic.accountID,
-        );
-        await Database.setValue(DatabaseKeys.yandexMusicEmail.value, email);
-        await Database.setValue(
-          DatabaseKeys.yandexMusicDisplayName.value,
-          displayName,
-        );
-        await Database.setValue(
-          DatabaseKeys.yandexMusicFullName.value,
-          fullName,
-        );
-        await Database.setValue(DatabaseKeys.yandexMusicLogin.value, login);
+
+        await Database.putAll({
+          DatabaseKeys.yandexMusicToken.value: value,
+          DatabaseKeys.yandexMusicLogin.value: login,
+          DatabaseKeys.yandexMusicFullName.value: fullName,
+          DatabaseKeys.yandexMusicDisplayName.value: displayName,
+          DatabaseKeys.yandexMusicUid.value: yandexMusic.accountID,
+          DatabaseKeys.yandexMusicEmail.value: email,
+        });
         setState(() {
           operation = StateIndicatorOperation.success;
         });
@@ -426,7 +422,7 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
       for (var entry in qualityMap.entries) entry.value: entry.key,
     };
     String? quality2 = qualityReverse[value];
-    await Database.setValue(
+    await Database.put(
       DatabaseKeys.yandexMusicTrackQuality.value,
       quality2!,
     );
@@ -436,22 +432,22 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
   }
 
   void setSearch(bool value) async {
-    await Database.setValue(DatabaseKeys.yandexMusicSearch.value, value);
+    await Database.put(DatabaseKeys.yandexMusicSearch.value, value);
   }
 
   void setPreload(bool value) async {
-    await Database.setValue(DatabaseKeys.yandexMusicPreload.value, value);
+    await Database.put(DatabaseKeys.yandexMusicPreload.value, value);
   }
 
   void initDatabase() async {
-    final token = await Database.getValue(DatabaseKeys.yandexMusicToken.value);
-    final qualityl = await Database.getValue(
+    final token = await Database.get(DatabaseKeys.yandexMusicToken.value);
+    final qualityl = await Database.get(
       DatabaseKeys.yandexMusicTrackQuality.value,
     );
-    final search2 = await Database.getValue(
+    final search2 = await Database.get(
       DatabaseKeys.yandexMusicSearch.value,
     );
-    final preload = await Database.getValue(
+    final preload = await Database.get(
       DatabaseKeys.yandexMusicPreload.value,
     );
     setState(() {
