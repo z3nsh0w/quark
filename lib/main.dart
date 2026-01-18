@@ -18,7 +18,6 @@ import '/widgets/settings.dart';
 import '/objects/playlist.dart';
 import 'services/old_database.dart';
 import '/widgets/yandex_login.dart';
-import 'services/database.dart' as db;
 import '/widgets/yandex_playlists_widget.dart';
 
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
@@ -60,10 +59,14 @@ class _MainPageState extends State<MainPage> {
   /// Reacting on pick folder button
   Future<void> pickFolder() async {
     try {
+      final bool? recursiveFilesAdding = await Database.getValue(
+        DatabaseKeys.recursiveFilesAdding.value,
+      );
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
       if (selectedDirectory != null) {
         List<PlayerTrack> result = await Files().getFilesFromDirectory(
-          selectedDirectory,
+          directoryPath: selectedDirectory,
+          recursiveEnable: recursiveFilesAdding,
         );
         if (result.isNotEmpty) {
           playlistRoute(

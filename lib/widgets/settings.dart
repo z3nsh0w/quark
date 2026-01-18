@@ -116,33 +116,53 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
   bool gradientAsBackground = false;
   bool windowManagerPlugin = false;
   bool playlistOpeningArea = true;
+  bool recursiveFilesAdding = true;
   int clicks = 0;
   String restoreText = 'Restore';
+  bool? databaseError;
   InteractiveSliderController transitionSpeedController =
       InteractiveSliderController(1.0);
 
   void initDatabase() async {
-    bool? indicator = await Database.getValue(
-      DatabaseKeys.stateIndicatorState.value,
-    );
-    bool? gradient = await Database.getValue(DatabaseKeys.gradientMode.value);
-    bool? windowManager = await Database.getValue(
-      DatabaseKeys.windowManager.value,
-    );
-    double? transitionSpeed = await Database.getValue(
-      DatabaseKeys.transitionSpeed.value,
-    );
-    bool? playlistArea = await Database.getValue(
-      DatabaseKeys.playlistOpeningArea.value,
-    );
-    setState(() {
-      stateIndicatorState = indicator ?? stateIndicatorState;
-      gradientAsBackground = gradient ?? gradientAsBackground;
-      windowManagerPlugin = windowManager ?? windowManagerPlugin;
-      playlistOpeningArea = playlistArea ?? playlistOpeningArea;
-      transitionSpeedController.value =
-          transitionSpeed ?? transitionSpeedController.value;
-    });
+    try {
+      bool indicator = await Database.getValue(
+        DatabaseKeys.stateIndicatorState.value,
+        defaultValue: true,
+      );
+      bool gradient = await Database.getValue(
+        DatabaseKeys.gradientMode.value,
+        defaultValue: false,
+      );
+      bool windowManager = await Database.getValue(
+        DatabaseKeys.windowManager.value,
+        defaultValue: false,
+      );
+      double transitionSpeed = await Database.getValue(
+        DatabaseKeys.transitionSpeed.value,
+        defaultValue: 1.0,
+      );
+      bool playlistArea = await Database.getValue(
+        DatabaseKeys.playlistOpeningArea.value,
+        defaultValue: true,
+      );
+      bool recursiveFilesAdding2 = await Database.getValue(
+        DatabaseKeys.recursiveFilesAdding.value,
+        defaultValue: true,
+      );
+      setState(() {
+        stateIndicatorState = indicator;
+        gradientAsBackground = gradient;
+        windowManagerPlugin = windowManager;
+        playlistOpeningArea = playlistArea;
+        recursiveFilesAdding = recursiveFilesAdding2;
+        transitionSpeedController.value = transitionSpeed;
+      });
+    } catch (e) {
+      print(e);
+      setState(() {
+        databaseError = true;
+      });
+    }
   }
 
   void restoreDefaults() async {
@@ -155,6 +175,10 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
 
   void setPlaylistArea(bool value) async {
     await Database.setValue(DatabaseKeys.playlistOpeningArea.value, value);
+  }
+
+  void setRecursive(bool value) async {
+    await Database.setValue(DatabaseKeys.recursiveFilesAdding.value, value);
   }
 
   @override
@@ -171,6 +195,114 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
     return Center(
       child: Column(
         children: [
+          if (databaseError == true)
+            button(
+              'WARNING',
+              'The database is unavailable. All changes will not be saved.',
+              SizedBox.shrink(),
+              maxWidth,
+              rightPadding,
+              ButtonPosition.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              nameColor: Colors.red,
+            ),
+          SizedBox(height: 1),
+          button(
+            'Recursively adding files',
+            'The player will check not only the top folder, but also all subfolders to add local tracks.',
+            Switch(
+              value: recursiveFilesAdding,
+              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              inactiveThumbColor: Colors.grey[300],
+              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              onChanged: (a) {
+                setState(() {
+                  recursiveFilesAdding = a;
+                });
+                setRecursive(a);
+              },
+            ),
+            maxWidth,
+            rightPadding,
+            databaseError == true
+                ? ButtonPosition.center
+                : ButtonPosition.start,
+          ),
+
+          SizedBox(height: 1),
+          button(
+            'Playlist opening area',
+            'When you hover to the left side of the screen, the playlistView will automatically open.',
+            Switch(
+              value: playlistOpeningArea,
+              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              inactiveThumbColor: Colors.grey[300],
+              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              onChanged: (a) {
+                setState(() {
+                  playlistOpeningArea = a;
+                });
+                setPlaylistArea(a);
+              },
+            ),
+            maxWidth,
+            rightPadding,
+            ButtonPosition.center,
+          ),
+          SizedBox(height: 1),
+
+          button(
+            'State indicator',
+            'Turn on/off the status indicator that notifies you when network operations are being performed.',
+            Switch(
+              value: stateIndicatorState,
+              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              inactiveThumbColor: Colors.grey[300],
+              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+              onChanged: (a) {
+                setState(() {
+                  stateIndicatorState = a;
+                });
+                setIndicator(a);
+              },
+            ),
+
+            maxWidth,
+            rightPadding,
+            ButtonPosition.end,
+          ),
+          SizedBox(height: 1),
+          button(
+            'Transition speed',
+            'Change the speed of most animations in the application.',
+            SizedBox(
+              width: 150,
+              child: InteractiveSlider(
+                padding: EdgeInsets.all(0),
+                controller: transitionSpeedController,
+                unfocusedHeight: 5,
+                focusedHeight: 10,
+                min: 0.0,
+                max: 2.5,
+                onProgressUpdated: (value) async {
+                  await Database.setValue(DatabaseKeys.transitionSpeed.value, value);
+                },
+                onFocused: (value) {},
+
+                brightness: Brightness.light,
+                initialProgress: 1.0,
+                iconColor: Colors.white,
+                gradient: LinearGradient(colors: [Colors.white, Colors.white]),
+                shapeBorder: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                ),
+              ),
+            ),
+            maxWidth,
+            rightPadding,
+            ButtonPosition.center,
+          ),
+          SizedBox(height: 1),
           button(
             'Restore defaults',
             'Reset player settings to factory defaults. After resetting, it is recommended to restart the player.',
@@ -201,7 +333,7 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
                     child: Text(
                       restoreText,
                       style: TextStyle(
-                        color: const Color.fromARGB(255, 255, 0, 0),
+                        color: Colors.red,
                         fontSize: 12,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -212,87 +344,8 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
             ),
             maxWidth,
             rightPadding,
-            ButtonPosition.start,
-          ),
-          SizedBox(height: 1),
-          button(
-            'Transition speed',
-            'Change the speed of most animations in the application.',
-            SizedBox(
-              width: 150,
-              child: InteractiveSlider(
-                padding: EdgeInsets.all(0),
-                controller: transitionSpeedController,
-                unfocusedHeight: 5,
-                focusedHeight: 10,
-                min: 0.0,
-                max: 2.5,
-                onProgressUpdated: (value) async {
-                  await Database.setValue(
-                    DatabaseKeys.transitionSpeed.value,
-                    value,
-                  );
-                },
-                onFocused: (value) {},
-
-                brightness: Brightness.light,
-                initialProgress: 1.0,
-                iconColor: Colors.white,
-                gradient: LinearGradient(colors: [Colors.white, Colors.white]),
-                shapeBorder: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(8)),
-                ),
-              ),
-            ),
-            maxWidth,
-            rightPadding,
-            ButtonPosition.center,
-          ),
-          SizedBox(height: 1),
-          button(
-            'Playlist opening area',
-            'When you hover to the left side of the screen, the playlistView will automatically open.',
-            Switch(
-              value: playlistOpeningArea,
-              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
-              inactiveThumbColor: Colors.grey[300],
-              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
-              // activeThumbColor: Colors.white,
-              onChanged: (a) {
-                setState(() {
-                  playlistOpeningArea = a;
-                });
-                setPlaylistArea(a);
-              },
-            ),
-            maxWidth,
-            rightPadding,
-            ButtonPosition.center,
-          ),
-          SizedBox(height: 1),
-
-          button(
-            'State indicator',
-            'Turn on/off the status indicator that notifies you when network operations are being performed.',
-            Switch(
-              value: stateIndicatorState,
-              activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
-              inactiveThumbColor: Colors.grey[300],
-              inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
-              // activeThumbColor: Colors.white,
-              onChanged: (a) {
-                setState(() {
-                  stateIndicatorState = a;
-                });
-                setIndicator(a);
-              },
-            ),
-
-            maxWidth,
-            rightPadding,
             ButtonPosition.end,
           ),
-          SizedBox(height: 1),
         ],
       ),
     );
@@ -582,8 +635,10 @@ Container button(
   Widget widget,
   double width,
   double rightPadding,
-  ButtonPosition buttonPosition,
-) {
+  ButtonPosition buttonPosition, {
+  CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.start,
+  Color nameColor = Colors.white,
+}) {
   return Container(
     width: width,
     height: 50,

@@ -1,5 +1,4 @@
 import 'package:hive/hive.dart';
-// import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Wrapper over the database so you don't have to enter keys manually
@@ -15,6 +14,10 @@ enum DatabaseKeys {
   /// ```Boolean```
   /// Is the indicator enabled
   stateIndicatorState('indicator_state'),
+
+  /// ```Boolean```
+  /// recursiveFilesAdding
+  recursiveFilesAdding('recursive_files_adding'),
 
   /// ```Boolean```
   /// Is the playlist opening area enabled?
@@ -144,19 +147,18 @@ class Database {
       await box.put(key, value);
       return true;
     } catch (e) {
-      print('Database setValue was failed: $e');
       return false;
     }
   }
 
-  static Future<dynamic> getValue(String key) async {
+  static Future<dynamic> getValue(String key, {dynamic defaultValue}) async {
     final box = await _ensureInitialized();
 
     if (!box.containsKey(key)) {
-      return null;
+      return defaultValue;
     }
 
-    return box.get(key);
+    return await box.get(key);
   }
 
   static Future<bool> containsKey(String key) async {
@@ -192,7 +194,6 @@ class Database {
   static Future<String> getDirectory() async {
     final box = await _ensureInitialized();
     var path = box.path.toString();
-    print(path);
     return path;
   }
 }

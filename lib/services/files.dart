@@ -5,56 +5,82 @@ import 'package:path/path.dart' as path;
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 
 class Files {
-  Future<List<PlayerTrack>> getFilesFromDirectory(String directoryPath) async {
+  Future<LocalTrack> _getTrackInfo(FileSystemEntity entity) async {
     try {
-      final dir = Directory(directoryPath);
-      final List<PlayerTrack> fileNames = [];
+      final tagsFromFile = readMetadata(File(entity.path), getImage: true);
 
-      await for (final entity in dir.list()) {
-        if (entity is File) {
-          if (entity.path.toLowerCase().endsWith('.mp3') ||
-              entity.path.toLowerCase().endsWith('.wav') ||
-              entity.path.toLowerCase().endsWith('.flac') ||
-              entity.path.toLowerCase().endsWith('.dsf') ||
-              entity.path.toLowerCase().endsWith('.aac') ||
-              entity.path.toLowerCase().endsWith('.ogg') ||
-              entity.path.toLowerCase().endsWith('.alac') ||
-              entity.path.toLowerCase().endsWith('.pcm') ||
-              entity.path.toLowerCase().endsWith('.m4a')) {
-            try {
-              final tagsFromFile = readMetadata(
-                File(entity.path),
-                getImage: true,
-              );
+      String trackName = tagsFromFile.title ??= 'Unknown';
+      Uint8List? cover = tagsFromFile.pictures.isNotEmpty
+          ? tagsFromFile.pictures.first.bytes
+          : null;
 
-              String trackName = tagsFromFile.title ??= 'Unknown';
-              Uint8List? cover = tagsFromFile.pictures.isNotEmpty
-                  ? tagsFromFile.pictures.first.bytes
-                  : null;
+      LocalTrack track = LocalTrack(
+        title: trackName,
+        artists: [tagsFromFile.artist ??= 'Unknown'],
+        filepath: entity.path,
+        albums: ['Unknown'],
+      );
 
-              LocalTrack track = LocalTrack(
-                title: trackName,
-                artists: [tagsFromFile.artist ??= 'Unknown'],
-                filepath: entity.path,
-                albums: ['Unknown'],
-              );
+      track.coverByted = cover!;
 
-              track.coverByted = cover!;
+      return track;
+    } catch (e) {
+      String trackName = path.basename(path.normalize(entity.path));
+      LocalTrack track = LocalTrack(
+        title: trackName,
+        artists: ['Unknown'],
+        filepath: entity.path,
+        albums: ['Unknown'],
+      );
+      return track;
+    }
+  }
 
-              fileNames.add(track);
-            } catch (e) {
-              String trackName = path.basename(path.normalize(entity.path));
-              LocalTrack track = LocalTrack(
-                title: trackName,
-                artists: ['Unknown'],
-                filepath: entity.path,
-                albums: ['Unknown'],
-              );
-              fileNames.add(track);
-            }
-          }
+  Future<void> _scanDirectory({
+    required String path,
+    required List<PlayerTrack> fileNames,
+    required bool recursiveEnable,
+  }) async {
+    final dir = Directory(path);
+
+    await for (final entity in dir.list()) {
+      if (entity is File) {
+        if (entity.path.toLowerCase().endsWith('.mp3') ||
+            entity.path.toLowerCase().endsWith('.wav') ||
+            entity.path.toLowerCase().endsWith('.flac') ||
+            entity.path.toLowerCase().endsWith('.dsf') ||
+            entity.path.toLowerCase().endsWith('.aac') ||
+            entity.path.toLowerCase().endsWith('.ogg') ||
+            entity.path.toLowerCase().endsWith('.alac') ||
+            entity.path.toLowerCase().endsWith('.pcm') ||
+            entity.path.toLowerCase().endsWith('.m4a')) {
+          final LocalTrack track = await _getTrackInfo(entity);
+          fileNames.add(track);
         }
       }
+      if (entity is Directory) {
+        if (recursiveEnable) {
+          await _scanDirectory(
+            path: entity.path,
+            fileNames: fileNames,
+            recursiveEnable: recursiveEnable,
+          );
+        }
+      }
+    }
+  }
+
+  Future<List<PlayerTrack>> getFilesFromDirectory({
+    required String directoryPath,
+    bool? recursiveEnable,
+  }) async {
+    try {
+      final List<PlayerTrack> fileNames = [];
+      await _scanDirectory(
+        path: directoryPath,
+        fileNames: fileNames,
+        recursiveEnable: recursiveEnable ?? true,
+      );
 
       return fileNames;
     } catch (e) {}

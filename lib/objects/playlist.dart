@@ -80,11 +80,11 @@ Future<PlayerPlaylist> deserializePlaylist(Map playlist) async {
         title: track.title,
         albums: track.albums.isNotEmpty
             ? track.albums
-                  .map((album) => album.title ?? 'Unknown album')
+                  .map((album) => album.title)
                   .toList()
             : ['Unknown album'],
         artists: track.artists
-            .map((album) => album.title ?? 'Unknown album')
+            .map((album) => album.title)
             .toList(),
         track: track,
       );

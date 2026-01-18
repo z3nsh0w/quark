@@ -1543,15 +1543,25 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                             ),
 
                                           animatedExpandButton(() async {
+                                            final bool? recursiveFilesAdding =
+                                                await Database.getValue(
+                                                  DatabaseKeys
+                                                      .recursiveFilesAdding
+                                                      .value,
+                                                );
+
                                             String? selectedDirectory =
                                                 await FilePicker.platform
                                                     .getDirectoryPath();
                                             if (selectedDirectory != null) {
-                                              List<PlayerTrack> result =
-                                                  await Files()
-                                                      .getFilesFromDirectory(
+                                              List<PlayerTrack>
+                                              result = await Files()
+                                                  .getFilesFromDirectory(
+                                                    directoryPath:
                                                         selectedDirectory,
-                                                      );
+                                                    recursiveEnable:
+                                                        recursiveFilesAdding,
+                                                  );
                                               if (result.isNotEmpty) {
                                                 currentPlaylist.addAll(result);
                                                 backupPlaylist.addAll(result);
