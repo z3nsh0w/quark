@@ -1,16 +1,12 @@
-# QUARK
+<h1 align="center">quark</h1>  
 
 <p align="center">
-  <img width="322" height="322" src="https://raw.githubusercontent.com/z3nsh0w/QUARK/refs/heads/main/assets/icon512.png" alt="QUARK Logo">
+  <img width="322" height="322" src="https://raw.githubusercontent.com/z3nsh0w/QUARK/refs/heads/main/assets/icon512.png" alt="quark Logo">
 </p>
 
 <h1 align="center">
-  <strong>Lightweight, easy to use and beautiful audio player</strong>
+  <strong>Lightweight, multifunctional and beautiful audio player</strong>
 </h1>
-
-<p align="center">
-  <a href="https://quarkaudio.github.io/">For a more beautiful description, see the website</a>
-</p>
 
 <div align="center">
 
@@ -20,76 +16,35 @@
 
 </div>
 
----
-
 ## Features
 
-- **Universal Audio Formats Support**
-- **Yandex Music Integration**
-- **Cross-Platform**
 - **Beautiful Design**
-
-## Coming Soon in Release 1.2
-
-- **Optimized Performance**
-- **OS-Native Media Controls**
-- **Drag & Drop Functionality**
-- **Automatic Metadata Fetching**
-- **Micro Clips**
-- **Multilingual UI**
-- **Enhanced Yandex Music**
-- **Resource Saving Mode**
-
-## Installation
-
-### Installation Options
-
-Choose the method that works best for you:
-
-1. **Full Installation** - Download the `quark-installer` for a complete setup
-2. **Portable Version** - Get the `{system}-release.zip` for portable use
-
-### Downloads
-
-All files are available in the [**Releases**](https://github.com/z3nsh0w/QUARK/releases) section
-
-> **Note:** macOS version coming soon (waiting for our dev to grace us with their attention)
-
-### 🖥 System Requirements
-
-| Platform | Requirements |
-|----------|-------------|
-| **Windows** | Microsoft Visual C++ Runtime |
-| **macOS** | macOS 10.15+ |
-| **Linux** | Modern distribution, File Chooser Dialog dependency |
-| **Internet** | Stable connection (for Yandex Music features) |
+- **Yandex Music Integration**
+- **Universal Audio Formats Support**
+- **Slowing down/Speed up tracks (Linux only)**
+- **Synchronization of local and Yandex tracks**
 
 ### ⚠ Important Notes
 
- > [!WARNING]
- > To use player on Windows older than 1809 you need to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe). 
-
-**For Linux Users:**
-- Requires `libwebkit2gtk` or `qtwebengine` (usually pre-installed on popular distributions)
-
-### 🛠 Installer
-
-The installer source code is available in our [separate repository](https://github.com/z3nsh0w/quark-installer/)
+> [!WARNING]
+> **Windows**
+> To use player on Windows you must to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
+> 
+>To use WebView authorization on Windows version below 10 1809, you need install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/), otherwise you will have to enter the Yandex Music token manually.
+> 
+> **Linux**
+> Requires `libgtk-4-1+` or `libqt6gui6` (usually pre-installed on popular distributions)
 
 ## Screenshots
 
 <p align="center">
-  <img src="appphoto.png" alt="QUARK Interface" width="45%">
-  <img src="appphoto1.png" alt="QUARK Player" width="45%">
+  <img src="/assets/player.png" alt="QUARK Interface" width="45%">
+  <img src="/assets/player_main_menu.png" alt="QUARK Player" width="45%">
 </p>
 
-## Development Team
 
-**Made by Penises Development Group (Penises DG)**
+### Made by PDG
 - [@z3nsh0w](https://github.com/z3nsh0w)
 - [@aror](https://github.com/Aror1)
 
-## License
-
-This project is licensed under GPL-3.0 license. See the `LICENSE` file for details.
----
+**This project is licensed under MIT license. See the `LICENSE` file for details.**
