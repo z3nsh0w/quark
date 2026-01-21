@@ -32,6 +32,8 @@ dependencies:
   flutter_inappwebview: ^6.1.5
   audio_metadata_reader: ^1.4.2
   material_symbols_icons: ^4.2892.0
+  window_manager: ^0.5.1
+  provider: ^6.1.5+1
 
 
 dependency_overrides:
@@ -39,6 +41,7 @@ dependency_overrides:
     path: ./lib/overrided_libraries/yandex_music
   animated_expand:
     path: ./lib/overrided_libraries/animated_expand
+
 
 dev_dependencies:
   flutter_test:

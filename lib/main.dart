@@ -3,11 +3,13 @@ import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart';
 import 'package:quark/objects/track.dart';
 
 // Additional packages
 import 'package:logging/logging.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:quark/services/player.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
 

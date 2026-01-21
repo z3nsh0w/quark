@@ -7,7 +7,19 @@ import 'package:audioplayers/audioplayers.dart';
 
 /// A standalone player running in the background, independent of the stream UI
 class Player {
+
+  // SINGLETON INTERNAL REALISATION
+  Player._internal()
+    : startVolume = 0.3,
+      playlist = [],
+      nowPlayingTrack = LocalTrack(title: '', filepath: '', artists: [], albums: []);
+
+  static final Player _player = Player._internal();
+
+  static Player get player => _player;
+  
   final double startVolume;
+  
   final trackNotifier = ValueNotifier<PlayerTrack>(
     LocalTrack(title: '', filepath: '', artists: [], albums: []),
   );
@@ -16,14 +28,14 @@ class Player {
 
   List<PlayerTrack> playlist;
   PlayerTrack nowPlayingTrack;
-
+  
   Player({
     required this.startVolume,
     required this.playlist,
     required this.nowPlayingTrack,
   });
 
-  final player = AudioPlayer();
+  final player_instance = AudioPlayer();
   bool isPlaying = false;
   bool isRepeat = false;
   StreamSubscription? onCompleteSubscription;
@@ -34,36 +46,43 @@ class Player {
     trackNotifier.value = nowPlayingTrack;
     setupListeners();
   }
+  
+
+  // TODO: correct dispose subs and player
+  // @override
+  // void dispose() {
+
+  // }
 
   Future<void> setupListeners() async {
     onCompleteSubscription?.cancel();
     onDurationChanged?.cancel();
     onPlayedChanged?.cancel();
-    onCompleteSubscription = player.onPlayerComplete.listen((event) {
+    onCompleteSubscription = player_instance.onPlayerComplete.listen((event) {
       playNext();
     });
 
-    onDurationChanged = player.onDurationChanged.listen((event) async {
+    onDurationChanged = player_instance.onDurationChanged.listen((event) async {
       durationNotifier.value = event;
     });
 
-    onPlayedChanged = player.onPositionChanged.listen((event) async {
+    onPlayedChanged = player_instance.onPositionChanged.listen((event) async {
       playedNotifier.value = event;
     });
   }
 
   Future<Duration> getPosition() async {
-    Duration? position = await player.getCurrentPosition();
+    Duration? position = await player_instance.getCurrentPosition();
     return position ?? Duration();
   }
 
   Future<Duration> getTrackDuration() async {
-    Duration? duration = await player.getDuration();
+    Duration? duration = await player_instance.getDuration();
     return duration ?? Duration();
   }
 
   Future<void> eventListener() async {
-    player.onPlayerComplete.listen((onData) {
+    player_instance.onPlayerComplete.listen((onData) {
       playNext();
     });
   }
@@ -78,7 +97,7 @@ class Player {
         : 0;
     nowPlayingTrack = playlist[nextIndex];
     trackNotifier.value = nowPlayingTrack;
-    await player.stop();
+    await player_instance.stop();
     await _playIsPlaying();
   }
 
@@ -87,9 +106,9 @@ class Player {
     if (!exists) {
       return;
     }
-    await player.setSource(DeviceFileSource(nowPlayingTrack.filepath));
+    await player_instance.setSource(DeviceFileSource(nowPlayingTrack.filepath));
     if (isPlaying) {
-      await player.play(DeviceFileSource(nowPlayingTrack.filepath));
+      await player_instance.play(DeviceFileSource(nowPlayingTrack.filepath));
     }
   }
 
@@ -102,21 +121,26 @@ class Player {
         : 0;
     nowPlayingTrack = playlist[nextIndex];
     trackNotifier.value = nowPlayingTrack;
-    await player.stop();
+    await player_instance.stop();
     await _playIsPlaying();
+
+    
   }
 
   Future<void> playPause(bool play) async {
     isPlaying = play ? true : false;
-    play ? await player.resume() : await player.pause();
+    play ? await player_instance.resume() : await player_instance.pause();
+
+    
   }
 
   Future<void> setVolume(double volume) async {
-    await player.setVolume(volume);
+    await player_instance.setVolume(volume);
+    
   }
 
   Future<void> seek(Duration seek) async {
-    await player.seek(seek);
+    await player_instance.seek(seek);
   }
 
   Future<void> updatePlaylist(List<PlayerTrack> newPlaylist) async {
@@ -126,18 +150,19 @@ class Player {
   Future<void> playNetTrack(String link, PlayerTrack track) async {
     nowPlayingTrack = track;
     trackNotifier.value = nowPlayingTrack;
-    await player.stop();
-    await player.setSource(UrlSource(link));
+    await player_instance.stop();
+    await player_instance.setSource(UrlSource(link));
     if (isPlaying) {
-      await player.play(UrlSource(link));
+      await player_instance.play(UrlSource(link));
     }
+    
   }
 
   Future<void> playCustom(PlayerTrack track) async {
     nowPlayingTrack = track;
     trackNotifier.value = nowPlayingTrack;
-    await player.stop();
-    await player.setSource(DeviceFileSource(track.filepath));
+    await player_instance.stop();
+    await player_instance.setSource(DeviceFileSource(track.filepath));
     await _playIsPlaying();
   }
 }

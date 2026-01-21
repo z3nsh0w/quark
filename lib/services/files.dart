@@ -35,7 +35,7 @@ class Files {
       return track;
     }
   }
-
+  
   Future<void> _scanDirectory({
     required String path,
     required List<PlayerTrack> fileNames,
