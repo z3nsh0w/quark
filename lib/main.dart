@@ -24,9 +24,12 @@ import '/widgets/yandex_playlists_widget.dart';
 
 // #TODO: fix bug while closing playtlist with iconbutton then if playlist was opened by mouseArea it wont close
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
+import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  WindowManager.instance.ensureInitialized();
+  WindowManager.instance.setMinimumSize(const Size(300, 200));
   runApp(const Quark());
 }
 
@@ -179,6 +182,7 @@ class _MainPageState extends State<MainPage> {
         log.warning('Trying to initialize yandex music instance...');
 
         await yandexMusic.init();
+
         inited = true;
 
         if (userPlaylists.isEmpty) {
@@ -189,6 +193,7 @@ class _MainPageState extends State<MainPage> {
               DatabaseKeys.yandexMusicPlaylists.value,
               playlists.map((toElement) => toElement.raw).toList(),
             );
+
             setState(() {
               userPlaylists = playlists;
               playlistView = true;
@@ -271,6 +276,11 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
+    Player(
+      startVolume: 0.5,
+      playlist: [],
+      nowPlayingTrack: LocalTrack(title: 'title', artists: ['artists'], albums: ['albums'], filepath: 'filepath'),
+    );
     initLogger();
     log.info('Trying to initialize database...');
     Database.init();

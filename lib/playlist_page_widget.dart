@@ -100,7 +100,8 @@ class _PlaylistPage1State extends State<PlaylistPage1>
   //
 
   /// Main Player instance
-  late Player player;
+  Player player = Player.player;
+
 
   /// Network player instance (shell over the main player class)
   late NetPlayer netPlayer;
@@ -913,38 +914,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
-  /// Initializing all players
-  void initPlayers() async {
-    player = Player(
-      startVolume: volume,
-      playlist: currentPlaylist,
-      nowPlayingTrack: nowPlayingTrack,
-    );
-    
-    log.info('Trying to initialize the player instance...');
-    player.init();
-    log.fine('Player instance initialized successfully');
-    bool exists = await File(nowPlayingTrack.filepath).exists();
-    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
-    log.info('Trying to set source of track...');
-    if (exists) {
-      try {
-        log.info('The track was found locally. Trying to set source...');
-        player.player_instance.setSource(DeviceFileSource(nowPlayingTrack.filepath));
-      } catch (e) {
-        log.shout(
-          'Failed to set local source (file exists: $exists). Attempting to set network source',
-        );
-        netPlayer.playYandex(nowPlayingTrack);
-      }
-    } else {
-      log.info(
-        'The track was NOT found locally. Trying to set network source...',
-      );
-      netPlayer.playYandex(nowPlayingTrack);
-    }
-  }
-
   /// Dispose
   @override
   void initState() {
@@ -953,17 +922,16 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     super.initState();
 
     // SET MINIMUM SIZE
-    WidgetsFlutterBinding.ensureInitialized();
-    WindowManager.instance.ensureInitialized();
-    WindowManager.instance.setMinimumSize(const Size(300, 200));
 
     currentPlaylist = [...widget.playlist.tracks];
     backupPlaylist = [...widget.playlist.tracks];
-    nowPlayingTrack = currentPlaylist[0];
-    restoreLastTrack();
+    nowPlayingTrack = player.nowPlayingTrack;
+    isPlaying = player.isPlaying;
+    volume = player.player_instance.volume;
+
+    // restoreLastTrack();
     // Classes
-    log.info('Trying to initialize players...');
-    initPlayers();
+
     log.info('Trying to initialize database...');
     Database.init();
     log.fine('Database initialized successfully');
@@ -1021,15 +989,15 @@ YandexMusic client: ${widget.yandexMusic.accountID}
 
   @override
   void dispose() {
-    player.player_instance.onPositionChanged.drain();
-    player.player_instance.stop();
-    player.player_instance.dispose();
-    player.onCompleteSubscription?.cancel();
-    player.onDurationChanged?.cancel();
-    player.onPlayedChanged?.cancel();
-    player.trackNotifier.dispose();
-    player.playedNotifier.dispose();
-    player.durationNotifier.dispose();
+    // player.player_instance.onPositionChanged.drain();
+    // player.player_instance.stop();
+    // player.player_instance.dispose();
+    // player.onCompleteSubscription?.cancel();
+    // player.onDurationChanged?.cancel();
+    // player.onPlayedChanged?.cancel();
+    // player.trackNotifier.dispose();
+    // player.playedNotifier.dispose();
+    // player.durationNotifier.dispose();
     playlistAnimationController.dispose();
     super.dispose();
   }

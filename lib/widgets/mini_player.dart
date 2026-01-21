@@ -40,7 +40,7 @@ class MiniPlayerWidget extends StatefulWidget {
   const MiniPlayerWidget({
     super.key,
     required this.playlist,
-    required this.yandexMusic
+    required this.yandexMusic,
   });
 
   @override
@@ -96,7 +96,7 @@ class _MiniPlayerWidgetState extends State<MiniPlayerWidget>
   //
 
   /// Main Player instance
-  late Player player;
+  Player player = Player.player;
 
   /// Network player instance (shell over the main player class)
   late NetPlayer netPlayer;
@@ -711,7 +711,9 @@ YandexMusic client: ${widget.yandexMusic.accountID}
         isPlaying = !isPlaying;
       });
 
-      isPlaying ? await player.player_instance.resume() : await player.player_instance.pause();
+      isPlaying
+          ? await player.player_instance.resume()
+          : await player.player_instance.pause();
       player.isPlaying = isPlaying ? true : false;
     }
     cacheFiles();
@@ -909,36 +911,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
-  /// Initializing all players
-  void initPlayers() async {
-    player = Player(
-      startVolume: volume,
-      playlist: currentPlaylist,
-      nowPlayingTrack: nowPlayingTrack,
-    );
-    log.info('Trying to initialize the player instance...');
-    player.init();
-    log.fine('Player instance initialized successfully');
-    bool exists = await File(nowPlayingTrack.filepath).exists();
-    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
-    log.info('Trying to set source of track...');
-    if (exists) {
-      try {
-        log.info('The track was found locally. Trying to set source...');
-        player.player_instance.setSource(DeviceFileSource(nowPlayingTrack.filepath));
-      } catch (e) {
-        log.shout(
-          'Failed to set local source (file exists: $exists). Attempting to set network source',
-        );
-        netPlayer.playYandex(nowPlayingTrack);
-      }
-    } else {
-      log.info(
-        'The track was NOT found locally. Trying to set network source...',
-      );
-      netPlayer.playYandex(nowPlayingTrack);
-    }
-  }
+
 
   /// Dispose
   @override
@@ -949,11 +922,12 @@ YandexMusic client: ${widget.yandexMusic.accountID}
 
     currentPlaylist = [...widget.playlist.tracks];
     backupPlaylist = [...widget.playlist.tracks];
-    nowPlayingTrack = currentPlaylist[0];
-    restoreLastTrack();
+    nowPlayingTrack = player.nowPlayingTrack;
+    isPlaying = player.isPlaying;
+    volume = player.player_instance.volume;
+    // restoreLastTrack();
     // Classes
     log.info('Trying to initialize players...');
-    initPlayers();
     log.info('Trying to initialize database...');
     Database.init();
     log.fine('Database initialized successfully');
@@ -1011,15 +985,15 @@ YandexMusic client: ${widget.yandexMusic.accountID}
 
   @override
   void dispose() {
-    player.player_instance.onPositionChanged.drain();
-    player.player_instance.stop();
-    player.player_instance.dispose();
-    player.onCompleteSubscription?.cancel();
-    player.onDurationChanged?.cancel();
-    player.onPlayedChanged?.cancel();
-    player.trackNotifier.dispose();
-    player.playedNotifier.dispose();
-    player.durationNotifier.dispose();
+    // player.player_instance.onPositionChanged.drain();
+    // player.player_instance.stop();
+    // player.player_instance.dispose();
+    // player.onCompleteSubscription?.cancel();
+    // player.onDurationChanged?.cancel();
+    // player.onPlayedChanged?.cancel();
+    // player.trackNotifier.dispose();
+    // player.playedNotifier.dispose();
+    // player.durationNotifier.dispose();
     playlistAnimationController.dispose();
     super.dispose();
   }
@@ -1082,115 +1056,111 @@ YandexMusic client: ${widget.yandexMusic.accountID}
           child: Stack(
             children: [
               Positioned(
-                  bottom: 16,
-                  left: 12,
-                  right: 12,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                      child: Container(
-                        // RECTANGLE MINI PLAYER SIZE
-                        height: 160,
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.45),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.08),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 12,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
+                bottom: 16,
+                left: 12,
+                right: 12,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      // RECTANGLE MINI PLAYER SIZE
+                      height: 160,
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.45),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.08),
+                          width: 1,
                         ),
-                        child: Column(
-                          children: [
-                            SizedBox(height: 10),
-                            DragToMoveArea(
-                              child: Row(
-                                children: [
-                                  if (nowPlayingTrack is LocalTrack &&
-                                      nowPlayingTrack.coverByted !=
-                                          Uint8List(0))
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.memory(
-                                        nowPlayingTrack.coverByted,
-                                        width: 48,
-                                        height: 48,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  else
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: CachedNetworkImage(
-                                        imageUrl:
-                                            'https://${nowPlayingTrack.cover.replaceAll('%%', '100x100')}',
-                                        width: 48,
-                                        height: 48,
-                                        fit: BoxFit.cover,
-                                        errorWidget: (context, url, error) =>
-                                            Icon(
-                                              Icons.music_note,
-                                              size: 24,
-                                              color: Colors.grey[500],
-                                            ),
-                                      ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          SizedBox(height: 10),
+                          DragToMoveArea(
+                            child: Row(
+                              children: [
+                                if (nowPlayingTrack is LocalTrack &&
+                                    nowPlayingTrack.coverByted != Uint8List(0))
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.memory(
+                                      nowPlayingTrack.coverByted,
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
                                     ),
-                                  SizedBox(width: 12),
-
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          nowPlayingTrack.title,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            fontFamily: 'noto',
-                                            overflow: TextOverflow.ellipsis,
+                                  )
+                                else
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: CachedNetworkImage(
+                                      imageUrl:
+                                          'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                      errorWidget: (context, url, error) =>
+                                          Icon(
+                                            Icons.music_note,
+                                            size: 24,
+                                            color: Colors.grey[500],
                                           ),
-                                          maxLines: 1,
-                                        ),
-                                        Text(
-                                          nowPlayingTrack.artists.isNotEmpty
-                                              ? nowPlayingTrack.artists.join(
-                                                  ', ',
-                                                )
-                                              : 'Unknown artist',
-                                          style: TextStyle(
-                                            color: Colors.grey[300],
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w300,
-                                            fontFamily: 'noto',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          maxLines: 1,
-                                        ),
-                                      ],
                                     ),
                                   ),
+                                SizedBox(width: 12),
 
-                                  // DRAGGBLE ZONE FOR MINI PLAYER
-                                  // Padding(
-                                  //   padding: EdgeInsetsGeometry.only(right: 70, bottom: 20),
-                                  //   child: Icon(
-                                  //     Icons.drag_handle,
-                                  //     color: Colors.white.withOpacity(0.5),
-                                  //   ),
-                                  // ),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        nowPlayingTrack.title,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          fontFamily: 'noto',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        maxLines: 1,
+                                      ),
+                                      Text(
+                                        nowPlayingTrack.artists.isNotEmpty
+                                            ? nowPlayingTrack.artists.join(', ')
+                                            : 'Unknown artist',
+                                        style: TextStyle(
+                                          color: Colors.grey[300],
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w300,
+                                          fontFamily: 'noto',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        maxLines: 1,
+                                      ),
+                                    ],
+                                  ),
+                                ),
 
+                                // DRAGGBLE ZONE FOR MINI PLAYER
+                                // Padding(
+                                //   padding: EdgeInsetsGeometry.only(right: 70, bottom: 20),
+                                //   child: Icon(
+                                //     Icons.drag_handle,
+                                //     color: Colors.white.withOpacity(0.5),
+                                //   ),
+                                // ),
+                                if (nowPlayingTrack is YandexMusicTrack)
                                   functionPlayerButton(
                                     Icons.favorite_outlined,
                                     Icons.favorite_outlined,
@@ -1201,157 +1171,154 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                     ),
                                     () => likeUnlike(),
                                   ),
-                                  SizedBox(width: 7),
-                                ],
+                                SizedBox(width: 7),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 30,
+                                height: 30,
+                                child: functionPlayerButton(
+                                  Icons.shuffle,
+                                  Icons.shuffle_outlined,
+                                  isShuffleEnable,
+                                  () => shuffle(),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 18),
+                              InkWell(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(30),
+                                ),
+                                onTap: () async {
+                                  changeTrack(previous: true);
+                                },
 
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 30,
+                                child: Container(
                                   height: 30,
-                                  child: functionPlayerButton(
-                                    Icons.shuffle,
-                                    Icons.shuffle_outlined,
-                                    isShuffleEnable,
-                                    () => shuffle(),
-                                  ),
-                                ),
-                                const SizedBox(width: 18),
-                                InkWell(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(30),
-                                  ),
-                                  onTap: () async {
-                                    changeTrack(previous: true);
-                                  },
-
-                                  child: Container(
-                                    height: 30,
-                                    width: 30,
-
-                                    decoration: buttonDecoration(),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.skip_previous,
-                                          color: Colors.white,
-                                          size: 24,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(width: 18),
-
-                                InkWell(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(30),
-                                  ),
-                                  onTap: () async {
-                                    changeTrack(playpause: true);
-                                  },
-
-                                  child: Container(
-                                    height: 35,
-                                    width: 35,
-
-                                    decoration: buttonDecoration(),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          isPlaying
-                                              ? Icons.pause
-                                              : Icons.play_arrow,
-                                          color: Colors.white,
-
-                                          size: 28,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(width: 18),
-
-                                InkWell(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(30),
-                                  ),
-                                  onTap: () async {
-                                    changeTrack(next: true);
-                                  },
-                                  child: Container(
-                                    height: 30,
-                                    width: 30,
-
-                                    decoration: buttonDecoration(),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.skip_next,
-                                          color: Colors.white,
-                                          size: 24,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 18),
-
-                                SizedBox(
                                   width: 30,
-                                  height: 30,
-                                  child: functionPlayerButton(
-                                    Icons.repeat_one_outlined,
-                                    Icons.repeat_one_outlined,
-                                    isRepeatEnable,
-                                    () => repeatChange(),
-                                  ),
-                                ),
-                              ],
-                            ),
 
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 250,
-                                  height: 40,
-                                  child: InteractiveSlider(
-                                    padding: EdgeInsets.only(top: 10),
-                                    startIcon: const Icon(Icons.volume_down),
-                                    endIcon: const Icon(Icons.volume_up),
-                                    min: 0.0,
-                                    max: 1.0,
-                                    brightness: Brightness.light,
-                                    initialProgress: volume,
-                                    iconColor: Colors.white,
-                                    gradient: LinearGradient(
-                                      colors: [Colors.white, Colors.white],
-                                    ),
-                                    onChanged: (value) => changeVolume(value),
+                                  decoration: buttonDecoration(),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.skip_previous,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ],
-                        ),
+                              ),
+
+                              const SizedBox(width: 18),
+
+                              InkWell(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(30),
+                                ),
+                                onTap: () async {
+                                  changeTrack(playpause: true);
+                                },
+
+                                child: Container(
+                                  height: 35,
+                                  width: 35,
+
+                                  decoration: buttonDecoration(),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        isPlaying
+                                            ? Icons.pause
+                                            : Icons.play_arrow,
+                                        color: Colors.white,
+
+                                        size: 28,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(width: 18),
+
+                              InkWell(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(30),
+                                ),
+                                onTap: () async {
+                                  changeTrack(next: true);
+                                },
+                                child: Container(
+                                  height: 30,
+                                  width: 30,
+
+                                  decoration: buttonDecoration(),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.skip_next,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 18),
+
+                              SizedBox(
+                                width: 30,
+                                height: 30,
+                                child: functionPlayerButton(
+                                  Icons.repeat_one_outlined,
+                                  Icons.repeat_one_outlined,
+                                  isRepeatEnable,
+                                  () => repeatChange(),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 250,
+                                height: 40,
+                                child: InteractiveSlider(
+                                  padding: EdgeInsets.only(top: 10),
+                                  startIcon: const Icon(Icons.volume_down),
+                                  endIcon: const Icon(Icons.volume_up),
+                                  min: 0.0,
+                                  max: 1.0,
+                                  brightness: Brightness.light,
+                                  initialProgress: volume,
+                                  iconColor: Colors.white,
+                                  gradient: LinearGradient(
+                                    colors: [Colors.white, Colors.white],
+                                  ),
+                                  onChanged: (value) => changeVolume(value),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
+              ),
             ],
           ),
         ),

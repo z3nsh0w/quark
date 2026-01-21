@@ -43,7 +43,7 @@ class Player {
   StreamSubscription? onPlayedChanged;
 
   Future<void> init() async {
-    trackNotifier.value = nowPlayingTrack;
+    // trackNotifier.value = nowPlayingTrack;
     setupListeners();
   }
   
