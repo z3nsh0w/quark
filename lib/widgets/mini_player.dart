@@ -312,160 +312,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
-  /// Reaction on playlist button
-  Future<void> togglePlaylist() async {
-    if (isPlaylistOpened) {
-      setState(() {
-        isPlaylistOpened = false;
-        isManuallyOpenedPlaylist = false;
-        playerPadding = 0.0;
-      });
-      await playlistAnimationController.reverse();
-    } else {
-      if (playlistOverlayEntry == null) {
-        playlistOverlayEntry = OverlayEntry(
-          builder: (context) => PlaylistOverlay(
-            playlistAnimationController: playlistAnimationController,
-            playlistOffsetAnimation: playlistOffsetAnimation,
-            togglePlaylist: togglePlaylist,
-            playlist: currentPlaylist,
-            playlistName: widget.playlist.name,
-            changeTrack: changeTrack,
-            yandexMusic: widget.yandexMusic,
-            showOperation: showOperation,
-            likedPlaylist: likedTracks,
-            addNext: addTrack,
-            removeTrack: removeTrack,
-            moveTrack: moveTrack,
-          ),
-        );
-        Overlay.of(context).insert(playlistOverlayEntry!);
-      }
-
-      playlistAnimationController.forward();
-      setState(() {
-        isPlaylistOpened = true;
-        if (MediaQuery.of(context).size.width > 800) {
-          playerPadding = 400.0;
-        } else {
-          playerPadding = 0.0;
-        }
-      });
-    }
-  }
-
-  void manuallyClosedPlaylist() async {
-    await togglePlaylist();
-    isManuallyOpenedPlaylist = false;
-  }
-
-  void closeFullScreenCover() async {
-    coverAnimationController.reverse().then((_) {
-      coverOverlayEntry?.remove();
-      coverOverlayEntry = null;
-    });
-  }
-
-  void toggleCover() async {
-    if (coverOverlayEntry != null) return;
-    ImageProvider<Object> imageProvider;
-    if (nowPlayingTrack is LocalTrack &&
-        nowPlayingTrack.coverByted != Uint8List(0)) {
-      imageProvider = MemoryImage(nowPlayingTrack.coverByted);
-    } else {
-      imageProvider = CachedNetworkImageProvider(
-        'https://${nowPlayingTrack.cover.replaceAll('%%', '700x700')}',
-      );
-    }
-
-    coverAnimationController.value = 0.0;
-    coverOverlayEntry = OverlayEntry(
-      builder: (context) {
-        return GestureDetector(
-          onTap: () => closeFullScreenCover(),
-          child: Material(
-            color: Colors.transparent,
-            child: Stack(
-              children: [
-                Container(
-                  height: MediaQuery.of(context).size.height,
-                  width: MediaQuery.of(context).size.width,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: imageProvider,
-                      fit: BoxFit.cover,
-                      colorFilter: ColorFilter.mode(
-                        Colors.black.withOpacity(0.5),
-                        BlendMode.darken,
-                      ),
-                    ),
-                  ),
-                  child: ClipRect(
-                    child: AnimatedSwitcher(
-                      duration: Duration(
-                        milliseconds: (650 * transitionSpeed).round(),
-                      ),
-                      transitionBuilder:
-                          (Widget child, Animation<double> animation) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                      child: BackdropFilter(
-                        key: ValueKey((nowPlayingTrack, animationInitiator)),
-                        filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
-                        child: Container(
-                          color: Colors.transparent,
-                          child: AnimatedPadding(
-                            duration: Duration(
-                              milliseconds: (750 * transitionSpeed).round(),
-                            ),
-                            curve: Curves.ease,
-                            padding: EdgeInsets.only(),
-
-                            child: ScaleTransition(
-                              scale: coverDoubleAnimation,
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final maxWidth = constraints.maxWidth * 0.9;
-                                  final maxHeight = constraints.maxHeight * 0.9;
-                                  final size = min(
-                                    maxWidth,
-                                    maxHeight,
-                                  ).clamp(270.0, 1200.0);
-                                  return AnimatedContainer(
-                                    duration: const Duration(milliseconds: 500),
-                                    curve: Curves.easeOutQuint,
-                                    width: size,
-                                    height: size,
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image(
-                                        image: imageProvider,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    Overlay.of(context).insert(coverOverlayEntry!);
-    coverAnimationController.forward();
-  }
+  void manuallyClosedPlaylist() async {}
 
   /// Forced playlist update
   void updatePlaylist() async {
@@ -744,12 +591,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     );
     setState(() {
       settingsView = false;
-      if (openPlaylistNextTime) {
-        openPlaylistNextTime = false;
-        if (!isPlaylistOpened) {
-          togglePlaylist();
-        }
-      }
       transitionSpeed = transitionSpeed2 ?? transitionSpeed;
       stateIndicator = indicator ?? stateIndicator;
       playlistOpeningArea = playlistArea ?? playlistOpeningArea;
@@ -911,14 +752,14 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
-
-
   /// Dispose
   @override
   void initState() {
     // Init playlists
 
     super.initState();
+
+    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
 
     currentPlaylist = [...widget.playlist.tracks];
     backupPlaylist = [...widget.playlist.tracks];
@@ -975,12 +816,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
       );
     });
     updateLiked();
-    Future.delayed(Duration(milliseconds: 150), () {
-      if (MediaQuery.of(context).size.width > 800) {
-        togglePlaylist();
-        isManuallyOpenedPlaylist = true;
-      }
-    });
   }
 
   @override
@@ -1042,6 +877,21 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     } else {
       playerPadding = 0.0;
     }
+    // TUT HUINYA RAZMER ITD
+    print(size);
+
+    bool isCompact = MediaQuery.of(context).size.width > 350;
+    double isCompactPadding = isCompact ? 25 : 18; 
+
+    ImageProvider<Object> imageProvider;
+    if (nowPlayingTrack is LocalTrack &&
+        nowPlayingTrack.coverByted != Uint8List(0)) {
+      imageProvider = MemoryImage(nowPlayingTrack.coverByted);
+    } else {
+      imageProvider = CachedNetworkImageProvider(
+        'https://${nowPlayingTrack.cover.replaceAll('%%', '700x700')}',
+      );
+    }
 
     // TODO: SPLIT WIDGETS
 
@@ -1051,275 +901,325 @@ YandexMusic client: ${widget.yandexMusic.accountID}
         transitionBuilder: (Widget child, Animation<double> animation) {
           return FadeTransition(opacity: animation, child: child);
         },
-        child: Material(
-          type: MaterialType.transparency,
-          child: Stack(
-            children: [
-              Positioned(
-                bottom: 16,
-                left: 12,
-                right: 12,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Container(
-                      // RECTANGLE MINI PLAYER SIZE
-                      height: 160,
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.45),
+        child: Container(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: imageProvider,
+              fit: BoxFit.cover,
+              colorFilter: ColorFilter.mode(
+                Colors.black.withOpacity(0.5),
+                BlendMode.darken,
+              ),
+            ),
+          ),
+          child: AnimatedSwitcher(
+            duration: Duration(milliseconds: (650 * transitionSpeed).round()),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            child: BackdropFilter(
+              key: ValueKey((nowPlayingTrack, animationInitiator)),
+              filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
+              child: Material(
+                type: MaterialType.transparency,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      bottom: 16,
+                      left: 12,
+                      right: 12,
+                      child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.08),
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
-                            blurRadius: 12,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          SizedBox(height: 10),
-                          DragToMoveArea(
-                            child: Row(
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                          child: Container(
+                            // RECTANGLE MINI PLAYER SIZE
+                            height: 169,
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.45),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.08),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
                               children: [
-                                if (nowPlayingTrack is LocalTrack &&
-                                    nowPlayingTrack.coverByted != Uint8List(0))
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.memory(
-                                      nowPlayingTrack.coverByted,
-                                      width: 48,
-                                      height: 48,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  )
-                                else
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: CachedNetworkImage(
-                                      imageUrl:
-                                          'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
-                                      width: 48,
-                                      height: 48,
-                                      fit: BoxFit.cover,
-                                      errorWidget: (context, url, error) =>
-                                          Icon(
-                                            Icons.music_note,
-                                            size: 24,
-                                            color: Colors.grey[500],
-                                          ),
-                                    ),
-                                  ),
-                                SizedBox(width: 12),
-
-                                Expanded(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        nowPlayingTrack.title,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          fontFamily: 'noto',
-                                          overflow: TextOverflow.ellipsis,
+                                SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    if (nowPlayingTrack is LocalTrack &&
+                                        nowPlayingTrack.coverByted !=
+                                            Uint8List(0))
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.memory(
+                                          nowPlayingTrack.coverByted,
+                                          width: 48,
+                                          height: 48,
+                                          fit: BoxFit.cover,
                                         ),
-                                        maxLines: 1,
+                                      )
+                                    else
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: CachedNetworkImage(
+                                          imageUrl:
+                                              'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                                          width: 48,
+                                          height: 48,
+                                          fit: BoxFit.cover,
+                                          errorWidget: (context, url, error) =>
+                                              Icon(
+                                                Icons.music_note,
+                                                size: 24,
+                                                color: Colors.grey[500],
+                                              ),
+                                        ),
                                       ),
-                                      Text(
-                                        nowPlayingTrack.artists.isNotEmpty
-                                            ? nowPlayingTrack.artists.join(', ')
-                                            : 'Unknown artist',
-                                        style: TextStyle(
-                                          color: Colors.grey[300],
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w300,
-                                          fontFamily: 'noto',
-                                          overflow: TextOverflow.ellipsis,
+                                    SizedBox(width: 12),
+
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            nowPlayingTrack.title,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              fontFamily: 'noto',
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            maxLines: 1,
+                                          ),
+                                          Text(
+                                            nowPlayingTrack.artists.isNotEmpty
+                                                ? nowPlayingTrack.artists.join(
+                                                    ', ',
+                                                  )
+                                                : 'Unknown artist',
+                                            style: TextStyle(
+                                              color: Colors.grey[300],
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w300,
+                                              fontFamily: 'noto',
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            maxLines: 1,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    if (nowPlayingTrack is YandexMusicTrack)
+                                      functionPlayerButton(
+                                        Icons.favorite_outlined,
+                                        Icons.favorite_outlined,
+                                        likedTracks.contains(
+                                          (nowPlayingTrack as YandexMusicTrack)
+                                              .track
+                                              .id,
                                         ),
-                                        maxLines: 1,
+                                        () => likeUnlike(),
+                                      ),
+                                    SizedBox(width: 7),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 10),
+                                
+                                AnimatedContainer(
+                                  duration: Duration(milliseconds: 1000),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                     AnimatedContainer(
+                                        duration: Duration(milliseconds: 600),
+                                        height: isCompact ? 40 : 30,
+                                        width: isCompact ? 40 : 30,
+                                        child: functionPlayerButton(
+                                          Icons.shuffle,
+                                          Icons.shuffle_outlined,
+                                          isShuffleEnable,
+                                          () => shuffle(),
+                                        ),
+                                      ),
+
+                                      AnimatedPadding(padding: EdgeInsetsGeometry.only(right: isCompactPadding), duration: Duration(milliseconds: 1000), curve: Curves.ease,),
+
+                                      // SizedBox(width: isCompact ? 32 : 18 ),
+                                      InkWell(
+                                        borderRadius: BorderRadius.all(
+                                          Radius.circular(30),
+                                        ),
+                                        onTap: () async {
+                                          changeTrack(previous: true);
+                                        },
+
+                                        child: AnimatedContainer(
+                                        duration: Duration(milliseconds: 600),
+                                        height: isCompact ? 40 : 30,
+                                        width: isCompact ? 40 : 30,
+
+                                          decoration: buttonDecoration(),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.skip_previous,
+                                                color: Colors.white,
+                                                size: 24,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+
+                                      AnimatedPadding(padding: EdgeInsetsGeometry.only(right: isCompactPadding), duration: Duration(milliseconds: 1000)),
+
+                                      InkWell(
+                                        borderRadius: BorderRadius.all(
+                                          Radius.circular(30),
+                                        ),
+                                        onTap: () async {
+                                          changeTrack(playpause: true);
+                                        },
+
+                                        child: AnimatedContainer(
+                                          duration: Duration(milliseconds: 600),
+                                          height: isCompact ? 45 : 35,
+                                          width: isCompact ? 45 : 35,
+
+                                          decoration: buttonDecoration(),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                isPlaying
+                                                    ? Icons.pause
+                                                    : Icons.play_arrow,
+                                                color: Colors.white,
+
+                                                size: 28,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+
+                                      AnimatedPadding(padding: EdgeInsetsGeometry.only(right: isCompactPadding), duration: Duration(milliseconds: 1000)),
+
+                                      InkWell(
+                                        borderRadius: BorderRadius.all(
+                                          Radius.circular(30),
+                                        ),
+                                        onTap: () async {
+                                          changeTrack(next: true);
+                                        },
+                                        child: AnimatedContainer(
+                                        duration: Duration(milliseconds: 600),
+                                        height: isCompact ? 40 : 30,
+                                        width: isCompact ? 40 : 30,
+
+                                          decoration: buttonDecoration(),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.skip_next,
+                                                color: Colors.white,
+                                                size: 24,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      AnimatedPadding(padding: EdgeInsetsGeometry.only(left: isCompactPadding), duration: Duration(milliseconds: 1000)),
+
+                                      AnimatedContainer(
+                                        duration: Duration(milliseconds: 600),
+                                        height: isCompact ? 40 : 30,
+                                        width: isCompact ? 40 : 30,
+                                        child: functionPlayerButton(
+                                          Icons.repeat_one_outlined,
+                                          Icons.repeat_one_outlined,
+                                          isRepeatEnable,
+                                          () => repeatChange(),
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
 
-                                // DRAGGBLE ZONE FOR MINI PLAYER
-                                // Padding(
-                                //   padding: EdgeInsetsGeometry.only(right: 70, bottom: 20),
-                                //   child: Icon(
-                                //     Icons.drag_handle,
-                                //     color: Colors.white.withOpacity(0.5),
-                                //   ),
-                                // ),
-                                if (nowPlayingTrack is YandexMusicTrack)
-                                  functionPlayerButton(
-                                    Icons.favorite_outlined,
-                                    Icons.favorite_outlined,
-                                    likedTracks.contains(
-                                      (nowPlayingTrack as YandexMusicTrack)
-                                          .track
-                                          .id,
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      width: 250,
+                                      height: 30,
+                                      child: Container(
+                                        // color: Colors.red,
+                                        child: InteractiveSlider(
+                                          padding: EdgeInsets.only(
+                                            top: 8,
+                                            bottom: 0,
+                                          ),
+                                          startIcon: const Icon(
+                                            Icons.volume_down,
+                                          ),
+                                          endIcon: const Icon(Icons.volume_up),
+                                          min: 0.0,
+                                          max: 1.0,
+                                          brightness: Brightness.light,
+                                          initialProgress: volume,
+                                          iconColor: Colors.white,
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Colors.white,
+                                              Colors.white,
+                                            ],
+                                          ),
+                                          onChanged: (value) =>
+                                              changeVolume(value),
+                                        ),
+                                      ),
                                     ),
-                                    () => likeUnlike(),
+                                  ],
+                                ),
+
+                                DragToMoveArea(
+                                  child: Icon(
+                                    Icons.drag_handle_rounded,
+                                    color: Colors.grey,
                                   ),
-                                SizedBox(width: 7),
+                                ),
                               ],
                             ),
                           ),
-
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 30,
-                                height: 30,
-                                child: functionPlayerButton(
-                                  Icons.shuffle,
-                                  Icons.shuffle_outlined,
-                                  isShuffleEnable,
-                                  () => shuffle(),
-                                ),
-                              ),
-                              const SizedBox(width: 18),
-                              InkWell(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(30),
-                                ),
-                                onTap: () async {
-                                  changeTrack(previous: true);
-                                },
-
-                                child: Container(
-                                  height: 30,
-                                  width: 30,
-
-                                  decoration: buttonDecoration(),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.skip_previous,
-                                        color: Colors.white,
-                                        size: 24,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(width: 18),
-
-                              InkWell(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(30),
-                                ),
-                                onTap: () async {
-                                  changeTrack(playpause: true);
-                                },
-
-                                child: Container(
-                                  height: 35,
-                                  width: 35,
-
-                                  decoration: buttonDecoration(),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        isPlaying
-                                            ? Icons.pause
-                                            : Icons.play_arrow,
-                                        color: Colors.white,
-
-                                        size: 28,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(width: 18),
-
-                              InkWell(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(30),
-                                ),
-                                onTap: () async {
-                                  changeTrack(next: true);
-                                },
-                                child: Container(
-                                  height: 30,
-                                  width: 30,
-
-                                  decoration: buttonDecoration(),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.skip_next,
-                                        color: Colors.white,
-                                        size: 24,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 18),
-
-                              SizedBox(
-                                width: 30,
-                                height: 30,
-                                child: functionPlayerButton(
-                                  Icons.repeat_one_outlined,
-                                  Icons.repeat_one_outlined,
-                                  isRepeatEnable,
-                                  () => repeatChange(),
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 250,
-                                height: 40,
-                                child: InteractiveSlider(
-                                  padding: EdgeInsets.only(top: 10),
-                                  startIcon: const Icon(Icons.volume_down),
-                                  endIcon: const Icon(Icons.volume_up),
-                                  min: 0.0,
-                                  max: 1.0,
-                                  brightness: Brightness.light,
-                                  initialProgress: volume,
-                                  iconColor: Colors.white,
-                                  gradient: LinearGradient(
-                                    colors: [Colors.white, Colors.white],
-                                  ),
-                                  onChanged: (value) => changeVolume(value),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),

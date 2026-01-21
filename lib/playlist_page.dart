@@ -920,28 +920,14 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     await player.playCustom(nowPlayingTrack);
     await player.setVolume(volume);
     await player.updatePlaylist(currentPlaylist);
+    
     log.info('Trying to initialize the player instance...');
+
     player.init();
     log.fine('Player instance initialized successfully');
-    // bool exists = await File(nowPlayingTrack.filepath).exists();
-    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
+
     log.info('Trying to set source of track...');
-    // if (exists) {
-    //   try {
-    //     log.info('The track was found locally. Trying to set source...');
-    //     player.player_instance.setSource(DeviceFileSource(nowPlayingTrack.filepath));
-    //   } catch (e) {
-    //     log.shout(
-    //       'Failed to set local source (file exists: $exists). Attempting to set network source',
-    //     );
-    //     netPlayer.playYandex(nowPlayingTrack);
-    //   }
-    // } else {
-    //   log.info(
-    //     'The track was NOT found locally. Trying to set network source...',
-    //   );
-    //   netPlayer.playYandex(nowPlayingTrack);
-    // }
+  
   }
 
   /// Dispose
@@ -952,6 +938,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     super.initState();
 
     // SET MINIMUM SIZE
+    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
 
     currentPlaylist = [...widget.playlist.tracks];
     backupPlaylist = [...widget.playlist.tracks];
@@ -1026,6 +1013,8 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     // player.trackNotifier.dispose();
     // player.playedNotifier.dispose();
     // player.durationNotifier.dispose();
+    
+    player.player_instance.stop();
     playlistAnimationController.dispose();
     super.dispose();
   }

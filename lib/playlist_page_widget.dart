@@ -928,7 +928,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     nowPlayingTrack = player.nowPlayingTrack;
     isPlaying = player.isPlaying;
     volume = player.player_instance.volume;
-
+    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
     // restoreLastTrack();
     // Classes
 
