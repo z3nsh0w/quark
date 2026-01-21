@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:yandex_music/src/lower_level.dart';
+import 'package:collection/collection.dart';
 import 'package:yandex_music/src/objects/lyrics_format.dart';
 
 class YandexMusicTrack {
@@ -170,6 +171,27 @@ class YandexMusicTrack {
     CancelToken? cancelToken,
   }) async {
     final tracks;
+
+    if (trackIds.length > 90) {
+      List<Track> result = [];
+      trackIds = trackIds is List<ShortTrack>
+          ? trackIds.map((ele) => ele.trackID.toString()).toList()
+          : trackIds;
+      var chunks = trackIds.slices(90);
+      for (List list in chunks) {
+        final res = await api.getTracks(
+          _parentClass.accountID,
+          list,
+          cancelToken: cancelToken,
+        );
+        print(res);
+        (res['result'] as List)
+            .map((t) => Track(t))
+            .toList()
+            .forEach((a) => result.add(a));
+      }
+      return result;
+    }
 
     tracks = await api.getTracks(
       _parentClass.accountID,
