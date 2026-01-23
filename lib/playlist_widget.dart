@@ -510,7 +510,6 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                                 children: [
                                                   Icon(
                                                     Icons.delete_sweep_rounded,
-
                                                     size: popupIconSize,
                                                     color: popupIconsColor,
                                                   ),

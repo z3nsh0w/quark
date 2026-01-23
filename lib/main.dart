@@ -13,6 +13,8 @@ import 'package:quark/services/player.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:hive/hive.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
+
 // Local files
 import 'playlist_page.dart';
 import '/services/files.dart';
@@ -23,6 +25,7 @@ import '/widgets/yandex_login.dart';
 import '/widgets/yandex_playlists_widget.dart';
 
 
+
 // #TODO: fix bug while closing playtlist with iconbutton then if playlist was opened by mouseArea it wont close
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
 import 'package:window_manager/window_manager.dart';
@@ -30,7 +33,7 @@ import 'package:window_manager/window_manager.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   WindowManager.instance.ensureInitialized();
-  
+
   final path = await getApplicationCacheDirectory();
   Hive.init(path.path);
   WindowManager.instance.setMinimumSize(const Size(300, 200));
@@ -481,8 +484,8 @@ class _MainPageState extends State<MainPage> {
               loginView == false &&
               settingsView == false)
             Positioned(
-              right: 0,
-              top: 0,
+              right: 5,
+              top: 5,
               child: IconButton(
                 onPressed: () {
                   setState(() {

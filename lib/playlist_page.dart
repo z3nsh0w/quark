@@ -101,7 +101,6 @@ class _PlaylistPageState extends State<PlaylistPage>
   /// Main Player instance
   Player player = Player.player;
 
-
   /// Network player instance (shell over the main player class)
   late NetPlayer netPlayer;
 
@@ -200,12 +199,12 @@ class _PlaylistPageState extends State<PlaylistPage>
         showOperation(StateIndicatorOperation.success);
       } catch (error) {
         log.shout('''
-An error has occured while downloading track
-TrackID: ${(track as YandexMusicTrack).track.id}
-Filepath: ${track.filepath}
-Quality: $quality
-YandexMusic client: ${widget.yandexMusic.accountID}
-''', error);
+          An error has occured while downloading track
+          TrackID: ${(track as YandexMusicTrack).track.id}
+          Filepath: ${track.filepath}
+          Quality: $quality
+          YandexMusic client: ${widget.yandexMusic.accountID}
+          ''', error);
         if (mounted) {
           showOperation(StateIndicatorOperation.error);
         }
@@ -213,12 +212,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
-  /// A convenient shuffle function that is only needed in one place xd
-  List<T> shuffleList<T>(List<T> list) {
-    final shuffled = List<T>.from(list);
-    shuffled.shuffle();
-    return shuffled;
-  }
 
   /// Agreement on track removing caused by playlistview
   Future<void> removeTrack(PlayerTrack track) async {
@@ -316,185 +309,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
-  /// Reaction on playlist button
-  Future<void> togglePlaylist() async {
-    if (isPlaylistOpened) {
-      setState(() {
-        isPlaylistOpened = false;
-        isManuallyOpenedPlaylist = false;
-        playerPadding = 0.0;
-      });
-      await playlistAnimationController.reverse();
-    } else {
-      if (playlistOverlayEntry == null) {
-        playlistOverlayEntry = OverlayEntry(
-          builder: (context) => PlaylistOverlay(
-            playlistAnimationController: playlistAnimationController,
-            playlistOffsetAnimation: playlistOffsetAnimation,
-            togglePlaylist: togglePlaylist,
-            playlist: currentPlaylist,
-            playlistName: widget.playlist.name,
-            changeTrack: changeTrack,
-            yandexMusic: widget.yandexMusic,
-            showOperation: showOperation,
-            likedPlaylist: likedTracks,
-            addNext: addTrack,
-            removeTrack: removeTrack,
-            moveTrack: moveTrack,
-          ),
-        );
-        Overlay.of(context).insert(playlistOverlayEntry!);
-      }
-
-      playlistAnimationController.forward();
-      setState(() {
-        isPlaylistOpened = true;
-        if (MediaQuery.of(context).size.width > 800) {
-          playerPadding = 400.0;
-        } else {
-          playerPadding = 0.0;
-        }
-      });
-    }
-  }
-
-  Future<void> manuallyClosedPlaylist() async {
-    await togglePlaylist();
-    isManuallyOpenedPlaylist = false;
-  }
-
-  Future<void> closeFullScreenCover() async {
-    coverAnimationController.reverse().then((_) {
-      coverOverlayEntry?.remove();
-      coverOverlayEntry = null;
-    });
-  }
-
-  Future<void> toggleCover() async {
-    if (coverOverlayEntry != null) return;
-    ImageProvider<Object> imageProvider;
-    if (nowPlayingTrack is LocalTrack &&
-        nowPlayingTrack.coverByted != Uint8List(0)) {
-      imageProvider = MemoryImage(nowPlayingTrack.coverByted);
-    } else {
-      imageProvider = CachedNetworkImageProvider(
-        'https://${nowPlayingTrack.cover.replaceAll('%%', '700x700')}',
-      );
-    }
-
-    coverAnimationController.value = 0.0;
-    coverOverlayEntry = OverlayEntry(
-      builder: (context) {
-        return GestureDetector(
-          onTap: () => closeFullScreenCover(),
-          child: Material(
-            color: Colors.transparent,
-            child: Stack(
-              children: [
-                Container(
-                  height: MediaQuery.of(context).size.height,
-                  width: MediaQuery.of(context).size.width,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: imageProvider,
-                      fit: BoxFit.cover,
-                      colorFilter: ColorFilter.mode(
-                        Colors.black.withOpacity(0.5),
-                        BlendMode.darken,
-                      ),
-                    ),
-                  ),
-                  child: ClipRect(
-                    child: AnimatedSwitcher(
-                      duration: Duration(
-                        milliseconds: (650 * transitionSpeed).round(),
-                      ),
-                      transitionBuilder:
-                          (Widget child, Animation<double> animation) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                      child: BackdropFilter(
-                        key: ValueKey((nowPlayingTrack, animationInitiator)),
-                        filter: ImageFilter.blur(sigmaX: 95.0, sigmaY: 95.0),
-                        child: Container(
-                          color: Colors.transparent,
-                          child: AnimatedPadding(
-                            duration: Duration(
-                              milliseconds: (750 * transitionSpeed).round(),
-                            ),
-                            curve: Curves.ease,
-                            padding: EdgeInsets.only(),
-
-                            child: ScaleTransition(
-                              scale: coverDoubleAnimation,
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final maxWidth = constraints.maxWidth * 0.9;
-                                  final maxHeight = constraints.maxHeight * 0.9;
-                                  final size = min(
-                                    maxWidth,
-                                    maxHeight,
-                                  ).clamp(270.0, 1200.0);
-                                  return AnimatedContainer(
-                                    duration: const Duration(milliseconds: 500),
-                                    curve: Curves.easeOutQuint,
-                                    width: size,
-                                    height: size,
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image(
-                                        image: imageProvider,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    Overlay.of(context).insert(coverOverlayEntry!);
-    coverAnimationController.forward();
-  }
-
-  /// Forced playlist update
-  Future<void> updatePlaylist() async {
-    if (isPlaylistOpened) {
-      playlistOverlayEntry?.remove();
-      playlistOverlayEntry = OverlayEntry(
-        builder: (context) => PlaylistOverlay(
-          playlistAnimationController: playlistAnimationController,
-          playlistOffsetAnimation: playlistOffsetAnimation,
-          togglePlaylist: manuallyClosedPlaylist,
-          playlist: currentPlaylist,
-          playlistName: widget.playlist.name,
-          changeTrack: changeTrack,
-          yandexMusic: widget.yandexMusic,
-          showOperation: showOperation,
-          likedPlaylist: likedTracks,
-          addNext: addTrack,
-          removeTrack: removeTrack,
-          moveTrack: moveTrack,
-        ),
-      );
-      Overlay.of(context).insert(playlistOverlayEntry!);
-    } else {}
-  }
-
   //
   //
   // Button's && Slider's functions
@@ -553,95 +367,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
   Future<void> setAnimationSpeed(double speed) async {
     setState(() {
       transitionSpeed = speed;
-    });
-  }
-
-  /// Reaction on repeat button
-  Future<void> repeatChange() async {
-    setState(() {
-      isRepeatEnable = !isRepeatEnable;
-    });
-    player.isRepeat = isRepeatEnable;
-  }
-
-  /// Reaction on like button
-  Future<void> likeUnlike() async {
-    if (likedTracks.contains((nowPlayingTrack as YandexMusicTrack).track.id)) {
-      try {
-        await widget.yandexMusic.usertracks.unlike([
-          (nowPlayingTrack as YandexMusicTrack).track.id,
-        ]);
-        setState(() {
-          likedTracks.remove((nowPlayingTrack as YandexMusicTrack).track.id);
-          isLiked = false;
-        });
-        showOperation(StateIndicatorOperation.success);
-      } catch (e) {
-        log.warning('Failed to send like track POST', e);
-        showOperation(StateIndicatorOperation.error);
-      }
-    } else {
-      try {
-        await widget.yandexMusic.usertracks.like([
-          (nowPlayingTrack as YandexMusicTrack).track.id,
-        ]);
-        setState(() {
-          likedTracks.add((nowPlayingTrack as YandexMusicTrack).track.id);
-          isLiked = true;
-        });
-        if (!currentPlaylist.contains(nowPlayingTrack) &&
-            widget.playlist.name == 'Liked') {
-          currentPlaylist.insert(0, nowPlayingTrack);
-          backupPlaylist.insert(0, nowPlayingTrack);
-          await player.updatePlaylist(currentPlaylist);
-          updateDatabasePlaylist();
-        }
-
-        showOperation(StateIndicatorOperation.success);
-      } catch (e) {
-        log.warning('Failed to send unlike track POST', e);
-        showOperation(StateIndicatorOperation.error);
-      }
-    }
-    print(isLiked);
-  }
-
-  /// Reaction on shuffle button
-  Future<void> shuffle() async {
-    bool enable = !isShuffleEnable;
-    List<PlayerTrack> lcpl = [];
-
-    if (enable) {
-      backupPlaylist.clear();
-      backupPlaylist.addAll([...currentPlaylist]);
-      final currentIndex = backupPlaylist.indexOf(nowPlayingTrack);
-
-      if (currentIndex == -1) return;
-
-      final fixedPart = backupPlaylist.sublist(0, currentIndex + 1);
-      final queue = backupPlaylist.sublist(currentIndex + 1);
-      final shuffledQueue = shuffleList(queue);
-
-      List<PlayerTrack> tcp = []
-        ..addAll(fixedPart)
-        ..addAll(shuffledQueue);
-
-      await player.updatePlaylist(tcp);
-      setState(() {
-        currentPlaylist = tcp;
-      });
-    }
-
-    if (!enable) {
-      lcpl = [...backupPlaylist];
-      setState(() {
-        currentPlaylist = lcpl;
-      });
-      await player.updatePlaylist(lcpl);
-    }
-    updatePlaylist();
-    setState(() {
-      isShuffleEnable = enable;
     });
   }
 
@@ -716,23 +441,13 @@ YandexMusic client: ${widget.yandexMusic.accountID}
       });
 
       isPlaying
-          ? await player.player_instance.resume()
-          : await player.player_instance.pause();
+          ? await player.resume()
+          : await player.pause();
       player.isPlaying = isPlaying ? true : false;
     }
     cacheFiles();
     saveLastTrack();
     nativeControl.updateData(nowPlayingTrack);
-  }
-
-  /// Reaction on volume interactive slider
-  Future<void> changeVolume(value) async {
-    volume = value;
-    await player.setVolume(value);
-    await Database.put(DatabaseKeys.volume.value, value);
-    setState(() {
-      volume = value;
-    });
   }
 
   /// Reaction on setting closing button
@@ -751,26 +466,13 @@ YandexMusic client: ${widget.yandexMusic.accountID}
       if (openPlaylistNextTime) {
         openPlaylistNextTime = false;
         if (!isPlaylistOpened) {
-          togglePlaylist();
+          // togglePlaylist();
         }
       }
       transitionSpeed = transitionSpeed2 ?? transitionSpeed;
       stateIndicator = indicator ?? stateIndicator;
       playlistOpeningArea = playlistArea ?? playlistOpeningArea;
     });
-  }
-
-  /// Reaction on progress interactive slider
-  Future<void> updateProgress(value) async {
-    setState(() {
-      isSliderActive = true;
-    });
-    try {
-      final seconds = await getSecondsByValue(value);
-      await player.seek(Duration(seconds: seconds));
-    } catch (e) {
-      log.warning('Progress update failed ', e);
-    }
   }
 
   /// A function that protects the slider's progress from external changes while the user selects the track position.
@@ -801,7 +503,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     stateIndicator = indicator ?? stateIndicator;
     playlistOpeningArea = playlistArea ?? playlistOpeningArea;
 
-    changeVolume(dbVolume);
     await player.setVolume(dbVolume);
     playAnimation();
     setAnimationSpeed(transition);
@@ -915,21 +616,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
-  /// Initializing all players
-  Future<void> initPlayers() async {
-    await player.playCustom(nowPlayingTrack);
-    await player.setVolume(volume);
-    await player.updatePlaylist(currentPlaylist);
-    
-    log.info('Trying to initialize the player instance...');
-
-    player.init();
-    log.fine('Player instance initialized successfully');
-
-    log.info('Trying to set source of track...');
-  
-  }
-
   /// Dispose
   @override
   void initState() {
@@ -944,9 +630,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     backupPlaylist = [...widget.playlist.tracks];
     nowPlayingTrack = currentPlaylist[0];
     restoreLastTrack();
-    
-    // Classes
-    initPlayers();
+
     log.info('Trying to initialize database...');
     Database.init();
     log.fine('Database initialized successfully');
@@ -994,27 +678,11 @@ YandexMusic client: ${widget.yandexMusic.accountID}
       );
     });
     updateLiked();
-    Future.delayed(Duration(milliseconds: 150), () {
-      if (MediaQuery.of(context).size.width > 800) {
-        togglePlaylist();
-        isManuallyOpenedPlaylist = true;
-      }
-    });
   }
 
   @override
   void dispose() {
-    // player.player_instance.onPositionChanged.drain();
-    // player.player_instance.stop();
-    // player.player_instance.dispose();
-    // player.onCompleteSubscription?.cancel();
-    // player.onDurationChanged?.cancel();
-    // player.onPlayedChanged?.cancel();
-    // player.trackNotifier.dispose();
-    // player.playedNotifier.dispose();
-    // player.durationNotifier.dispose();
-    
-    player.player_instance.stop();
+    player.stop();
     playlistAnimationController.dispose();
     super.dispose();
   }
@@ -1024,17 +692,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
   /// WIDGETS
   //
   //
-
-  Widget get _expandedHeader =>
-      animatedExpandButton(() => expandController.collapse(), Icons.arrow_back);
-
-  Widget get _collapsedHeader => functionPlayerButton(
-    Icons.more_vert,
-    Icons.more_vert,
-    false,
-    () => expandController.toggle(),
-    color: Colors.transparent,
-  );
 
   Widget animatedExpandButton(Function() onTap, IconData icon) {
     return InkWell(
@@ -1080,6 +737,7 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     return AnimatedSwitcher(
       duration: Duration(milliseconds: 500),
       child: isCompact
+          // MB POTOM PEREPIL
           ? MiniPlayerWidget(
               playlist: widget.playlist,
               yandexMusic: widget.yandexMusic,

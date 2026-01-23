@@ -123,8 +123,6 @@ class Player {
     trackNotifier.value = nowPlayingTrack;
     await player_instance.stop();
     await _playIsPlaying();
-
-    
   }
 
   Future<void> playPause(bool play) async {
@@ -133,10 +131,8 @@ class Player {
 
     
   }
-
   Future<void> setVolume(double volume) async {
     await player_instance.setVolume(volume);
-    
   }
 
   Future<void> seek(Duration seek) async {
@@ -165,4 +161,15 @@ class Player {
     await player_instance.setSource(DeviceFileSource(track.filepath));
     await _playIsPlaying();
   }
+
+  Future<void> pause() async {
+    await player_instance.stop();
+  }
+  Future<void> resume() async {
+    await player_instance.resume();
+  }
+  Future<void> stop() async {
+    await player_instance.stop();
+  }
 }
+

@@ -31,6 +31,7 @@ import 'services/database.dart';
 import '/services/net_player.dart';
 import '/services/native_control.dart';
 import '/widgets/state_indicator.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 // #TODO:открывание плейлиста по наведению
 
@@ -101,7 +102,6 @@ class _PlaylistPage1State extends State<PlaylistPage1>
 
   /// Main Player instance
   Player player = Player.player;
-
 
   /// Network player instance (shell over the main player class)
   late NetPlayer netPlayer;
@@ -716,7 +716,9 @@ YandexMusic client: ${widget.yandexMusic.accountID}
         isPlaying = !isPlaying;
       });
 
-      isPlaying ? await player.player_instance.resume() : await player.player_instance.pause();
+      isPlaying
+          ? await player.resume()
+          : await player.pause();
       player.isPlaying = isPlaying ? true : false;
     }
     cacheFiles();
@@ -914,14 +916,33 @@ YandexMusic client: ${widget.yandexMusic.accountID}
     }
   }
 
+  void showMiniPlayerDialog() async {
+    final windowController = await WindowController.fromCurrentEngine();
+
+    // final arguments = parseArguments(windowController.arguments);
+    // switch (arguments.type) {
+    //   case YourArgumentDefinitions.main:
+    //     runApp(const MainWindow());
+    //   case YourArgumentDefinitions.sample:
+    //     runApp(const SampleWindow());
+    //   // Add more window types as needed
+    // }
+
+    final controller = await WindowController.create(
+      WindowConfiguration(
+        hiddenAtLaunch: true,
+        arguments: 'YOUR_WINDOW_ARGUMENTS_HERE',
+      ),
+    );
+
+    await controller.show();
+  }
+
   /// Dispose
   @override
   void initState() {
     // Init playlists
-
     super.initState();
-
-    // SET MINIMUM SIZE
 
     currentPlaylist = [...widget.playlist.tracks];
     backupPlaylist = [...widget.playlist.tracks];
@@ -1037,7 +1058,8 @@ YandexMusic client: ${widget.yandexMusic.accountID}
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    print(size);
+    // WINDOW SIZE LOG
+    // print(size);
     final bool isCompactState = size.width <= 400 && size.height <= 300;
 
     if (isCompactState != isCompact) {
@@ -1407,8 +1429,8 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   functionPlayerButton(
-                                    Icons.featured_play_list_outlined,
-                                    Icons.featured_play_list_outlined,
+                                    Icons.list_alt,
+                                    Icons.list_alt_outlined,
                                     isPlaylistOpened,
                                     () async {
                                       await togglePlaylist();
@@ -1523,6 +1545,13 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                               ],
                                             ),
 
+                                          // MINI PLAYER BUTTON
+                                          animatedExpandButton(
+                                            () => setState(() {
+                                              showMiniPlayerDialog();
+                                            }),
+                                            Icons.featured_play_list_outlined,
+                                          ),
                                           animatedExpandButton(() async {
                                             final bool? recursiveFilesAdding =
                                                 await Database.get(
@@ -1769,7 +1798,6 @@ YandexMusic client: ${widget.yandexMusic.accountID}
                                   //     color: Colors.white.withOpacity(0.5),
                                   //   ),
                                   // ),
-
                                   functionPlayerButton(
                                     Icons.favorite_outlined,
                                     Icons.favorite_outlined,
