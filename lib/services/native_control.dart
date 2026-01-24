@@ -2,25 +2,17 @@ import 'dart:io';
 import 'dart:async';
 import 'linux_audio_control.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:quark/objects/track.dart';
 import 'package:smtc_windows/smtc_windows.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:smtc_windows/src/rust/frb_generated.dart';
+import 'player.dart';
 
 // A collection of native media notifications for controlling the player from outside
 class NativeControl {
   static final NativeControl _instance = NativeControl._internal();
 
   factory NativeControl() => _instance;
-  late Function({
-    bool next,
-    bool previous,
-    bool playpause,
-    bool reload,
-    PlayerTrack? custom,
-  })
-  masterControl;
 
   late Function() onSeek;
 
@@ -29,20 +21,22 @@ class NativeControl {
   }
 
   late final control;
+  late final VoidCallback _playingListener;
+  late final VoidCallback _nowPlayingListener;
+  Future<void> listeners() async {
+    _playingListener = () async {
+      await setPlaybackStatus(Player.player.isPlaying);
+    };
+    _nowPlayingListener = () async {
+      await updateData(Player.player.nowPlayingTrack);
+    };
+    Player.player.playingNotifier.addListener(_playingListener);
+    Player.player.trackNotifier.addListener(_nowPlayingListener);
+  }
 
   Future<void> init(
-    Function({
-      bool next,
-      bool previous,
-      bool playpause,
-      bool reload,
-      PlayerTrack? custom,
-    })
-    masterControl2,
-    Function() onSeek2,
   ) async {
-    masterControl = masterControl2;
-    onSeek = onSeek2;
+    listeners();
     if (Platform.isWindows) {
       try {
         await RustLib.init();
@@ -67,19 +61,19 @@ class NativeControl {
 
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         try {
-          control.buttonPressStream.listen((event) {
+          control.buttonPressStream.listen((event) async {
             switch (event) {
               case PressedButton.play:
-                masterControl(playpause: true);
+                await Player.player.resume();
                 break;
               case PressedButton.pause:
-                masterControl(playpause: true);
+                await Player.player.pause();
                 break;
               case PressedButton.next:
-                masterControl(next: true);
+                await Player.player.playNext(forceNext: true);
                 break;
               case PressedButton.previous:
-                masterControl(previous: true);
+                await Player.player.playPrevious();
                 break;
               case PressedButton.stop:
                 control.disableSmtc();
@@ -95,12 +89,11 @@ class NativeControl {
     } else {
       try {
         control = await AudioService.init(
-          
           builder: () => MyAudioHandler(
-            onPlay: () => masterControl(playpause: true),
-            onPause: () => masterControl(playpause: true),
-            onNext: () => masterControl(next: true),
-            onPrevious: () => masterControl(previous: true),
+            onPlay: () async => await Player.player.resume(),
+            onPause: () async => await Player.player.pause(),
+            onNext: () async => await Player.player.playNext(forceNext: true),
+            onPrevious: () async => await Player.player.playPrevious(),
             onSeek: (position) => onSeek(),
           ),
           config: AudioServiceConfig(
@@ -118,6 +111,7 @@ class NativeControl {
       status
           ? await control.setPlaybackStatus(PlaybackStatus.playing)
           : await control.setPlaybackStatus(PlaybackStatus.paused);
+    } else {
     }
   }
 

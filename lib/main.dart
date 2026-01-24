@@ -1,30 +1,29 @@
 // Flutter & Dart
 import 'dart:io';
 import 'dart:async';
+import 'package:audio_service_mpris/audio_service_mpris.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:provider/provider.dart';
 import 'package:quark/objects/track.dart';
 
 // Additional packages
 import 'package:logging/logging.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:quark/services/native_control.dart';
 import 'package:quark/services/player.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:hive/hive.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 // Local files
 import 'playlist_page.dart';
 import '/services/files.dart';
 import '/widgets/settings.dart';
 import '/objects/playlist.dart';
-import 'services/database.dart';
+import 'services/database_engine.dart';
 import '/widgets/yandex_login.dart';
 import '/widgets/yandex_playlists_widget.dart';
-
-
 
 // #TODO: fix bug while closing playtlist with iconbutton then if playlist was opened by mouseArea it wont close
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
@@ -65,6 +64,7 @@ class _MainPageState extends State<MainPage> {
   bool playlistView = false;
   bool settingsView = false;
   PlayerPlaylist? lastPlaylist;
+  String? lastTrackPath;
   final log = Logger('MainPage');
   List<PlaylistWShortTracks> userPlaylists = [];
   YandexMusic yandexMusic = YandexMusic(token: '');
@@ -126,6 +126,28 @@ class _MainPageState extends State<MainPage> {
     Map play = await serializePlaylist(playlist);
     await Database.put(DatabaseKeys.lastPlaylist.value, play);
     lastPlaylist = playlist;
+    await Player.player.updatePlaylist(playlist.tracks);
+
+    PlayerTrack? foundTrack;
+
+    if (lastTrackPath != null) {
+      for (final track in playlist.tracks) {
+        if (track.filepath == lastTrackPath) {
+          foundTrack = track;
+          break;
+        }
+      }
+    }
+
+    final trackToPlay = foundTrack ?? playlist.tracks[0];
+
+    await Player.player.stop();
+    Player.player.isPlaying = false;
+    Player.player.nowPlayingTrack = trackToPlay;
+    await Player.player.playerInstance.setSource(
+      DeviceFileSource(trackToPlay.filepath),
+    );
+
     Navigator.push(
       context,
       CupertinoPageRoute(
@@ -139,7 +161,7 @@ class _MainPageState extends State<MainPage> {
   Future<void> playlistRestore() async {
     String? token = await Database.get(DatabaseKeys.yandexMusicToken.value);
 
-    final playlist = await restoreLastPlaylistFromDatabase();
+    final playlist = await restoreLast();
 
     if (playlist == null) {
       return;
@@ -234,14 +256,21 @@ class _MainPageState extends State<MainPage> {
   }
 
   /// Execute last playlist from database
-  Future<PlayerPlaylist?> restoreLastPlaylistFromDatabase() async {
+  Future<PlayerPlaylist?> restoreLast() async {
+    String? resl = await Database.get(DatabaseKeys.lastTrack.value);
+    lastTrackPath = resl;
+
     final executed = await Database.get(DatabaseKeys.lastPlaylist.value);
+
     if (executed != null) {
-      lastPlaylist = await deserializePlaylist(
+      final ls = await deserializePlaylist(
         (executed as Map).cast<String, dynamic>(),
       );
-      setState(() {});
-      return lastPlaylist;
+      setState(() {
+        lastPlaylist = ls;
+      });
+
+      return ls;
     } else {
       return null;
     }
@@ -284,16 +313,23 @@ class _MainPageState extends State<MainPage> {
   void initState() {
     super.initState();
     Player(
-      startVolume: 0.5,
       playlist: [],
-      nowPlayingTrack: LocalTrack(title: 'title', artists: ['artists'], albums: ['albums'], filepath: 'filepath'),
+      nowPlayingTrack: LocalTrack(
+        title: 'title',
+        artists: ['artists'],
+        albums: ['albums'],
+        filepath: 'filepath',
+      ),
     );
+    Player.player.init();
+    NativeControl().init();
+    AudioServiceMpris.registerWith();
     initLogger();
     log.info('Trying to initialize database...');
     Database.init();
     log.fine('Database initialized successfully');
     Future.delayed(Duration(milliseconds: 15), () async {
-      await restoreLastPlaylistFromDatabase();
+      await restoreLast();
     });
     Future.delayed(Duration(milliseconds: 15), () async {
       bool? yandexPreload = await Database.get(

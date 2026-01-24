@@ -2,12 +2,13 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quark/services/player.dart';
 import '/widgets/state_indicator.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quark/objects/track.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:quark/services/database.dart';
+import 'package:quark/services/database_engine.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 Widget playlistSearch(
@@ -50,14 +51,6 @@ class PlaylistOverlay extends StatefulWidget {
   final List<PlayerTrack> playlist;
   final String playlistName;
   final YandexMusic yandexMusic;
-  final Function({
-    bool next,
-    bool previous,
-    bool playpause,
-    bool reload,
-    PlayerTrack? custom,
-  })
-  changeTrack;
   final Function(StateIndicatorOperation operation) showOperation;
   final List<String> likedPlaylist;
   final Function(
@@ -77,7 +70,6 @@ class PlaylistOverlay extends StatefulWidget {
     required this.togglePlaylist,
     required this.playlist,
     required this.playlistName,
-    required this.changeTrack,
     required this.yandexMusic,
     required this.showOperation,
     required this.likedPlaylist,
@@ -634,11 +626,9 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                         }
                                       },
                                     ),
-                                    onTap: () {
-                                      widget.changeTrack(
-                                        custom: playlistView[index],
-                                      );
-                                    },
+                                    onTap: () async =>
+                                      await Player.player.playCustom(playlistView[index])
+                                    ,
                                     title: songElement(playlistView[index]),
                                   ),
                                 );
