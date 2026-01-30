@@ -23,28 +23,8 @@ enum DatabaseKeys {
   /// Is the playlist opening area enabled?
   playlistOpeningArea('playlist_opening_area'),
 
-  /// ```Boolean```
-  /// Is the cover set as the background
-  albumArtAsBackground('background_art'),
-
-  /// ```Boolean```
-  /// Is smart shuffle enabled
-  smartShuffle('smart_shuffle_state'),
-
-  /// ```Boolean```
-  /// Is adwaita theme enabled
-  adwaitaTheme('adwaita_theme_state'),
-
-  /// ```Boolean```
-  /// Is transparent mode enabled
-  transparentMode('transparent_mode'),
-
-  /// ```Color```
-  /// Player accent color
-  accentColor('accent_color'),
-
   /// ```List<Map<String, dynamic>>```
-  /// Player accent color
+  /// Cached info about user's playlists
   yandexMusicPlaylists('yandex_music_playlists'),
 
   /// ```Boolean```
@@ -79,7 +59,7 @@ enum DatabaseKeys {
   /// Yandex account unique id
   yandexMusicUid('yandex_music_uid'),
 
-  /// ```String```
+  /// ```String``` - enum value of AudioQuality from YandexMusic lib
   /// Quality of track
   yandexMusicTrackQuality('yandex_music_track_quality'),
 

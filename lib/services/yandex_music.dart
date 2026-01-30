@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 class YandexMusicS {
+  // да здесь чинила нейронка
+  // и че нахуй
   static YandexMusicS? _instance;
 
   final yandex_music_package.YandexMusic _client;
@@ -17,16 +19,12 @@ class YandexMusicS {
 
   static void init(String token) {
     if (_instance != null) {
-      throw StateError('YandexMusicS уже инициализирован');
     }
     _instance = YandexMusicS._internal(token);
   }
 
   static YandexMusicS get instance {
     if (_instance == null) {
-      throw StateError(
-        'YandexMusicS не инициализирован. Вызовите init() сначала.',
-      );
     }
     return _instance!;
   }

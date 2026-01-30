@@ -68,7 +68,7 @@ class NetConductor {
       }
     }
 
-    cacheFiles();
+    await cacheFiles();
   }
 
   /// Top function for caching tracks in storage

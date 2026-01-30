@@ -17,7 +17,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:hive/hive.dart';
 
 // Local files
-import 'playlist_page.dart';
+import 'playlist_page_router.dart';
 import '/services/files.dart';
 import '/widgets/settings.dart';
 import '/objects/playlist.dart';
@@ -144,9 +144,12 @@ class _MainPageState extends State<MainPage> {
     await Player.player.stop();
     Player.player.isPlaying = false;
     Player.player.nowPlayingTrack = trackToPlay;
+    if (await File(trackToPlay.filepath).exists()) {
     await Player.player.playerInstance.setSource(
       DeviceFileSource(trackToPlay.filepath),
     );
+    }
+
 
     Navigator.push(
       context,
@@ -204,41 +207,47 @@ class _MainPageState extends State<MainPage> {
 
   /// Update playlists from yandex music
   Future<void> ymUpdate() async {
+    if (inited && userPlaylists.isNotEmpty) {
+      setState(() {
+        playlistView = true;
+      });
+      return;
+    }
+
     try {
-      String? token = await Database.get(DatabaseKeys.yandexMusicToken.value);
-      if (token != null) {
+      if (!inited) {
+        String? token = await Database.get(DatabaseKeys.yandexMusicToken.value);
+        if (token == null) {
+          setState(() {
+            loginView = true;
+          });
+          return;
+        }
         yandexMusic = YandexMusic(token: token);
         log.warning('Trying to initialize yandex music instance...');
 
         await yandexMusic.init();
-
         inited = true;
+      }
 
-        if (userPlaylists.isEmpty) {
-          yandexMusic.usertracks.getPlaylistsWithLikes().then((
-            playlists,
-          ) async {
-            await Database.put(
-              DatabaseKeys.yandexMusicPlaylists.value,
-              playlists.map((toElement) => toElement.raw).toList(),
-            );
+      if (userPlaylists.isEmpty) {
+        yandexMusic.usertracks.getPlaylistsWithLikes().then((playlists) async {
+          await Database.put(
+            DatabaseKeys.yandexMusicPlaylists.value,
+            playlists.map((toElement) => toElement.raw).toList(),
+          );
 
-            setState(() {
-              userPlaylists = playlists;
-              playlistView = true;
-            });
-          });
-        } else {
           setState(() {
+            userPlaylists = playlists;
             playlistView = true;
           });
-        }
-        await precacheTracks();
+        });
       } else {
         setState(() {
-          loginView = true;
+          playlistView = true;
         });
       }
+      await precacheTracks();
     } on YandexMusicException catch (e) {
       switch (e.type) {
         case YandexMusicException.unauthorized:
@@ -285,28 +294,6 @@ class _MainPageState extends State<MainPage> {
       );
     });
     log.finest('Hello world!');
-  }
-
-  /// Reaction on yandex music button
-  Future<void> yandexMusicButton() async {
-    if (inited) {
-      if (userPlaylists.isEmpty) {
-        yandexMusic.usertracks.getPlaylistsWithLikes().then((playlists) {
-          setState(() {
-            userPlaylists = playlists;
-
-            playlistView = true;
-          });
-        });
-      } else {
-        setState(() {
-          playlistView = true;
-        });
-        precacheTracks();
-      }
-    } else {
-      ymUpdate();
-    }
   }
 
   @override
@@ -418,7 +405,7 @@ class _MainPageState extends State<MainPage> {
                   }, 'Add folder'),
                   const SizedBox(height: 12.5),
                   _mainPageButton(
-                    () async => yandexMusicButton(),
+                    () async => await ymUpdate(),
                     'Yandex Music',
                   ),
                 ],

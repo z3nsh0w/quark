@@ -11,6 +11,7 @@ import 'package:file_picker/file_picker.dart';
 
 // Additional packages
 import 'package:logging/logging.dart';
+import 'package:quark/services/cached_images.dart';
 import 'package:quark/services/files.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:animated_expand/animated_expand.dart';
@@ -21,12 +22,12 @@ import 'package:material_symbols_icons/material_symbols_icons.dart';
 import 'package:window_manager/window_manager.dart';
 
 // Local components&modules
-import 'player_widget.dart';
-import 'playlist_widget.dart';
+import '../player_widget.dart';
+import '../playlist_widget.dart';
 import '/services/player.dart';
 import '/objects/playlist.dart';
 import '/widgets/settings.dart';
-import 'services/database_engine.dart';
+import '../services/database_engine.dart';
 import '/services/net_player.dart';
 import '/widgets/state_indicator.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
@@ -309,15 +310,6 @@ class _PlaylistPage1State extends State<PlaylistPage1>
 
   void toggleCover() async {
     if (coverOverlayEntry != null) return;
-    ImageProvider<Object> imageProvider;
-    if (nowPlayingTrack is LocalTrack &&
-        nowPlayingTrack.coverByted != Uint8List(0)) {
-      imageProvider = MemoryImage(nowPlayingTrack.coverByted);
-    } else {
-      imageProvider = CachedNetworkImageProvider(
-        'https://${nowPlayingTrack.cover.replaceAll('%%', '700x700')}',
-      );
-    }
 
     coverAnimationController.value = 0.0;
     coverOverlayEntry = OverlayEntry(
@@ -331,16 +323,6 @@ class _PlaylistPage1State extends State<PlaylistPage1>
                 Container(
                   height: MediaQuery.of(context).size.height,
                   width: MediaQuery.of(context).size.width,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: imageProvider,
-                      fit: BoxFit.cover,
-                      colorFilter: ColorFilter.mode(
-                        Colors.black.withOpacity(0.5),
-                        BlendMode.darken,
-                      ),
-                    ),
-                  ),
                   child: ClipRect(
                     child: AnimatedSwitcher(
                       duration: Duration(
@@ -382,10 +364,30 @@ class _PlaylistPage1State extends State<PlaylistPage1>
                                     height: size,
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
-                                      child: Image(
-                                        image: imageProvider,
-                                        fit: BoxFit.cover,
-                                      ),
+                                      child:
+                                          (nowPlayingTrack is LocalTrack &&
+                                              !listEquals(
+                                                nowPlayingTrack.coverByted,
+                                                Uint8List(0),
+                                              ))
+                                          ? ClipRRect(
+                                              borderRadius:
+                                                  BorderRadiusGeometry.circular(
+                                                    10,
+                                                  ),
+                                              child: Image.memory(
+                                                nowPlayingTrack.coverByted,
+                                                height: 270,
+                                                width: 270,
+                                              ),
+                                            )
+                                          : CachedImage(
+                                              borderRadius: 15,
+                                              coverUri:
+                                                  'https://${nowPlayingTrack.cover.replaceAll('%%', '1000x1000')}',
+                                              height: 270,
+                                              width: 270,
+                                            ),
                                     ),
                                   );
                                 },
@@ -674,6 +676,7 @@ class _PlaylistPage1State extends State<PlaylistPage1>
       setState(() {
         nowPlayingTrack = player.trackNotifier.value;
       });
+
       saveLastTrack();
     };
 
@@ -805,17 +808,12 @@ class _PlaylistPage1State extends State<PlaylistPage1>
 
   @override
   void dispose() {
-    // player.player_instance.onPositionChanged.drain();
-    // player.player_instance.stop();
-    // player.player_instance.dispose();
-    // player.onCompleteSubscription?.cancel();
-    // player.onDurationChanged?.cancel();
-    // player.onPlayedChanged?.cancel();
-    // player.trackNotifier.dispose();
-    // player.playedNotifier.dispose();
     player.playingNotifier.removeListener(_playingListener);
     player.playedNotifier.removeListener(_playedListener);
     player.trackNotifier.removeListener(_trackListener);
+    player.playlistNotifier.removeListener(_playlistListener);
+    player.shuffleModeNotifier.removeListener(_shuffleListener);
+    player.repeatModeNotifier.removeListener(_repeatListener);
     playlistAnimationController.dispose();
     super.dispose();
   }
@@ -894,9 +892,12 @@ class _PlaylistPage1State extends State<PlaylistPage1>
                   image: DecorationImage(
                     image:
                         (nowPlayingTrack is LocalTrack &&
-                            nowPlayingTrack.coverByted != Uint8List(0))
-                        ? MemoryImage(nowPlayingTrack.coverByted)
-                        : CachedNetworkImageProvider(
+                            !listEquals(
+                              nowPlayingTrack.coverByted,
+                              Uint8List(0),
+                            ))
+                        ? MemoryBytesImageProvider(nowPlayingTrack.coverByted)
+                        : CachedImageProvider(
                             'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
                           ),
                     fit: BoxFit.cover,
@@ -944,8 +945,10 @@ class _PlaylistPage1State extends State<PlaylistPage1>
                                 onTap: () => toggleCover(),
                                 child:
                                     (nowPlayingTrack is LocalTrack &&
-                                        nowPlayingTrack.coverByted !=
-                                            Uint8List(0))
+                                        !listEquals(
+                                          nowPlayingTrack.coverByted,
+                                          Uint8List(0),
+                                        ))
                                     ? ClipRRect(
                                         borderRadius:
                                             BorderRadiusGeometry.circular(10),
@@ -955,32 +958,12 @@ class _PlaylistPage1State extends State<PlaylistPage1>
                                           width: 270,
                                         ),
                                       )
-                                    : ClipRRect(
-                                        borderRadius:
-                                            BorderRadiusGeometry.circular(10),
-                                        child: CachedNetworkImage(
-                                          imageUrl:
-                                              'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
-                                          progressIndicatorBuilder:
-                                              (
-                                                context,
-                                                url,
-                                                downloadProgress,
-                                              ) => CircularProgressIndicator(
-                                                value:
-                                                    downloadProgress.progress,
-                                                color: Color.fromARGB(
-                                                  31,
-                                                  255,
-                                                  255,
-                                                  255,
-                                                ),
-                                              ),
-                                          errorWidget: (context, url, error) =>
-                                              Icon(Icons.error),
-                                          height: 270,
-                                          width: 270,
-                                        ),
+                                    : CachedImage(
+                                        borderRadius: 10,
+                                        coverUri:
+                                            'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                                        height: 270,
+                                        width: 270,
                                       ),
                               ),
 
@@ -1350,12 +1333,13 @@ class _PlaylistPage1State extends State<PlaylistPage1>
                                             ),
 
                                           // MINI PLAYER BUTTON
-                                          animatedExpandButton(
-                                            () => setState(() {
-                                              showMiniPlayerDialog();
-                                            }),
-                                            Icons.featured_play_list_outlined,
-                                          ),
+                                          if (false)
+                                            animatedExpandButton(
+                                              () => setState(() {
+                                                showMiniPlayerDialog();
+                                              }),
+                                              Icons.featured_play_list_outlined,
+                                            ),
                                           animatedExpandButton(() async {
                                             final bool? recursiveFilesAdding =
                                                 await Database.get(

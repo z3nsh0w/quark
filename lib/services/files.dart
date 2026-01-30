@@ -19,9 +19,11 @@ class Files {
         artists: [tagsFromFile.artist ??= 'Unknown'],
         filepath: entity.path,
         albums: ['Unknown'],
+        // cover22: cover != null ? BytedCover(bytes: cover, source: CoverSource.bytes) : NoCover(source: CoverSource.no)
       );
 
       track.coverByted = cover!;
+      
 
       return track;
     } catch (e) {

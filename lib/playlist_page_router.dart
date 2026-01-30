@@ -1,8 +1,11 @@
 // Flutter packages
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/android_player.dart';
 
 // Additional packages
-import 'package:quark/playlist_page_widget.dart';
+import 'package:quark/widgets/playlist_page_widget.dart';
 import 'package:quark/widgets/mini_player.dart';
 import 'package:yandex_music/yandex_music.dart';
 
@@ -40,11 +43,16 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final size = MediaQuery.of(context).size;
 
     final bool isCompactState = size.width <= 400 && size.height <= 300;
+    final bool isAndroid = Platform.isAndroid;
 
     return AnimatedSwitcher(
       duration: Duration(milliseconds: 500),
-      child: isCompactState
-          // MB POTOM PEREPIL z
+      child: isAndroid
+          ? AndroidWidget(
+              playlist: widget.playlist,
+              yandexMusic: widget.yandexMusic,
+            )
+          : isCompactState
           ? MiniPlayerWidget(
               playlist: widget.playlist,
               yandexMusic: widget.yandexMusic,

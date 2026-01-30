@@ -244,7 +244,7 @@ class Player {
     nowPlayingTrack = track;
     trackNotifier.value = nowPlayingTrack;
     await playerInstance.stop();
-    await playerInstance.setSource(DeviceFileSource(track.filepath));
+    // await playerInstance.setSource(DeviceFileSource(track.filepath));
     await _playIsPlaying();
   }
 

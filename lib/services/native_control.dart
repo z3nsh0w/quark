@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:crypto/crypto.dart';
+import 'package:quark/services/cached_images.dart';
+
 import 'linux_audio_control.dart';
 import 'package:flutter/material.dart';
 import 'package:quark/objects/track.dart';
@@ -7,6 +10,7 @@ import 'package:smtc_windows/smtc_windows.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:smtc_windows/src/rust/frb_generated.dart';
 import 'player.dart';
+import 'package:flutter/foundation.dart';
 
 // A collection of native media notifications for controlling the player from outside
 class NativeControl {
@@ -28,14 +32,24 @@ class NativeControl {
       await setPlaybackStatus(Player.player.isPlaying);
     };
     _nowPlayingListener = () async {
-      await updateData(Player.player.nowPlayingTrack);
+      String? path;
+      if (Player.player.nowPlayingTrack is LocalTrack &&
+          !listEquals(Player.player.nowPlayingTrack.coverByted, Uint8List(0))) {
+        path = await ImageCacheService().putImageBytes(
+          ImageCacheService().getMd5(Player.player.nowPlayingTrack.coverByted),
+          Player.player.nowPlayingTrack.coverByted,
+        );
+      }
+      await updateData(
+        Player.player.nowPlayingTrack,
+        customImage: path != null ? 'file://$path' : null,
+      );
     };
     Player.player.playingNotifier.addListener(_playingListener);
     Player.player.trackNotifier.addListener(_nowPlayingListener);
   }
 
-  Future<void> init(
-  ) async {
+  Future<void> init() async {
     listeners();
     if (Platform.isWindows) {
       try {
@@ -64,10 +78,10 @@ class NativeControl {
           control.buttonPressStream.listen((event) async {
             switch (event) {
               case PressedButton.play:
-                await Player.player.resume();
+                await Player.player.playPause(!Player.player.isPlaying);
                 break;
               case PressedButton.pause:
-                await Player.player.pause();
+                await Player.player.playPause(!Player.player.isPlaying);
                 break;
               case PressedButton.next:
                 await Player.player.playNext(forceNext: true);
@@ -90,8 +104,8 @@ class NativeControl {
       try {
         control = await AudioService.init(
           builder: () => MyAudioHandler(
-            onPlay: () async => await Player.player.resume(),
-            onPause: () async => await Player.player.pause(),
+            onPlay: () async => await Player.player.playPause(!Player.player.isPlaying),
+            onPause: () async => await Player.player.playPause(!Player.player.isPlaying),
             onNext: () async => await Player.player.playNext(forceNext: true),
             onPrevious: () async => await Player.player.playPrevious(),
             onSeek: (position) => onSeek(),
@@ -109,13 +123,12 @@ class NativeControl {
   Future<void> setPlaybackStatus(bool status) async {
     if (Platform.isWindows) {
       status
-          ? await control.setPlaybackStatus(PlaybackStatus.playing)
-          : await control.setPlaybackStatus(PlaybackStatus.paused);
-    } else {
-    }
+          ? await control.setPlaybackStatus(PlaybackStatus.paused)
+          : await control.setPlaybackStatus(PlaybackStatus.playing);
+    } else {}
   }
 
-  Future<void> updateData(PlayerTrack track) async {
+  Future<void> updateData(PlayerTrack track, {String? customImage}) async {
     if (Platform.isWindows) {
       try {
         await control.updateMetadata(
@@ -124,7 +137,9 @@ class NativeControl {
             album: 'Unknown',
             albumArtist: track.artists.join(','),
             artist: track.artists.join(','),
-            thumbnail: 'https://${track.cover.replaceAll('%%', '300x300')}',
+            thumbnail:
+                customImage ??
+                'https://${track.cover.replaceAll('%%', '300x300')}',
           ),
         );
       } catch (e) {}
@@ -136,7 +151,7 @@ class NativeControl {
           track.artists.join(','),
           track.albums.join(','),
           duration,
-          'https://${track.cover.replaceAll('%%', '300x300')}',
+          customImage ?? 'https://${track.cover.replaceAll('%%', '300x300')}',
           '#TODO',
         );
       } catch (e) {}

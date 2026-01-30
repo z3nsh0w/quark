@@ -3,6 +3,34 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:yandex_music/src/objects/track.dart';
 
+
+// TODO: 
+// enum CoverSource {
+//   uri,
+//   bytes,
+//   no
+// }
+
+// abstract class TrackCover {
+//   final CoverSource source;
+
+//   const TrackCover({required this.source});
+// }
+
+// class UriCover extends TrackCover {
+//   final String uri;
+//   const UriCover({required this.uri, required super.source});
+// }
+
+// class BytedCover extends TrackCover {
+//   final Uint8List bytes;
+//   const BytedCover({required this.bytes, required super.source});
+// }
+
+// class NoCover extends TrackCover {
+//   const NoCover({required super.source});
+// }
+
 abstract class PlayerTrack {
   final String title;
   final List<String> artists;
@@ -16,11 +44,12 @@ abstract class PlayerTrack {
     required this.artists,
     required this.albums,
     required this.filepath,
-    // # TODO: MAKE NOCOVER LOCALLY
-    // # TODO: Caching track images locally for native control support (link like file://)
+    // this.cover =
+        // 'raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/nocover.png',
     this.cover =
-        'raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/nocover.png',
+        'none',
     Uint8List? coverByted,
+    // this.cover22 = const NoCover(source: CoverSource.no)
   }) : coverByted = coverByted ?? Uint8List(0);
 }
 
@@ -32,6 +61,7 @@ class LocalTrack extends PlayerTrack {
     required super.filepath,
     super.cover,
     super.coverByted,
+    // super.cover22,
   });
 }
 
@@ -46,6 +76,7 @@ class YandexMusicTrack extends PlayerTrack {
     required super.filepath,
     super.cover,
     super.coverByted,
+    // super.cover22,
   });
 }
 

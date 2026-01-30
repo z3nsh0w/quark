@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_windows
   desktop_multi_window
   flutter_inappwebview_windows
+  isar_flutter_libs
   screen_retriever_windows
   url_launcher_windows
   window_manager

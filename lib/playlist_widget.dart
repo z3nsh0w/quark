@@ -1,4 +1,6 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
+import 'services/cached_images.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +11,6 @@ import 'package:quark/objects/track.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:quark/services/database_engine.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 Widget playlistSearch(
   TextEditingController searchController,
@@ -626,9 +627,8 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                         }
                                       },
                                     ),
-                                    onTap: () async =>
-                                      await Player.player.playCustom(playlistView[index])
-                                    ,
+                                    onTap: () async => await Player.player
+                                        .playCustom(playlistView[index]),
                                     title: songElement(playlistView[index]),
                                   ),
                                 );
@@ -667,20 +667,6 @@ Widget songElement(PlayerTrack track) {
         height: 55,
         width: 55,
         decoration: BoxDecoration(
-          image: DecorationImage(
-            image: (track is LocalTrack && track.coverByted != Uint8List(0))
-                ? MemoryImage(track.coverByted)
-                : CachedNetworkImageProvider(
-                    'https://${track.cover.replaceAll('%%', '300x300')}',
-                  ),
-
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(
-              Colors.black.withOpacity(0),
-              BlendMode.darken,
-            ),
-          ),
-
           boxShadow: [
             BoxShadow(
               color: const Color.fromARGB(255, 21, 21, 21),
@@ -689,6 +675,22 @@ Widget songElement(PlayerTrack track) {
             ),
           ],
         ),
+        child:
+            (track is LocalTrack && !listEquals(track.coverByted, Uint8List(0)))
+            ? ClipRRect(
+                borderRadius: BorderRadiusGeometry.circular(3),
+                child: Image.memory(track.coverByted, height: 270, width: 270),
+              )
+            : CachedImage(
+                borderRadius: 3,
+                coverUri: 'https://${track.cover.replaceAll('%%', '300x300')}',
+                height: 55,
+                alphaChannel: 255,
+                backgroundColor: const Color.fromARGB(255, 77, 77, 77),
+                iconColor: Colors.grey,
+                alphaChannelIcon: 255,
+                width: 55,
+              ),
       ),
       const SizedBox(width: 10),
 

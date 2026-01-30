@@ -1,6 +1,6 @@
 import Cocoa
 import FlutterMacOS
-import desktop_multi_window
+
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController.init()
@@ -18,10 +18,6 @@ class MainFlutterWindow: NSWindow {
     self.hasShadow = false
 
     RegisterGeneratedPlugins(registry: flutterViewController)
-
-    FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
-      RegisterGeneratedPlugins(registry: controller)
-    }
     super.awakeFromNib()
   }
 }
