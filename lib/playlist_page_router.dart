@@ -2,13 +2,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:quark/widgets/android_player.dart';
 
 // Additional packages
 import 'package:quark/widgets/playlist_page_widget.dart';
 import 'package:quark/widgets/mini_player.dart';
 import 'package:yandex_music/yandex_music.dart';
-
+import './widgets/android_player.dart';
 // Local components&modules
 import '/services/player.dart';
 import '/objects/playlist.dart';

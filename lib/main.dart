@@ -429,7 +429,8 @@ class _MainPageState extends State<MainPage> {
                         children: [
                           YandexLogin(closeView: closeLogin),
                           Positioned(
-                            right: 0,
+                            right: 15,
+                            top: 15,
                             child: IconButton(
                               onPressed: () =>
                                   setState(() => loginView = false),
@@ -507,8 +508,8 @@ class _MainPageState extends State<MainPage> {
               loginView == false &&
               settingsView == false)
             Positioned(
-              right: 5,
-              top: 5,
+              right: Platform.isAndroid ? 15 : 5,
+              top: Platform.isAndroid ? 15 : 5,
               child: IconButton(
                 onPressed: () {
                   setState(() {
