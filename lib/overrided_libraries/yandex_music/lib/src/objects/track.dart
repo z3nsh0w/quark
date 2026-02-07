@@ -74,11 +74,11 @@ class Track {
       realId = json['realId']?.toString(),
       artists = json['artists'] != null
           ? (json['artists'] as List).map((t) {
-              if (json['trackSource'] == TrackSource.OWN.value) {
-                return OfficialArtist(t);
+              if (json['trackSource'] == TrackSource.UGC.value) {
+                return UGCArtist(t);
               }
               ;
-              return UGCArtist(t);
+              return OfficialArtist(t);
             }).toList()
           : <Artist>[],
       albums = json['albums'] != null

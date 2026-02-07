@@ -1,8 +1,12 @@
+
 import 'dart:math';
 import 'dart:ui';
 import 'dart:async';
+import 'package:quark/services/database/listen_logger.dart';
+import 'package:quark/services/native_controls/native_control.dart';
+
 import 'state_indicator.dart';
-import '../services/database_engine.dart';
+import '../services/database/database_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:interactive_slider/interactive_slider.dart';
@@ -16,6 +20,7 @@ class Settings extends StatefulWidget {
 }
 
 class _SettingsState extends State<Settings> {
+  int taps = 0;
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -56,15 +61,39 @@ class _SettingsState extends State<Settings> {
                   children: [
                     const SizedBox(height: 25),
                     Center(
-                      child: Text(
-                        'Preferences',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                      child: GestureDetector(
+                        onTap: () => setState(() {
+                          taps += 1;
+                        }),
+                        behavior: HitTestBehavior.opaque,
+                        child: Text(
+                          'Preferences',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
+
+                    if (taps >= 5) ...[
+                      const SizedBox(height: 15),
+
+                      Padding(
+                        padding: EdgeInsetsGeometry.only(left: 35),
+                        child: Text(
+                          'Debug',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _DebugSettings(),
+                    ],
 
                     Padding(
                       padding: EdgeInsetsGeometry.only(left: 35),
@@ -149,6 +178,7 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
         DatabaseKeys.recursiveFilesAdding.value,
         defaultValue: true,
       );
+      if (!mounted) return;
       setState(() {
         stateIndicatorState = indicator;
         gradientAsBackground = gradient;
@@ -158,7 +188,7 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
         transitionSpeedController.value = transitionSpeed;
       });
     } catch (e) {
-      print(e);
+      if (!mounted) return;
       setState(() {
         databaseError = true;
       });
@@ -195,10 +225,10 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
     return Center(
       child: Column(
         children: [
-          if (databaseError == true)
+          if (databaseError == true || Database.lastError != null)
             button(
               'WARNING',
-              'The database is unavailable. All changes will not be saved.',
+              'The database is unavailable or contains errors. All changes may not be saved. Check the logs.',
               SizedBox.shrink(),
               maxWidth,
               rightPadding,
@@ -285,10 +315,7 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
                 min: 0.0,
                 max: 2.5,
                 onProgressUpdated: (value) async {
-                  await Database.put(
-                    DatabaseKeys.transitionSpeed.value,
-                    value,
-                  );
+                  await Database.put(DatabaseKeys.transitionSpeed.value, value);
                 },
                 onFocused: (value) {},
 
@@ -388,6 +415,7 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
         return;
       }
       try {
+        if (!mounted) return;
         setState(() {
           operation = StateIndicatorOperation.loading;
         });
@@ -406,10 +434,12 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
           DatabaseKeys.yandexMusicUid.value: yandexMusic.accountID,
           DatabaseKeys.yandexMusicEmail.value: email,
         });
+        if (!mounted) return;
         setState(() {
           operation = StateIndicatorOperation.success;
         });
       } on YandexMusicException {
+        if (!mounted) return;
         setState(() {
           operation = StateIndicatorOperation.error;
         });
@@ -422,10 +452,8 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
       for (var entry in qualityMap.entries) entry.value: entry.key,
     };
     String? quality2 = qualityReverse[value];
-    await Database.put(
-      DatabaseKeys.yandexMusicTrackQuality.value,
-      quality2!,
-    );
+    await Database.put(DatabaseKeys.yandexMusicTrackQuality.value, quality2!);
+    if (!mounted) return;
     setState(() {
       quality = value;
     });
@@ -444,12 +472,9 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
     final qualityl = await Database.get(
       DatabaseKeys.yandexMusicTrackQuality.value,
     );
-    final search2 = await Database.get(
-      DatabaseKeys.yandexMusicSearch.value,
-    );
-    final preload = await Database.get(
-      DatabaseKeys.yandexMusicPreload.value,
-    );
+    final search2 = await Database.get(DatabaseKeys.yandexMusicSearch.value);
+    final preload = await Database.get(DatabaseKeys.yandexMusicPreload.value);
+    if (!mounted) return;
     setState(() {
       controller.text = token ?? '';
       quality = qualityl != null ? qualityMap[qualityl]! : quality;
@@ -623,6 +648,98 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
   }
 }
 
+class _DebugSettings extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => __DebugSettingsWidget();
+}
+
+class __DebugSettingsWidget extends State<_DebugSettings> {
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final maxWidth = min(size.width * 0.92 * 0.92, 800 * 0.92);
+    final rightPadding = 7.5;
+    return Center(
+      child: Column(
+        children: [
+           InkWell(
+            onTap: () async {
+              await showDialog(
+                context: context,
+                builder: (builder) => GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: SingleChildScrollView(
+                    child: SizedBox(
+                      width: maxWidth,
+                      height: maxWidth,
+                      child: Center(child: Text(
+                        Database.lastError.toString(),
+                        style: TextStyle(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    )),
+                  ),
+                ),
+              );
+            },
+            child:  button(
+            'Database',
+            'Inited: ${Database.isInited} || LastError: ${Database.lastError}',
+            SizedBox.shrink(),
+            maxWidth,
+            rightPadding,
+            ButtonPosition.start,
+           )),
+          // SizedBox(height: 1),
+          // button(
+          //   'ListenLogger',
+          //   'Inited: ${ListenLogger().inited} || Init tries: ${NativeControl().initTries} || LastError: ${ListenLogger().lastError}',
+          //   SizedBox.shrink(),
+          //   maxWidth,
+          //   rightPadding,
+          //   ButtonPosition.center,
+          // ),
+          SizedBox(height: 1),
+          InkWell(
+            onTap: () async {
+              await showDialog(
+                context: context,
+                builder: (builder) => GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: SingleChildScrollView(
+                    child: SizedBox(
+                      width: maxWidth,
+                      height: maxWidth,
+                      child: Center(child: Text(
+                        NativeControl().lastError.toString(),
+                        style: TextStyle(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    )),
+                  ),
+                ),
+              );
+            },
+            child: button(
+              'NativeControl',
+              'Inited: ${NativeControl().inited} || Init tries: ${NativeControl().initTries} || LastError: ${NativeControl().lastError}',
+              SizedBox.shrink(),
+              maxWidth,
+              rightPadding,
+              ButtonPosition.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 enum ButtonPosition { start, center, end }
 
 Container button(
@@ -662,14 +779,14 @@ Container button(
 
         Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: crossAxisAlignment,
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 name,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: nameColor,
                   fontSize: 12,
                   overflow: TextOverflow.ellipsis,
                 ),

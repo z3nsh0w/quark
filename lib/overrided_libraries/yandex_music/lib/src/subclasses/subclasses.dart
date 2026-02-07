@@ -3,6 +3,7 @@ export 'package:yandex_music/src/subclasses/objects/pins.dart';
 export 'package:yandex_music/src/subclasses/objects/albums.dart';
 export 'package:yandex_music/src/subclasses/objects/search.dart';
 export 'package:yandex_music/src/subclasses/objects/tracks.dart';
+export 'package:yandex_music/src/subclasses/objects/artists.dart';
 export 'package:yandex_music/src/subclasses/objects/account.dart';
 export 'package:yandex_music/src/subclasses/objects/landing.dart';
 export 'package:yandex_music/src/subclasses/objects/playlists.dart';

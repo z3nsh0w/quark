@@ -1,12 +1,11 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:yandex_music/src/objects/search_result.dart';
 import './requests/requests.dart';
 import 'package:xml/xml.dart' as xml;
+import 'package:yandex_music/yandex_music.dart';
 import 'package:yandex_music/src/signs/signs.dart';
-import 'package:yandex_music/src/objects/wave.dart';
-import 'package:yandex_music/src/objects/track.dart';
+
 
 // Yup, That's Me.
 // You're probably wondering how I ended up in this situation
@@ -80,6 +79,17 @@ class YandexMusicApiAsync {
   }) async {
     final responce = await requests.basicGet(
       '/users/$userId/playlists/$playlistKind',
+      cancelToken: cancelToken,
+    );
+    return responce;
+  }
+
+  Future<dynamic> getAnotherPlaylist(
+    String playlistKind, {
+    CancelToken? cancelToken,
+  }) async {
+    final responce = await requests.basicGet(
+      '/playlist/$playlistKind',
       cancelToken: cancelToken,
     );
     return responce;
@@ -320,10 +330,17 @@ class YandexMusicApiAsync {
     List trackIds, {
     CancelToken? cancelToken,
   }) async {
-    final responce = await requests.customGet('/tracks', {
-      'track-ids': trackIds,
-      'with-positions': 'false',
-    }, cancelToken: cancelToken);
+    final responce = await requests.post(
+      '/tracks',
+      data: FormData.fromMap({
+        'trackIds':
+            trackIds,
+        'removeDuplicates': false,
+        'withProgress': true,
+        'withMixData': false,
+      }),
+      cancelToken: cancelToken,
+    );
     return responce;
   }
 
@@ -557,10 +574,9 @@ class YandexMusicApiAsync {
     int albumId, {
     CancelToken? cancelToken,
   }) async {
-    final responce = await requests.basicGet(
-      '/albums/$albumId/with-tracks',
-      cancelToken: cancelToken,
-    );
+    final responce = await requests.customGet('/albums/$albumId/with-tracks', {
+      'richTracks': true,
+    }, cancelToken: cancelToken);
     return responce;
   }
 
@@ -642,14 +658,12 @@ class YandexMusicApiAsync {
 
   Future<Response> uploadFile(
     String url,
-    File file, {
+    Uint8List fileBytes,
+    String fileName, {
     CancelToken? cancelToken,
   }) async {
     final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(
-        file.path,
-        filename: file.path.split('/').last,
-      ),
+      'file': await MultipartFile.fromBytes(fileBytes, filename: fileName),
     });
 
     return await dio.post(
@@ -719,22 +733,39 @@ class YandexMusicApiAsync {
 
   Future<dynamic> searchV2(
     String query, {
-    List<SearchTypes> types = const [SearchTypes.track, SearchTypes.album, SearchTypes.artist],
+    List<SearchTypes> types = const [
+      SearchTypes.track,
+      SearchTypes.album,
+      SearchTypes.artist,
+    ],
     int page = 0,
     int pageSize = 36,
     bool withLikesCount = true,
     bool withBestResults = true,
-    CancelToken? cancelToken
+    CancelToken? cancelToken,
   }) async {
-    print(types.map((e) => e.value).join(','),);
+    print(types.map((e) => e.value).join(','));
     return await requests.customGet('/search/instant/mixed', {
-      'text' : query,
-      'page' : page,
-      'type' : types.map((e) => e.value).join(','),
-      'pageSize' : pageSize,
-      'withLikesCount' : withLikesCount,
-      'withBestResults' : withBestResults,
+      'text': query,
+      'page': page,
+      'type': types.map((e) => e.value).join(','),
+      'pageSize': pageSize,
+      'withLikesCount': withLikesCount,
+      'withBestResults': withBestResults,
     }, cancelToken: cancelToken);
+  }
+
+  Future<dynamic> getArtistInfo(
+    String route, {
+    CancelToken? cancelToken,
+    int page = 0,
+    Map<String, dynamic>? params,
+  }) async {
+    return await requests.customGet(
+      route,
+      params ?? {'page': page},
+      cancelToken: cancelToken,
+    );
   }
 
   Future<dynamic> _feedbacker(

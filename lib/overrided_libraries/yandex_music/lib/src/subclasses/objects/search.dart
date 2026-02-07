@@ -5,10 +5,9 @@ import 'package:yandex_music/yandex_music.dart';
 // #TODO: search without authorization
 
 class YandexMusicSearch {
-  final YandexMusic _parentClass;
   final YandexMusicApiAsync api;
 
-  YandexMusicSearch(this._parentClass, this.api);
+  YandexMusicSearch(this.api);
 
   Future<SearchResult> search(
     String query, {

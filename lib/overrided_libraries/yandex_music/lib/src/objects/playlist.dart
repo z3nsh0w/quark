@@ -48,7 +48,6 @@ class Playlist {
       raw = json;
 }
 
-
 class PlaylistWShortTracks {
   /// Playlist identifier
   final int kind;
@@ -91,7 +90,28 @@ class PlaylistWShortTracks {
       visibility = json['visibility'],
       cover = json['cover'],
       tracks = json['tracks'] != null
-          ? (json['tracks'] as List).map((t) => ShortTrack(t['track'] ?? t)).toList()
+          ? (json['tracks'] as List)
+                .map((t) => ShortTrack(t['track'] ?? t))
+                .toList()
           : [],
       raw = json;
+}
+
+class ShortPlaylistInfo {
+  final int likesCount;
+  final int trackCount;
+  final int ownerUid;
+  final String playlistUuid;
+  final int kind;
+  final String title;
+  final String coverUri;
+
+  ShortPlaylistInfo(Map<String, dynamic> fromJson)
+    : likesCount = fromJson['likesCount'],
+      trackCount = fromJson['trackCount'],
+      playlistUuid = fromJson['playlist']['playlistUuid'],
+      kind = fromJson['playlist']['kind'],
+      title = fromJson['playlist']['title'],
+      ownerUid = fromJson['playlist']['uid'],
+      coverUri = fromJson['playlist']['cover']['uri'];
 }

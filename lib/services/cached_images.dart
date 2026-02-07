@@ -128,6 +128,21 @@ class CachedImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (coverUri == 'none') {
+      return Container(
+        decoration: BoxDecoration(
+          color: backgroundColor.withAlpha(alphaChannel),
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        width: width,
+        height: height,
+        child: Icon(
+          Symbols.music_note,
+          color: iconColor.withAlpha(alphaChannelIcon),
+          size: width < 100 ? 16 : 42,
+        ),
+      );
+    }
     return FutureBuilder<Uint8List>(
       future: ImageCacheService().getImage(coverUri),
       builder: (context, snapshot) {

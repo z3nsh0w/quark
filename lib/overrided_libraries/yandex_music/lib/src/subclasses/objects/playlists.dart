@@ -13,6 +13,7 @@ class YandexMusicPlaylists {
   /// Returns the playlist's cover art (specifically, the custom cover art if it has one, or the cover art of the last track inside the playlist).
   ///
   /// You can choose the size of the cover. By default, it is 300x300. The cover size is specified in square format, multiple of 10 (50x50, 300x300, 1000x1000, etc.).
+  /// ""
   String getPlaylistCoverArtUrl(
     Map<String, dynamic> org, {
     String imageSize = '300x300',
@@ -44,6 +45,18 @@ class YandexMusicPlaylists {
     var playlistInfo = await api.getPlaylist(
       _parentClass.accountID,
       kind,
+      cancelToken: cancelToken,
+    );
+    return Playlist(playlistInfo['result']);
+  }
+
+  /// Returns complete information along with the tracks about the playlist by its Uuid.
+    Future<Playlist> getPlaylistByUuid(
+    String uuid, {
+    CancelToken? cancelToken,
+  }) async {
+    var playlistInfo = await api.getAnotherPlaylist(
+      uuid,
       cancelToken: cancelToken,
     );
     return Playlist(playlistInfo['result']);
@@ -91,18 +104,20 @@ class YandexMusicPlaylists {
   /// Returns information about multiple user playlists
   ///
   /// Example: getMultiplePlaylists([1011, 1009]);
-  Future<List<Playlist>> getMultiplePlaylists(
+  Future<List<PlaylistWShortTracks>> getMultiplePlaylists(
+    // TODO: Rich tracks settings 
     List kinds, {
+    int? userId,
     CancelToken? cancelToken,
   }) async {
     var playlists = await api.getMultiplePlaylists(
-      _parentClass.accountID,
+      userId ?? _parentClass.accountID,
       kinds,
       cancelToken: cancelToken,
     );
     return playlists != null
-        ? (playlists['result'] as List).map((t) => Playlist(t)).toList()
-        : <Playlist>[];
+        ? (playlists['result'] as List).map((t) => PlaylistWShortTracks(t)).toList()
+        : <PlaylistWShortTracks>[];
   }
 
   /// Returns a list of tracks that are most suitable for a given playlist

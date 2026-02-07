@@ -11,23 +11,23 @@ enum YandexMusicExceptionType {
 }
 
 
-/// Главный класс исключений библиотеки.
+/// The main exception class of the library.
 /// 
-/// Включает в себя 3 поля:
+/// Includes 3 fields:
 /// ```
-/// message - основное сообщение ошибки
-/// code - http код ошибки (может быть null!)
-/// type - тип ошибки (являющийся частью группы ошибок YandexMusicExceptionType)
+/// message - main error message
+/// code - http error code (May be null!)
+/// type - error type (part of an error groupYandexMusicExceptionType)
 /// ```
 /// 
-/// Использование: 
+/// Usage: 
 /// ```dart
 /// var ym = YandexMusic(
 ///      token: 'y0_4fjegHFFWgn552fnHfjsveegjknavd89UIGFEs',
 ///    );
-/// await ym.init();
 /// 
 /// try {
+///   await ym.init();
 ///   final result = await ym.playlists.getUsersPlaylists();
 ///   print(result);
 ///   
@@ -48,7 +48,7 @@ enum YandexMusicExceptionType {
 ///   case YandexMusicExceptionType.notFound:
 ///     print('Not found: ${e.message}');
 ///     break;
-///   // ETC. все типы можно увидеть внутри YandexMusicExceptionType
+///   // ETC. all types can be seen inside YandexMusicExceptionType
 ///   default:
 ///     print('Another error: ${e.message}');
 /// }
@@ -61,50 +61,48 @@ class YandexMusicException implements Exception {
 
   YandexMusicException(this.message, this.type, {this.code});
 
-  /// Сообщает об ошибке сети. 
-  /// Ошибка может быть вызвана только сетевой проблемой, которую определит библиотека dio
+  /// Reports a network error.
+  /// The error can only be caused by a network problem, which the dio library will detect
   YandexMusicException.network(String message, {int? code}) 
       : this(message, YandexMusicExceptionType.network, code: code);
   
-  /// Сообщает о проблеме запроса к серверу. 
+  /// Reports a problem with a request to the server.
   /// 
-  /// Является сообщением об ошибки сервера\клиента 
+  /// Is a server\client error message
   /// 
-  /// Все http коды кроме 200, 201, 202, 203, 204, 400, 401, 403, 404, 405, 412 вызывают этот тип ошибки.
+  /// All other errors, not considering the others, will cause this type of error.
   YandexMusicException.request(String message, {int? code}) 
       : this(message, YandexMusicExceptionType.request, code: code);
   
-  /// Сообщает об ошибке инициализации библиотеки
+  /// Reports a library initialization error
   /// 
-  /// Скорее всего токен неактивен
+  /// Most likely the token is inactive
   /// 
-  /// Вызывается если библиотека не смогла спарсить ym.getAllAccountInformation
+  /// Called if the library could not parse ym.getAllAccountInformation
   /// 
-  /// (Токен становится неактивным только если пользователь выходит из аккаунта на всех устройствах)
+///(The token becomes inactive only if the user logs out of the account on all devices or changes the password through the recovery)  
   YandexMusicException.initialization(String message) 
       : this(message, YandexMusicExceptionType.initialization);
   
-  /// Сообщает об ошибки авторизации
+  /// Reports authorization errors
   /// 
-  /// Скорее всего токен перестал быть активен и нужно заново инициализировать библиотеку с уже новым токеном
-  /// 
-  /// (Либо разработчик где то не прописал токен :)
+  /// Most likely the token has ceased to be active and you need to reinitialize the library with a new token
   YandexMusicException.unauthorized(String message, {int? code}) 
       : this(message, YandexMusicExceptionType.unauthorized, code: code);
 
-  /// Запрос был выполнен успешно, но сервер не нашел информацию по запросу
+  /// The request was completed successfully, but the server did not find information on the request
   YandexMusicException.notFound(String message, {int? code})
       : this(message, YandexMusicExceptionType.notFound, code: code);
 
-  /// Сообщает об ошибке передаваемых данных в запросе. 
+  /// Reports an error in the transmitted data in the request.
   YandexMusicException.badRequest(String message, {int? code})
       : this(message, YandexMusicExceptionType.badRequest, code: code);
 
-  /// Для изменения плейлиста необходимо указать правильную ревизию плейлиста.
+  /// To change a playlist, you must specify the correct revision of the playlist.
   YandexMusicException.wrongRevision(String message, {int? code})
       : this(message, YandexMusicExceptionType.wrongRevision, code: code);
 
-  /// Переданный аргумент неверный.
+  /// The argument passed is invalid.
   YandexMusicException.argumentError(String message, {int? code})
       : this(message, YandexMusicExceptionType.argumentError, code: code);
 

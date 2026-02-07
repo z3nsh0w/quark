@@ -1,41 +1,58 @@
 // Flutter & Dart
 import 'dart:io';
 import 'dart:async';
-import 'package:audio_service_mpris/audio_service_mpris.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:quark/objects/track.dart';
-
 // Additional packages
+import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:quark/services/native_control.dart';
-import 'package:quark/services/player.dart';
-import 'package:yandex_music/yandex_music.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:hive/hive.dart';
+import 'package:audio_service_mpris/audio_service_mpris.dart';
 
 // Local files
-import 'playlist_page_router.dart';
+import '/objects/track.dart';
 import '/services/files.dart';
 import '/widgets/settings.dart';
 import '/objects/playlist.dart';
-import 'services/database_engine.dart';
-import '/widgets/yandex_login.dart';
-import '/widgets/yandex_playlists_widget.dart';
+import '/playlist_page_router.dart';
+import 'services/database/listen_logger.dart';
+import '/services/player/player.dart';
+import 'services/database/database_engine.dart';
+import '/services/yandex_music_singleton.dart';
+import '/services/native_controls/native_control.dart';
+import '/widgets/yandex_music_integration/yandex_login.dart';
+import '/widgets/yandex_music_integration/yandex_widgets.dart';
+import '/widgets/yandex_music_integration/yandex_playlists_widget.dart';
 
-// #TODO: fix bug while closing playtlist with iconbutton then if playlist was opened by mouseArea it wont close
+// TODO: fix bug while closing playtlist with iconbutton then if playlist was opened by mouseArea it wont close
+// TODO: Lister logger migration
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
-import 'package:window_manager/window_manager.dart';
+// TODO: Fix the player's work while database is unavailable. Now, if the database fails to initialize for any reason, the player turns into a brick. (also for local audio work)
+// TODO: Rework playlist_widget using services
+// import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  WindowManager.instance.ensureInitialized();
+  // WindowManager.instance.ensureInitialized();
 
   final path = await getApplicationCacheDirectory();
   Hive.init(path.path);
-  WindowManager.instance.setMinimumSize(const Size(300, 200));
+  Player(
+    playlist: [],
+    nowPlayingTrack: LocalTrack(
+      title: 'title',
+      artists: ['artists'],
+      albums: ['albums'],
+      filepath: 'filepath',
+    ),
+  );
+  Player.player.init();
+  NativeControl().init();
+  // ListenLogger().init();
+  AudioServiceMpris.registerWith();
+  Database.init();
+  // WindowManager.instance.setMinimumSize(const Size(425, 720));
   runApp(const Quark());
 }
 
@@ -126,6 +143,7 @@ class _MainPageState extends State<MainPage> {
     Map play = await serializePlaylist(playlist);
     await Database.put(DatabaseKeys.lastPlaylist.value, play);
     lastPlaylist = playlist;
+    Player.player.updatePlaylistInfo(PlaylistInfo.fromPlayerPlaylist(playlist));
     await Player.player.updatePlaylist(playlist.tracks);
 
     PlayerTrack? foundTrack;
@@ -144,12 +162,7 @@ class _MainPageState extends State<MainPage> {
     await Player.player.stop();
     Player.player.isPlaying = false;
     Player.player.nowPlayingTrack = trackToPlay;
-    if (await File(trackToPlay.filepath).exists()) {
-    await Player.player.playerInstance.setSource(
-      DeviceFileSource(trackToPlay.filepath),
-    );
-    }
-
+      await Player.player.playCustom(trackToPlay);
 
     Navigator.push(
       context,
@@ -228,6 +241,7 @@ class _MainPageState extends State<MainPage> {
 
         await yandexMusic.init();
         inited = true;
+        YandexMusicSingleton.init(yandexMusic);
       }
 
       if (userPlaylists.isEmpty) {
@@ -290,8 +304,9 @@ class _MainPageState extends State<MainPage> {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
       print(
-        '${record.level.name}: ${record.time.toIso8601String()}: ${record.message} ${record.error ?? ''}',
+        '${record.loggerName} || ${record.level.name}: ${record.message} || ${record.error != null ? 'Error: ${record.error}' : ''}',
       );
+      if (record.stackTrace != null) print(record.stackTrace);
     });
     log.finest('Hello world!');
   }
@@ -299,21 +314,9 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-    Player(
-      playlist: [],
-      nowPlayingTrack: LocalTrack(
-        title: 'title',
-        artists: ['artists'],
-        albums: ['albums'],
-        filepath: 'filepath',
-      ),
-    );
-    Player.player.init();
-    NativeControl().init();
-    AudioServiceMpris.registerWith();
+
     initLogger();
     log.info('Trying to initialize database...');
-    Database.init();
     log.fine('Database initialized successfully');
     Future.delayed(Duration(milliseconds: 15), () async {
       await restoreLast();
@@ -334,6 +337,7 @@ class _MainPageState extends State<MainPage> {
 
             await yandexMusic.init();
             inited = true;
+            YandexMusicSingleton.init(yandexMusic);
             log.fine('Yandex Music successfully initialized.');
           }
         } on YandexMusicException {
@@ -404,10 +408,18 @@ class _MainPageState extends State<MainPage> {
                     await pickFolder();
                   }, 'Add folder'),
                   const SizedBox(height: 12.5),
-                  _mainPageButton(
-                    () async => await ymUpdate(),
-                    'Yandex Music',
-                  ),
+                  _mainPageButton(() async => await ymUpdate(), 'Yandex Music'),
+                  // _mainPageButton(
+                  //   () async => Navigator.push(
+                  //     context,
+                  //     CupertinoPageRoute(
+                  //       builder: (builder) => YandexPlaylistsInfo(
+                  //         playlists: YandexMusicSingleton.playlists,
+                  //       ),
+                  //     ),
+                  //   ),
+                  //   'Yandex Music S',
+                  // ),
                 ],
               ),
             ),
@@ -429,8 +441,8 @@ class _MainPageState extends State<MainPage> {
                         children: [
                           YandexLogin(closeView: closeLogin),
                           Positioned(
-                            right: 15,
-                            top: 15,
+                            right: Platform.isAndroid ? 15 : 0,
+                            top: Platform.isAndroid ? 15 : 0,
                             child: IconButton(
                               onPressed: () =>
                                   setState(() => loginView = false),
@@ -464,7 +476,8 @@ class _MainPageState extends State<MainPage> {
                             ),
                           ),
                           Positioned(
-                            right: 0,
+                            right: Platform.isAndroid ? 15 : 5,
+                            top: Platform.isAndroid ? 15 : 5,
                             child: IconButton(
                               onPressed: () =>
                                   setState(() => playlistView = false),
@@ -491,7 +504,8 @@ class _MainPageState extends State<MainPage> {
                             child: Settings(closeView: closeSettings),
                           ),
                           Positioned(
-                            right: 0,
+                            right: Platform.isAndroid ? 15 : 5,
+                            top: Platform.isAndroid ? 15 : 5,
                             child: IconButton(
                               onPressed: () =>
                                   setState(() => settingsView = false),
