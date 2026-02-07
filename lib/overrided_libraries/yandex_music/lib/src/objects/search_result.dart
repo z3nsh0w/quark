@@ -1,5 +1,6 @@
+import 'package:yandex_music/src/objects/cover.dart';
 import 'package:yandex_music/src/objects/track.dart';
-import 'package:yandex_music/src/objects/devired_colors.dart';
+import 'package:yandex_music/src/objects/concert.dart';
 
 enum SearchTypes {
   track('track'),
@@ -18,20 +19,15 @@ class SearchArtist {
   final int id;
   final String name;
   final int? likesCount;
-  final String coverUri;
-  /// HEX format
-  final String coverColor;
+  final Cover2 cover;
   final bool? trailerAvailable;
-  final DerivedColors? deviredColors;
 
   SearchArtist(Map<String, dynamic> artist)
     : id = artist['artist']['id'],
+      cover = Cover2(artist['artist']['cover']),
       name = artist['artist']['name'],
       likesCount = artist['likesCount'],
-      trailerAvailable = artist['trailer']['available'],
-      coverColor = artist['artist']['cover']['color'],
-      coverUri = artist['artist']['cover']['uri'],
-      deviredColors = artist['cover'] != null ? DerivedColors(artist['cover']['derivedColors']) : null;
+      trailerAvailable = artist['trailer']['available'];
 }
 
 class SearchAlbum {
@@ -41,7 +37,7 @@ class SearchAlbum {
   final String coverColor;
   final bool? available;
   final String? contentWarning;
-  final List<String>? disclaimers;
+  final List? disclaimers;
   final List<SearchArtist> artists;
 
   SearchAlbum(Map<String, dynamic> album)
@@ -55,37 +51,6 @@ class SearchAlbum {
       artists = (album['artists'] as List).map((t) {
         return SearchArtist(t);
       }).toList();
-}
-
-class SearchConcert {
-  final String id;
-  final String city;
-  final String place;
-  final String address;
-  final String dateTime;
-  final String imageUrl;
-  final int minPrice;
-  final String afishaUrl;
-  final List images;
-  final String concertTitle;
-  final String? contentRaiting;
-  final String? priceCurrency;
-  final String? priceCurrencySymbol;
-
-  SearchConcert(Map<String, dynamic> artist)
-    : id = artist['id'],
-      imageUrl = artist['imageUrl'],
-      concertTitle = artist['concertTitle'],
-      city = artist['city'],
-      place = artist['place'],
-      address = artist['address'],
-      dateTime = artist['datetime'],
-      afishaUrl = artist['afishaUrl'],
-      contentRaiting = artist['contentRaiting'],
-      images = artist['images'],
-      minPrice = artist['minPrice']['value'],
-      priceCurrencySymbol = artist['minPrice']['currencySymbol'],
-      priceCurrency = artist['minPrice']['currencty'];
 }
 
 class SearchResult {
@@ -102,8 +67,6 @@ class SearchResult {
   final SearchArtist? bestArtist;
   final SearchConcert? bestConcert;
 
-  
-
   SearchResult(Map<String, dynamic> query)
     : tracks =
           (query['results'] as List?)
@@ -119,7 +82,6 @@ class SearchResult {
       responseType = query['responseType'],
       query = query['text'],
       bestTrack = (() {
-        
         final bestResults = query['bestResults'] as List?;
         final match = bestResults?.firstWhere(
           (e) => e['type'] == 'best_result_track',
@@ -149,11 +111,8 @@ class SearchResult {
           (e) => e['type'] == 'best_result_concert',
           orElse: () => null,
         );
-        return match != null ? SearchConcert(match['best_result_concert']) : null;
+        return match != null
+            ? SearchConcert(match['best_result_concert'])
+            : null;
       }());
-
-
-
-
-          
 }

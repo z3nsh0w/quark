@@ -1,16 +1,24 @@
 # Changelog
 
-## [1.2.2] - 2025-12-30
+## [1.2.2] - 2026-01-16
 ### Added
 - Added the ability to add/remove tracks from DislikedTracks
 - The TrackSource enum has been added with OWN and UGC values.
 - Fields have been added to the Track class: matchedTrack (If the track was uploaded by the user and the system recognized it as a track existing on the platform, then there will be a full-fledged Track object with the recognized track)
+- Added the ability to upload local tracks to the music library, as well as the ability to rename existing tracks
+- The Search.All method has been removed. 3. The Search.search method was added, based on a new endpoint and returning a SearchResult.
+- The following were added: enum SearchTypes, class SearchArtist, class SearchAlbum, class SearchConcert, class SearchResult
+- The DerivedColors class with accent colors was added.
 
 ### Changed
 - The Artist class is now abstract and the functionality has been split into UGCArtist and OfficialArtist.
 - Track2 class renamed to ShortTrack
 - The getAsBytes and getTrackDownloadInfo functions are hidden from prying eyes
 - getTracks function now directly supports shortTrack transfer
+- The Playlist2 class was renamed to PlaylistWShortTracks.
+- The Artist class is now abstract and divided into the UGCArtist and OfficialArtist classes.
+- The methods Track.getDownloadInfo, Track.getAsBytes, and Track.getAdditionalInfo were hidden.
+- The documentation was completely translated into English.
 
 ### Fixed
 - Fixed display of disliked tracks

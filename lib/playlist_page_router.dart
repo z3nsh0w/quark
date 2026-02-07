@@ -2,14 +2,16 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/players_widgets/android_player.dart';
+import 'package:quark/widgets/players_widgets/macro_player.dart';
 
 // Additional packages
-import 'package:quark/widgets/playlist_page_widget.dart';
-import 'package:quark/widgets/mini_player.dart';
+import 'package:quark/widgets/players_widgets/main_player.dart';
+import 'package:quark/widgets/players_widgets/mini_player.dart';
 import 'package:yandex_music/yandex_music.dart';
-import './widgets/android_player.dart';
+
 // Local components&modules
-import '/services/player.dart';
+import 'services/player/player.dart';
 import '/objects/playlist.dart';
 
 class PlaylistPage extends StatefulWidget {
@@ -41,7 +43,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    final bool isCompactState = size.width <= 400 && size.height <= 300;
+    final bool isCompactState = size.height <= 300;
     final bool isAndroid = Platform.isAndroid;
 
     return AnimatedSwitcher(
@@ -52,11 +54,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
               yandexMusic: widget.yandexMusic,
             )
           : isCompactState
-          ? MiniPlayerWidget(
+          ? size.height < 80 ? MacroPlayer() : MiniPlayerWidget(
               playlist: widget.playlist,
               yandexMusic: widget.yandexMusic,
             )
-          : PlaylistPage1(
+          : MainPlayer(
               playlist: widget.playlist,
               yandexMusic: widget.yandexMusic,
             ),

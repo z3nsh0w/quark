@@ -1,5 +1,5 @@
 // Asynchronous Yandex Music library based on the DIO library
-// Version 1.2.2
+// Version 1.2.3
 // Made by zenar56
 
 import 'src/exceptions/exceptions.dart';
@@ -8,22 +8,26 @@ import 'src/subclasses/subclasses.dart' as sub_classes;
 // ladder everywhere lol
 export 'dart:io' show File;
 export 'src/objects/wave.dart';
+export 'src/objects/vibe.dart';
 export 'src/objects/album.dart';
 export 'src/objects/track.dart';
+export 'src/objects/cover.dart';
+export 'src/objects/owner.dart';
+export 'src/objects/label.dart';
 export 'src/objects/artist.dart';
 export 'src/objects/lyrics.dart';
+export 'src/objects/concert.dart';
 export 'src/objects/playlist.dart';
+export 'src/exceptions/exceptions.dart';
+export 'src/objects/search_result.dart';
 export 'src/objects/audio_quality.dart';
 export 'src/objects/vibe_settings.dart';
 export 'src/objects/feedback_type.dart';
 export 'src/objects/lyrics_format.dart';
 export 'src/objects/devired_colors.dart';
-export 'src/objects/search_result.dart';
-export 'src/exceptions/exceptions.dart';
 export 'package:dio/dio.dart' show CancelToken;
 
 class YandexMusic {
-
   final String token;
 
   /// yandex_music
@@ -31,7 +35,7 @@ class YandexMusic {
   ///
   /// The main class of the library.
   ///
-  /// Example of useя:
+  /// Example of use:
   ///```dart
   /// import 'package:yandex_music/yandex_music.dart';
   ///
@@ -75,25 +79,16 @@ class YandexMusic {
   late Map<String, dynamic> rawUserInfo;
   late main_library.YandexMusicApiAsync _api;
 
-  /// Account Inner Class
-  ///
-  /// All methods except getAccountSettings() and getAccountInformation() return cached information
-  ///
-  /// To update the cache, initialize the class again
-  /// ```dart
-  /// await ymInstance.init();
-  /// ```
-
-  late sub_classes.YandexMusicPin pin; 
+  late sub_classes.YandexMusicPin pin;
   late sub_classes.YandexMusicTrack tracks;
   late sub_classes.YandexMusicMyVibe myVibe;
   late sub_classes.YandexMusicSearch search;
   late sub_classes.YandexMusicAlbums albums;
+  late sub_classes.YandexMusicArtists artists;
   late sub_classes.YandexMusicLanding landing;
   late sub_classes.YandexMusicAccount account;
   late sub_classes.YandexMusicPlaylists playlists;
   late sub_classes.YandexMusicUserTracks usertracks;
-
 
   Future<dynamic> init() async {
     _api = main_library.YandexMusicApiAsync(token: token);
@@ -106,12 +101,13 @@ class YandexMusic {
       );
     }
 
-    pin = sub_classes.YandexMusicPin(this, _api);
+    pin = sub_classes.YandexMusicPin(_api);
+    artists = sub_classes.YandexMusicArtists(_api);
+    search = sub_classes.YandexMusicSearch(_api);
+    myVibe = sub_classes.YandexMusicMyVibe(_api);
+    albums = sub_classes.YandexMusicAlbums(_api);
+    landing = sub_classes.YandexMusicLanding(_api);
     tracks = sub_classes.YandexMusicTrack(this, _api);
-    search = sub_classes.YandexMusicSearch(this, _api);
-    myVibe = sub_classes.YandexMusicMyVibe(this, _api);
-    albums = sub_classes.YandexMusicAlbums(this, _api);
-    landing = sub_classes.YandexMusicLanding(this, _api);
     account = sub_classes.YandexMusicAccount(this, _api);
     playlists = sub_classes.YandexMusicPlaylists(this, _api);
     usertracks = sub_classes.YandexMusicUserTracks(this, _api);
@@ -128,3 +124,4 @@ class YandexMusic {
 }
 
 // TODO: add partial (range) real-time audio capture.
+// # TODO: switch to factory constructors

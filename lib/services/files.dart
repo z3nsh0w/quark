@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:logging/logging.dart';
+
 import '/objects/track.dart';
 import 'package:path/path.dart' as path;
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
@@ -23,7 +25,6 @@ class Files {
       );
 
       track.coverByted = cover!;
-      
 
       return track;
     } catch (e) {
@@ -37,7 +38,7 @@ class Files {
       return track;
     }
   }
-  
+
   Future<void> _scanDirectory({
     required String path,
     required List<PlayerTrack> fileNames,
@@ -52,7 +53,7 @@ class Files {
             entity.path.toLowerCase().endsWith('.flac') ||
             entity.path.toLowerCase().endsWith('.dsf') ||
             entity.path.toLowerCase().endsWith('.aac') ||
-            entity.path.toLowerCase().endsWith('.ogg') ||
+            // entity.path.toLowerCase().endsWith('.ogg') || // NO LONGER SUPPORTED
             entity.path.toLowerCase().endsWith('.alac') ||
             entity.path.toLowerCase().endsWith('.pcm') ||
             entity.path.toLowerCase().endsWith('.m4a')) {
@@ -85,7 +86,9 @@ class Files {
       );
 
       return fileNames;
-    } catch (e) {}
+    } catch (e) {
+      Logger('Files').severe('Failed to get files from directory.', e);
+    }
     return [];
   }
 }

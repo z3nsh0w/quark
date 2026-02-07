@@ -1,4 +1,4 @@
-import 'package:path/path.dart';
+import 'dart:typed_data';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:yandex_music/src/lower_level.dart';
 
@@ -160,18 +160,19 @@ class YandexMusicUserTracks {
   /// ```
   Future<dynamic> uploadUGCTrack(
     int kind,
-    File file, {
+    Uint8List file,
+    String fileName, {
     CancelToken? cancelToken,
   }) async {
     String playlistId = '${_parentClass.accountID}:$kind';
     var result = await api.getUploadLink(
       _parentClass.accountID,
-      basename(file.path),
+      fileName,
       playlistId,
       cancelToken: cancelToken,
     );
 
-    await api.uploadFile(result['post-target'], file);
+    await api.uploadFile(result['post-target'], file, fileName, cancelToken: cancelToken);
 
     return result['ugc-track-id'];
   }

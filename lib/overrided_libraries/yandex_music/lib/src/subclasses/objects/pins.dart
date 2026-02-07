@@ -3,10 +3,9 @@ import 'package:yandex_music/yandex_music.dart';
 
 // TODO: MOVE FUNCTIONS INTO LOWER_LEVEL
 class YandexMusicPin {
-  final YandexMusic _parentClass;
   final YandexMusicApiAsync api;
 
-  YandexMusicPin(this._parentClass, this.api);
+  YandexMusicPin(this.api);
 
   String unPin = 'delete';
   String pin = 'put';

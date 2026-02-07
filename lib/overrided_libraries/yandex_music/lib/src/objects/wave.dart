@@ -21,3 +21,16 @@ class Wave {
   interactive = raw['interactive'],
   name = raw['wave']['name'];
 }
+
+class CustomWave {
+  final String title;
+  final String animationUrl;
+  final String header;
+  final String backgroundImageUri;
+
+  CustomWave(Map<String, dynamic> fromJson)
+    : title = fromJson['title'],
+      animationUrl = fromJson['animationUrl'],
+      header = fromJson['header'],
+      backgroundImageUri = fromJson['backgroundImageUrl'];
+}

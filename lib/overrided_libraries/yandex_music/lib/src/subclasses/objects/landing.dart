@@ -2,10 +2,9 @@ import 'package:yandex_music/src/lower_level.dart';
 import 'package:yandex_music/yandex_music.dart';
 
 class YandexMusicLanding {
-  final YandexMusic _parentClass;
   final YandexMusicApiAsync api;
 
-  YandexMusicLanding(this._parentClass, this.api);
+  YandexMusicLanding(this.api);
 
   /// Returns new popular releases (tracks, albums, etc.)
   ///

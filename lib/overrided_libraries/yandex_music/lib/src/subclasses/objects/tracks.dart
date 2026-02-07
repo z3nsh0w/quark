@@ -1,8 +1,7 @@
 import 'dart:typed_data';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:yandex_music/src/lower_level.dart';
-import 'package:collection/collection.dart';
-import 'package:yandex_music/src/objects/lyrics_format.dart';
+import 'dart:developer' as dev;
 
 class YandexMusicTrack {
   final YandexMusic _parentClass;
@@ -52,7 +51,12 @@ class YandexMusicTrack {
     AudioQuality? quality,
     CancelToken? cancelToken,
   }) async {
-    if (quality == null || quality == AudioQuality.mp3) {
+    quality ??= AudioQuality.normal;
+    if (quality == AudioQuality.mp3) {
+      dev.log(
+        'AudioQuality.mp3 is deprecated and will be removed in a future version.',
+        name: 'yandex_music',
+      );
       int downloadIndex = 0;
       var info = await _getDownloadInfo(trackId);
 
@@ -99,7 +103,13 @@ class YandexMusicTrack {
     AudioQuality? quality,
     CancelToken? cancelToken,
   }) async {
-    if (quality == null) {
+    quality ??= AudioQuality.normal;
+    if (quality == AudioQuality.mp3) {
+      dev.log(
+        'AudioQuality.mp3 is deprecated and will be removed in a future version.',
+        name: 'yandex_music',
+      );
+
       var link = await getDownloadLink(trackId);
       var result = await _getAsBytes(link);
 
@@ -120,17 +130,17 @@ class YandexMusicTrack {
 
   /// Returns additional information about the track (for example, microclip, song lyrics, etc.)
   /// # TODO
-  Future<Map<String, dynamic>> _getAdditionalInfo(
-    String trackId, {
-    CancelToken? cancelToken,
-  }) async {
-    var info = await api.getAdditionalInformationOfTrack(
-      _parentClass.accountID,
-      trackId,
-      cancelToken: cancelToken,
-    );
-    return info['result'];
-  }
+  // Future<Map<String, dynamic>> _getAdditionalInfo(
+  //   String trackId, {
+  //   CancelToken? cancelToken,
+  // }) async {
+  //   var info = await api.getAdditionalInformationOfTrack(
+  //     _parentClass.accountID,
+  //     trackId,
+  //     cancelToken: cancelToken,
+  //   );
+  //   return info['result'];
+  // }
 
   /// Returns a list of similar tracks to a specific track
   Future<List<Track>> getSimilar(
@@ -171,27 +181,6 @@ class YandexMusicTrack {
     CancelToken? cancelToken,
   }) async {
     final tracks;
-
-    if (trackIds.length > 90) {
-      List<Track> result = [];
-      trackIds = trackIds is List<ShortTrack>
-          ? trackIds.map((ele) => ele.trackID.toString()).toList()
-          : trackIds;
-      var chunks = trackIds.slices(90);
-      for (List list in chunks) {
-        final res = await api.getTracks(
-          _parentClass.accountID,
-          list,
-          cancelToken: cancelToken,
-        );
-        print(res);
-        (res['result'] as List)
-            .map((t) => Track(t))
-            .toList()
-            .forEach((a) => result.add(a));
-      }
-      return result;
-    }
 
     tracks = await api.getTracks(
       _parentClass.accountID,

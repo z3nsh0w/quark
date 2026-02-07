@@ -2,10 +2,9 @@ import 'package:yandex_music/src/lower_level.dart';
 import 'package:yandex_music/yandex_music.dart';
 
 class YandexMusicMyVibe {
-  final YandexMusic _parentClass;
   final YandexMusicApiAsync api;
 
-  YandexMusicMyVibe(this._parentClass, this.api);
+  YandexMusicMyVibe(this.api);
 
   Future<List<VibeSetting>> getWaves() async {
     Map<String, dynamic> rst = await api.getAvailableWaveSettings();
