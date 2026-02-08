@@ -29,6 +29,7 @@
 > [!WARNING]
 > 
 > **Windows**
+> 
 > If you do not have a freshly installed system and you have multiple programs installed, you most likely already have all of these packages installed.
 > 
 > + To use player you must to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
