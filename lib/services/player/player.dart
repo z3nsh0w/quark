@@ -243,10 +243,40 @@ class Player {
   Future<void> insertTrack(
     PlayerTrack track,
     int index, {
-    bool? shuffleFix,
+    bool shuffleFix = true,
   }) async {
     playlist.insert(index, track);
     if (shuffleFix == true) unShuffledPlaylist.insert(index, track);
+    playlistNotifier.value = playlist;
+  }
+
+  Future<void> moveTrack(PlayerTrack track, int newIndex) async {
+    final index = playlist.indexOf(track);
+    if (index == -1) return;
+    playlist.removeAt(index);
+    playlist.insert(newIndex, track);
+    playlistNotifier.value = playlist;
+  }
+
+  Future<void> removeTrack(
+    PlayerTrack track, {
+    bool unshuffleRemove = true,
+  }) async {
+    playlist.remove(track);
+    playlistNotifier.value = playlist;
+    if (unshuffleRemove) {
+      unShuffledPlaylist.remove(track);
+    }
+  }
+
+  Future<void> addQueue(List<PlayerTrack> tracks, {PlayerTrack? after}) async {
+    after ??= nowPlayingTrack;
+    int index = playlist.indexOf(after) + 1;
+    if (index == -1) return;
+    for (PlayerTrack track in tracks) {
+      playlist.insert(index, track);
+      index += 1;
+    }
     playlistNotifier.value = playlist;
   }
 

@@ -9,6 +9,7 @@ import 'package:logging/logging.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audio_service_mpris/audio_service_mpris.dart';
+import 'package:window_manager/window_manager.dart';
 
 // Local files
 import '/objects/track.dart';
@@ -34,7 +35,9 @@ import '/widgets/yandex_music_integration/yandex_playlists_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // WindowManager.instance.ensureInitialized();
+  // if (!Platform.isAndroid) {
+    // WindowManager.instance.ensureInitialized();
+  // }
 
   final path = await getApplicationCacheDirectory();
   Hive.init(path.path);
@@ -52,7 +55,6 @@ void main() async {
   // ListenLogger().init();
   AudioServiceMpris.registerWith();
   Database.init();
-  // WindowManager.instance.setMinimumSize(const Size(425, 720));
   runApp(const Quark());
 }
 
@@ -162,7 +164,7 @@ class _MainPageState extends State<MainPage> {
     await Player.player.stop();
     Player.player.isPlaying = false;
     Player.player.nowPlayingTrack = trackToPlay;
-      await Player.player.playCustom(trackToPlay);
+    await Player.player.playCustom(trackToPlay);
 
     Navigator.push(
       context,

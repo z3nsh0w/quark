@@ -15,16 +15,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:logging/logging.dart';
 import 'package:quark/services/files.dart';
 import 'package:quark/services/yandex_music_singleton.dart';
-import 'package:quark/widgets/players_widgets/macro_player.dart';
 import 'package:quark/widgets/yandex_music_integration/yandex_widgets.dart';
-import 'package:yandex_music/yandex_music.dart';
 // import 'package:quark/widgets/listen_stats.dart';
 import 'package:quark/services/cached_images.dart';
 // import 'package:quark/services/listen_logger.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:animated_expand/animated_expand.dart';
 import 'package:interactive_slider/interactive_slider.dart';
+import 'package:window_manager/window_manager.dart';
 // import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 // Local components&modules
@@ -79,19 +77,14 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
 
   final log = Logger('PlaylistPage');
 
-  List<String> likedTracks = [];
   List<PlayerTrack> yandexUploadingTracks = [];
 
   /// Main playlist
   late List<PlayerTrack> currentPlaylist;
-
-  /// Unshuffled playlist
   late List<PlayerTrack> backupPlaylist;
 
   /// Now playing track
   late PlayerTrack nowPlayingTrack;
-
-  late WindowManager window_manager;
 
   Uint8List animationInitiator = Uint8List(0);
 
@@ -128,7 +121,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
 
   late AnimationController playlistAnimationController;
   late Animation<Offset> playlistOffsetAnimation;
-  OverlayEntry? playlistOverlayEntry;
+  // OverlayEntry? playlistOverlayEntry;
   OverlayEntry? coverOverlayEntry;
   late AnimationController coverAnimationController;
   late Animation<double> coverDoubleAnimation;
@@ -177,63 +170,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
   //
   //
 
-  /// Agreement on track relocation caused by playlistview
-  void moveTrack(int oldIndex, int newIndex) async {
-    final element = currentPlaylist[oldIndex];
-    currentPlaylist.remove(element);
-    currentPlaylist.insert(
-      newIndex < oldIndex ? newIndex : newIndex - 1,
-      element,
-    );
-    await player.updatePlaylist(currentPlaylist);
-  }
-
-  // TODO: REMOVE THE CRUTCHES
-  /// Agreement on track adding caused by playlistview
-  int addTrack(
-    PlayerTrack track, [
-    bool? addToEnd,
-    bool? addLikedTrack,
-    bool? removeLiked,
-  ]) {
-    if (addToEnd == null && addLikedTrack == null) {
-      currentPlaylist.insert(
-        currentPlaylist.indexOf(nowPlayingTrack) + 1,
-        track,
-      );
-      return currentPlaylist.indexOf(nowPlayingTrack) + 1;
-    } else if (addLikedTrack != null) {
-      if (widget.playlist.name == "Liked") {
-        if (!currentPlaylist.contains(track)) {
-          currentPlaylist.insert(0, track);
-          likedTracks.add((track as YandexMusicTrack).track.id);
-          if (track == nowPlayingTrack) {
-            setState(() {
-              isLiked = false;
-            });
-          }
-          return -56;
-        }
-        return -1;
-      }
-      return -2;
-    } else if (removeLiked != null) {
-      likedTracks.remove((track as YandexMusicTrack).track.id);
-      if (track == nowPlayingTrack) {
-        setState(() {
-          isLiked = false;
-        });
-      }
-      return 0;
-    } else if (addToEnd != null) {
-      print(5);
-      currentPlaylist.add(track);
-      return currentPlaylist.indexOf(track);
-    } else {
-      return -78;
-    }
-  }
-
   /// Reaction on playlist button
   Future<void> togglePlaylist() async {
     if (isPlaylistOpened) {
@@ -244,25 +180,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
       });
       await playlistAnimationController.reverse();
     } else {
-      if (playlistOverlayEntry == null) {
-        playlistOverlayEntry = OverlayEntry(
-          builder: (context) => PlaylistOverlay(
-            playlistAnimationController: playlistAnimationController,
-            playlistOffsetAnimation: playlistOffsetAnimation,
-            togglePlaylist: togglePlaylist,
-            playlist: currentPlaylist,
-            playlistName: widget.playlist.name,
-            yandexMusic: widget.yandexMusic,
-            showOperation: showOperation,
-            likedPlaylist: likedTracks,
-            addNext: addTrack,
-            removeTrack: removeTrack,
-            moveTrack: moveTrack,
-          ),
-        );
-        Overlay.of(context).insert(playlistOverlayEntry!);
-      }
-
       playlistAnimationController.forward();
       setState(() {
         isPlaylistOpened = true;
@@ -392,23 +309,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
   /// Forced playlist update
   void updatePlaylist() async {
     if (isPlaylistOpened) {
-      playlistOverlayEntry?.remove();
-      playlistOverlayEntry = OverlayEntry(
-        builder: (context) => PlaylistOverlay(
-          playlistAnimationController: playlistAnimationController,
-          playlistOffsetAnimation: playlistOffsetAnimation,
-          togglePlaylist: manuallyClosedPlaylist,
-          playlist: currentPlaylist,
-          playlistName: widget.playlist.name,
-          yandexMusic: widget.yandexMusic,
-          showOperation: showOperation,
-          likedPlaylist: likedTracks,
-          addNext: addTrack,
-          removeTrack: removeTrack,
-          moveTrack: moveTrack,
-        ),
-      );
-      Overlay.of(context).insert(playlistOverlayEntry!);
     } else {}
   }
 
@@ -456,7 +356,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
       currentPlaylist.insert(index, track);
       backupPlaylist.insert(index, track);
       await player.updatePlaylist(currentPlaylist);
-      updateLiked();
       if (trackss == nowPlayingTrack) {
         NetConductor().cacheFiles([track]);
         await netPlayer.playYandex(track);
@@ -476,43 +375,14 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
 
   /// Reaction on like button
   void likeUnlike() async {
-    if (likedTracks.contains((nowPlayingTrack as YandexMusicTrack).track.id)) {
-      try {
-        await widget.yandexMusic.usertracks.unlike([
-          (nowPlayingTrack as YandexMusicTrack).track.id,
-        ]);
-        setState(() {
-          likedTracks.remove((nowPlayingTrack as YandexMusicTrack).track.id);
-          isLiked = false;
-        });
-        // showOperation(StateIndicatorOperation.success);
-      } catch (e) {
-        log.warning('Failed to send like track POST', e);
-        showOperation(StateIndicatorOperation.error);
-      }
+    final List<String> likedTrack =
+        YandexMusicSingleton.likedTracksNotifier.value;
+    final track = (nowPlayingTrack as YandexMusicTrack).track;
+    if (likedTrack.contains(track.id)) {
+      await YandexMusicSingleton.unlikeTrack(track.id);
     } else {
-      try {
-        await widget.yandexMusic.usertracks.like([
-          (nowPlayingTrack as YandexMusicTrack).track.id,
-        ]);
-        setState(() {
-          likedTracks.add((nowPlayingTrack as YandexMusicTrack).track.id);
-          isLiked = true;
-        });
-        if (!currentPlaylist.contains(nowPlayingTrack) &&
-            widget.playlist.name == 'Liked') {
-          currentPlaylist.insert(0, nowPlayingTrack);
-          backupPlaylist.insert(0, nowPlayingTrack);
-          await player.updatePlaylist(currentPlaylist);
-        }
-
-        // showOperation(StateIndicatorOperation.success);
-      } catch (e) {
-        log.warning('Failed to send unlike track POST', e);
-        showOperation(StateIndicatorOperation.error);
-      }
+      await YandexMusicSingleton.likeTrack(track.id);
     }
-    print(isLiked);
   }
 
   /// Reaction on volume interactive slider
@@ -538,12 +408,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
     );
     setState(() {
       settingsView = false;
-      if (openPlaylistNextTime) {
-        openPlaylistNextTime = false;
-        if (!isPlaylistOpened) {
-          togglePlaylist();
-        }
-      }
       transitionSpeed = transitionSpeed2 ?? transitionSpeed;
       stateIndicator = indicator ?? stateIndicator;
       playlistOpeningArea = playlistArea ?? playlistOpeningArea;
@@ -686,23 +550,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
       });
     };
   }
-
-  /// Initializing liked tracks
-  void updateLiked() async {
-    try {
-      List<ShortTrack> result = await widget.yandexMusic.usertracks.getLiked();
-      likedTracks.clear();
-
-      for (ShortTrack track in result) {
-        likedTracks.add(track.trackID);
-      }
-      // showOperation(StateIndicatorOperation.success);
-    } catch (e) {
-      log.warning('Failed to update liked tracks ', e);
-      showOperation(StateIndicatorOperation.error);
-    }
-  }
-
   // void showMiniPlayerDialog() async {
   //   final windowController = await WindowController.fromCurrentEngine();
 
@@ -778,7 +625,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
     player.repeatModeNotifier.addListener(_repeatListener);
 
     loadDatabase();
-    updateLiked();
     Future.delayed(Duration(milliseconds: 150), () {
       if (MediaQuery.of(context).size.width > 800) {
         togglePlaylist();
@@ -993,23 +839,13 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                             .yandexMusic
                                             .albums
                                             .getInfo(track.track.albums[0].id);
-                                        if (isPlaylistOpened) {
-                                          await togglePlaylist();
-                                          openPlaylistNextTime = true;
-                                        }
-                                        await Navigator.push(
+                                        Navigator.push(
                                           context,
                                           CupertinoPageRoute(
                                             builder: (builder) =>
                                                 AlbumInfoWidget(album: album),
                                           ),
                                         );
-                                        if (openPlaylistNextTime) {
-                                          openPlaylistNextTime = false;
-                                          if (!isPlaylistOpened) {
-                                            await togglePlaylist();
-                                          }
-                                        }
                                       },
                                 child: Text(
                                   key: ValueKey(nowPlayingTrack),
@@ -1046,18 +882,18 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                         if (track.track.artists.length > 1) {
                                           final value = await showDialog<int>(
                                             context: context,
-                                            builder: (context) =>
-                                                Padding(padding: EdgeInsetsGeometry.only(left: isPlaylistOpened ? 400 : 0), child: WarningMessage(
-                                                  messageHeader:
-                                                      'Choose an artist',
-                                                  messageDiscription: '',
-                                                  buttons: track.track.artists
-                                                      .map(
-                                                        (toElement) =>
-                                                            toElement.title,
-                                                      )
-                                                      .toList(),
-                                                ),)
+                                            builder: (context) => WarningMessage(
+                                                messageHeader:
+                                                    'Choose an artist',
+                                                messageDiscription: '',
+                                                buttons: track.track.artists
+                                                    .map(
+                                                      (toElement) =>
+                                                          toElement.title,
+                                                    )
+                                                    .toList(),
+                                              
+                                            ),
                                           );
 
                                           if (value == null) return;
@@ -1072,12 +908,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                             .yandexMusic
                                             .artists
                                             .getInfo(track.track.artists[val]);
-                                        if (isPlaylistOpened) {
-                                          await togglePlaylist();
-                                          openPlaylistNextTime = true;
-                                        }
-
-                                        await Navigator.push(
+                                        Navigator.push(
                                           context,
                                           CupertinoPageRoute(
                                             builder: (builder) =>
@@ -1086,12 +917,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                                 ),
                                           ),
                                         );
-                                        if (openPlaylistNextTime) {
-                                          openPlaylistNextTime = false;
-                                          if (!isPlaylistOpened) {
-                                            await togglePlaylist();
-                                          }
-                                        }
                                       },
 
                                 child: Text(
@@ -1345,11 +1170,15 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                     functionPlayerButton(
                                       Icons.favorite_outlined,
                                       Icons.favorite_outlined,
-                                      likedTracks.contains(
-                                        (nowPlayingTrack as YandexMusicTrack)
-                                            .track
-                                            .id,
-                                      ),
+                                      YandexMusicSingleton
+                                          .likedTracksNotifier
+                                          .value
+                                          .contains(
+                                            (nowPlayingTrack
+                                                    as YandexMusicTrack)
+                                                .track
+                                                .id,
+                                          ),
                                       () => likeUnlike(),
                                     ),
                                   if (nowPlayingTrack is! YandexMusicTrack &&
@@ -1430,13 +1259,10 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                               ],
                                             ),
 
-                                          // MINI PLAYER BUTTON
-                                          // if (false)
+                                          // if (!Platform.isAndroid)
                                           // animatedExpandButton(
-                                          //   () => setState(() {
-                                          //     showMiniPlayerDialog();
-                                          //   }),
-                                          //   Icons.featured_play_list_outlined,
+                                          //   () async => await windowManager.setSize(Size(330, 90)),
+                                          //   Icons.close_fullscreen,
                                           // ),
                                           animatedExpandButton(() async {
                                             final bool? recursiveFilesAdding =
@@ -1444,6 +1270,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                                   DatabaseKeys
                                                       .recursiveFilesAdding
                                                       .value,
+                                                  defaultValue: true,
                                                 );
 
                                             String? selectedDirectory =
@@ -1472,34 +1299,12 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                           animatedExpandButton(
                                             () => setState(() {
                                               settingsView = true;
-                                              if (isPlaylistOpened) {
-                                                togglePlaylist();
-                                                openPlaylistNextTime = true;
-                                              }
                                             }),
                                             Icons.settings,
                                           ),
-                                          // animatedExpandButton(() async {
-                                          //   Navigator.push(
-                                          //     context,
-                                          //     CupertinoPageRoute(
-                                          //       builder: (builder) =>
-                                          //           YandexPlaylistsInfo(playlists: YandexMusicSingleton.playlists)
-                                          //     ),
-                                          //   );
-                                          // }, Icons.playlist_play_rounded),
                                           animatedExpandButton(() async {
                                             await Player.player.stop();
-                                            setState(() {
-                                              playlistAnimationController
-                                                  .reverse()
-                                                  .then((_) {
-                                                    playlistOverlayEntry
-                                                        ?.remove();
-                                                    playlistOverlayEntry = null;
-                                                    Navigator.pop(context);
-                                                  });
-                                            });
+                                            Navigator.pop(context);
                                           }, Icons.exit_to_app),
                                         ],
                                       ),
@@ -1521,43 +1326,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                   right: 15,
                   child: StateIndicator(operation: operation),
                 ),
-              AnimatedSwitcher(
-                duration: Duration(milliseconds: 300),
-                child: settingsView
-                    ? GestureDetector(
-                        onTap: () => closeSettings(),
-                        child: Container(
-                          color: Colors.black.withOpacity(0.3),
-                          child: Stack(
-                            children: [
-                              GestureDetector(
-                                onTap: () {},
-                                child: Settings(closeView: closeSettings),
-                              ),
-                              Positioned(
-                                right: 0,
-                                child: IconButton(
-                                  onPressed: () => setState(() {
-                                    settingsView = false;
-                                    if (openPlaylistNextTime) {
-                                      openPlaylistNextTime = false;
-                                      if (!isPlaylistOpened) {
-                                        togglePlaylist();
-                                      }
-                                    }
-                                  }),
-                                  icon: Icon(
-                                    Icons.close,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : SizedBox.shrink(key: ValueKey('empty')),
-              ),
               if (playlistOpeningArea)
                 Positioned(
                   left: 0,
@@ -1582,7 +1350,49 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                   ),
                 ),
 
-              // Positioned(child: MacroPlayer())
+              Positioned(
+                left: 0,
+                child: SlideTransition(
+                  position: playlistOffsetAnimation,
+                  child: PlaylistOverlay(
+                    showOperation: showOperation,
+                    closePlaylist: () {
+                      togglePlaylist();
+                    },
+                  ),
+                ),
+              ),
+              AnimatedSwitcher(
+                duration: Duration(milliseconds: 300),
+                child: settingsView
+                    ? GestureDetector(
+                        onTap: () => closeSettings(),
+                        child: Container(
+                          color: Colors.black.withOpacity(0.3),
+                          child: Stack(
+                            children: [
+                              GestureDetector(
+                                onTap: () {},
+                                child: Settings(closeView: closeSettings),
+                              ),
+                              Positioned(
+                                right: 0,
+                                child: IconButton(
+                                  onPressed: () => setState(() {
+                                    settingsView = false;
+                                  }),
+                                  icon: Icon(
+                                    Icons.close,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : SizedBox.shrink(key: ValueKey('empty')),
+              ),
             ],
           ),
         ),
@@ -1611,7 +1421,7 @@ class _WarningMessage extends State<WarningMessage> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color.fromARGB(55, 0, 0, 0),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(15),
         child: BackdropFilter(
@@ -1619,12 +1429,13 @@ class _WarningMessage extends State<WarningMessage> {
           child: Container(
             width: 300,
             decoration: BoxDecoration(
-              color: const Color.fromARGB(50, 54, 54, 58),
               borderRadius: BorderRadius.circular(15),
               border: Border.all(
                 color: Colors.white.withOpacity(0.2),
                 width: 1,
               ),
+            color: Color.fromARGB(15, 255, 255, 255),
+              
             ),
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -1657,11 +1468,11 @@ class _WarningMessage extends State<WarningMessage> {
                               height: 45,
                               decoration: BoxDecoration(
                                 color: const Color.fromARGB(
-                                  255,
+                                  50,
                                   74,
                                   74,
                                   77,
-                                ).withOpacity(0.6),
+                                ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Center(

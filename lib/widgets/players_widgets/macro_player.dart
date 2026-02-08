@@ -30,6 +30,7 @@ class _MacroPlayerState extends State<MacroPlayer> {
     Player.player.shuffleModeNotifier.addListener(updateListener);
     Player.player.repeatModeNotifier.addListener(updateListener);
     Player.player.trackChangeNotifier.addListener(updateListener);
+    YandexMusicSingleton.likedTracksNotifier.addListener(updateListener);
   }
 
   @override
@@ -38,6 +39,7 @@ class _MacroPlayerState extends State<MacroPlayer> {
     Player.player.shuffleModeNotifier.removeListener(updateListener);
     Player.player.repeatModeNotifier.removeListener(updateListener);
     Player.player.trackChangeNotifier.removeListener(updateListener);
+    YandexMusicSingleton.likedTracksNotifier.removeListener(updateListener);
     super.deactivate();
   }
 
@@ -47,7 +49,19 @@ class _MacroPlayerState extends State<MacroPlayer> {
     Player.player.shuffleModeNotifier.addListener(updateListener);
     Player.player.repeatModeNotifier.addListener(updateListener);
     Player.player.trackChangeNotifier.addListener(updateListener);
+    YandexMusicSingleton.likedTracksNotifier.addListener(updateListener);
     super.activate();
+  }
+
+  void likeUnlike() async {
+    final List<String> likedTrack =
+        YandexMusicSingleton.likedTracksNotifier.value;
+    final track = (Player.player.nowPlayingTrack as YandexMusicTrack).track;
+    if (likedTrack.contains(track.id)) {
+      await YandexMusicSingleton.unlikeTrack(track.id);
+    } else {
+      await YandexMusicSingleton.likeTrack(track.id);
+    }
   }
 
   @override
@@ -89,56 +103,49 @@ class _MacroPlayerState extends State<MacroPlayer> {
                     width: widget.height - 10,
                   ),
             SizedBox(width: 5),
-            Expanded (child: 
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  Player.player.nowPlayingTrack.title,
-                  style: TextStyle(
-                    fontFamily: 'noto',
-                    decoration: TextDecoration.none,
-                    fontSize: min(screehHeight * 0.28, 12),
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    Player.player.nowPlayingTrack.title,
+                    style: TextStyle(
+                      fontFamily: 'noto',
+                      decoration: TextDecoration.none,
+                      fontSize: min(screehHeight * 0.28, 12),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.start,
                   ),
-                  textAlign: TextAlign.start,
-                ),
 
-                Text(
-                  Player.player.nowPlayingTrack.artists.join(', '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'noto',
-                    decoration: TextDecoration.none,
-                    color: Colors.white,
-                    fontSize: min(screehHeight * 0.28, 12),
-                    fontWeight: FontWeight.w300,
+                  Text(
+                    Player.player.nowPlayingTrack.artists.join(', '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'noto',
+                      decoration: TextDecoration.none,
+                      color: Colors.white,
+                      fontSize: min(screehHeight * 0.28, 12),
+                      fontWeight: FontWeight.w300,
+                    ),
+                    textAlign: TextAlign.start,
                   ),
-                  textAlign: TextAlign.start,
-                ),
-              ],
-            ),),
+                ],
+              ),
+            ),
 
             SizedBox(width: 2),
             if (Player.player.nowPlayingTrack is YandexMusicTrack)
               Button(
                 enabledIcon: Icons.favorite_outlined,
                 disabledIcon: Icons.favorite_outlined,
-                isEnable: YandexMusicSingleton.likedTracks
-                    .map((e) => e.trackID)
-                    .toList()
-                    .contains(
-                      (Player.player.nowPlayingTrack as YandexMusicTrack)
-                          .track
-                          .id
-                          .toString(),
-                    ),
-                onTap: () => {},
+                isEnable: YandexMusicSingleton.likedTracksNotifier.value.contains((Player.player.nowPlayingTrack as YandexMusicTrack).track.id),
+                onTap: () => likeUnlike(),
               ),
             SizedBox(width: 2),
             if (screenWidth > 600) ...[

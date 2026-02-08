@@ -11,7 +11,7 @@ abstract class YandexMusicSingleton {
 
   static List<PlaylistWShortTracks> playlists = [];
 
-  static ValueNotifier likedTracksNotifier = ValueNotifier([]);
+  static ValueNotifier<List<String>> likedTracksNotifier = ValueNotifier<List<String>>([]);
 
   static void init(YandexMusic _instance) {
     instance = _instance;
@@ -20,18 +20,40 @@ abstract class YandexMusicSingleton {
     updateUserPlaylists();
   }
 
-  static void updateLiked() async {
+  static Future<void> updateLiked() async {
     try {
       final tracks = await instance.usertracks.getLiked();
       likedTracks.clear();
-      likedTracksNotifier.value = tracks;
+      likedTracksNotifier.value = tracks
+          .map((toElement) => toElement.trackID)
+          .toList();
       likedTracks.addAll(tracks);
     } catch (e) {
-      Logger('YandexMusicService').shout('Failed to update liked tracks');
+      Logger('YandexMusicService').shout('Failed to update liked tracks', e);
     }
   }
 
-  static void updateUserPlaylists() async {
+  static Future<void> unlikeTrack(String trackId) async {
+    try {
+      await instance.usertracks.unlike([trackId]);
+      final ts = likedTracks.map((e) => e.trackID).toList().indexOf(trackId);
+      likedTracks.removeAt(ts);
+      likedTracksNotifier.value.remove(trackId);
+    } catch (e) {
+      Logger('YandexMusicService').shout('Failed to unlikeTrack', e);
+    }
+  }
+
+  static Future<void> likeTrack(String trackId) async {
+    try {
+      await instance.usertracks.like([trackId]);
+      updateLiked();
+    } catch (e) {
+      Logger('YandexMusicService').shout('Failed to likeTrack', e);
+    }
+  }
+
+  static Future<void> updateUserPlaylists() async {
     try {
       final playlist = await instance.usertracks.getPlaylistsWithLikes();
       playlists.clear();

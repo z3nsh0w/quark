@@ -9,6 +9,7 @@ import 'package:quark/objects/track.dart';
 // Additional packages
 import 'package:logging/logging.dart';
 import 'package:quark/services/cached_images.dart';
+import 'package:quark/services/yandex_music_singleton.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:animated_expand/animated_expand.dart';
@@ -24,12 +25,10 @@ import '../../services/player/net_player.dart';
 
 class MiniPlayerWidget extends StatefulWidget {
   final PlayerPlaylist playlist;
-  final YandexMusic yandexMusic;
 
   const MiniPlayerWidget({
     super.key,
     required this.playlist,
-    required this.yandexMusic,
   });
 
   @override
@@ -61,7 +60,6 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
 
   final log = Logger('PlaylistPage');
 
-  List<String> likedTracks = [];
   List<PlayerTrack> yandexUploadingTracks = [];
 
   /// Main playlist
@@ -83,9 +81,6 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
 
   /// Main Player instance
   Player player = Player.player;
-
-  /// Network player instance (shell over the main player class)
-  late NetPlayer netPlayer;
 
   Color popupIconsColor = const Color.fromARGB(
     255,
@@ -154,46 +149,15 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
 
   /// Reaction on like button
   void likeUnlike() async {
-    if (likedTracks.contains((nowPlayingTrack as YandexMusicTrack).track.id)) {
-      try {
-        await widget.yandexMusic.usertracks.unlike([
-          (nowPlayingTrack as YandexMusicTrack).track.id,
-        ]);
-        setState(() {
-          likedTracks.remove((nowPlayingTrack as YandexMusicTrack).track.id);
-          isLiked = false;
-        });
-        showOperation(StateIndicatorOperation.success);
-      } catch (e) {
-        log.warning('Failed to send like track POST', e);
-        showOperation(StateIndicatorOperation.error);
-      }
+    final List<String> likedTrack =
+        YandexMusicSingleton.likedTracksNotifier.value;
+    final track = (nowPlayingTrack as YandexMusicTrack).track;
+    if (likedTrack.contains(track.id)) {
+      await YandexMusicSingleton.unlikeTrack(track.id);
     } else {
-      try {
-        await widget.yandexMusic.usertracks.like([
-          (nowPlayingTrack as YandexMusicTrack).track.id,
-        ]);
-        setState(() {
-          likedTracks.add((nowPlayingTrack as YandexMusicTrack).track.id);
-          isLiked = true;
-        });
-        if (!currentPlaylist.contains(nowPlayingTrack) &&
-            widget.playlist.name == 'Liked') {
-          currentPlaylist.insert(0, nowPlayingTrack);
-          backupPlaylist.insert(0, nowPlayingTrack);
-          await player.updatePlaylist(currentPlaylist);
-          updateDatabasePlaylist();
-        }
-
-        showOperation(StateIndicatorOperation.success);
-      } catch (e) {
-        log.warning('Failed to send unlike track POST', e);
-        showOperation(StateIndicatorOperation.error);
-      }
+      await YandexMusicSingleton.likeTrack(track.id);
     }
-    print(isLiked);
   }
-
   /// Reaction on volume interactive slider
   void changeVolume(value) async {
     volume = value;
@@ -263,22 +227,6 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
     };
   }
 
-  /// Initializing liked tracks
-  void updateLiked() async {
-    try {
-      List<ShortTrack> result = await widget.yandexMusic.usertracks.getLiked();
-      likedTracks.clear();
-
-      for (ShortTrack track in result) {
-        likedTracks.add(track.trackID);
-      }
-      showOperation(StateIndicatorOperation.success);
-    } catch (e) {
-      log.warning('Failed to update liked tracks ', e);
-      showOperation(StateIndicatorOperation.error);
-    }
-  }
-
   /// Dispose
   @override
   void initState() {
@@ -291,8 +239,6 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
     nowPlayingTrack = player.nowPlayingTrack;
     isPlaying = player.isPlaying;
     volume = player.playerInstance.volume;
-    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
-    NetConductor().init(Player.player, widget.yandexMusic);
 
     // Controllers
 
@@ -329,7 +275,6 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
     player.repeatModeNotifier.addListener(_repeatListener);
 
     loadDatabase();
-    updateLiked();
   }
 
   @override
@@ -513,7 +458,7 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                       functionPlayerButton(
                                         Icons.favorite_outlined,
                                         Icons.favorite_outlined,
-                                        likedTracks.contains(
+                                        YandexMusicSingleton.likedTracksNotifier.value.contains(
                                           (nowPlayingTrack as YandexMusicTrack)
                                               .track
                                               .id,
