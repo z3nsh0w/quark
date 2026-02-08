@@ -27,19 +27,25 @@
 ### ⚠ Important Notes
 
 > [!WARNING]
+> 
 > **Windows**
-> To use player on Windows you must to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
 > 
->To use WebView authorization on Windows version below 10 1809, you need install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/), otherwise you will have to enter the Yandex Music token manually.
+> If you do not have a freshly installed system and you have multiple programs installed, you most likely already have all of these packages installed.
 > 
+> + To use player you must to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
+> 
+> + To use WebView authorization on Windows version below 10 1809, you need install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/), otherwise you will have to enter the Yandex Music token manually.
+>
+> + You may also install [MSVC](https://aka.ms/vc14/vc_redist.x64.exe). Otherwise, the application may crash without an error during authorization.
+>
 > **Linux**
-> Requires `libgtk-4-1+` or `libqt6gui6` (usually pre-installed on popular distributions)
+> + Requires `libgtk-4-1+` or `libqt6gui6` (usually pre-installed on popular distributions)
 
 ## Screenshots
 
 <p align="center">
-  <img src="/assets/player.png" alt="QUARK Interface" width="45%">
-  <img src="/assets/player_main_menu.png" alt="QUARK Player" width="45%">
+  <img src="https://raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/player.png" alt="quark main player view" width="45%">
+  <img src="https://raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/player_main_menu.png" alt="quark menu" width="45%">
 </p>
 
 
