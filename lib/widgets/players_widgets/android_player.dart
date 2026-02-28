@@ -12,6 +12,7 @@ import 'package:file_picker/file_picker.dart';
 
 // Additional packages
 import 'package:logging/logging.dart';
+import 'package:quark/services/database/database.dart';
 import 'package:quark/services/files.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:yandex_music/yandex_music.dart';
@@ -141,7 +142,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
     return ((value / 100.0) * duration.inSeconds).round();
   }
 
-
   /// Function for changing the indicator status
   void showOperation(StateIndicatorOperation newOperation) {
     if (mounted) {
@@ -166,7 +166,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
       animationInitiator = Uint8List(0);
     });
   }
-
 
   //
   //
@@ -429,7 +428,7 @@ class _PlaylistPage1State extends State<AndroidWidget>
       String id = await widget.yandexMusic.usertracks.uploadUGCTrack(
         widget.playlist.kind,
         fileBytes,
-        path.basename(trackss.filepath)
+        path.basename(trackss.filepath),
       );
       List<Track> info = await widget.yandexMusic.tracks.getTracks([id]);
       final String trackPath = await getTrackPath(id);
@@ -515,8 +514,8 @@ class _PlaylistPage1State extends State<AndroidWidget>
   /// Reaction on volume interactive slider
   void changeVolume(value) async {
     volume = value;
+
     await player.setVolume(value);
-    await Database.put(DatabaseKeys.volume.value, value);
     setState(() {
       volume = value;
     });
@@ -524,15 +523,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
 
   /// Reaction on setting closing button
   void closeSettings() async {
-    bool? indicator = await Database.get(
-      DatabaseKeys.stateIndicatorState.value,
-    );
-    double? transitionSpeed2 = await Database.get(
-      DatabaseKeys.transitionSpeed.value,
-    );
-    bool? playlistArea = await Database.get(
-      DatabaseKeys.playlistOpeningArea.value,
-    );
     setState(() {
       settingsView = false;
       if (openPlaylistNextTime) {
@@ -541,10 +531,27 @@ class _PlaylistPage1State extends State<AndroidWidget>
           togglePlaylist();
         }
       }
-      transitionSpeed = transitionSpeed2 ?? transitionSpeed;
-      stateIndicator = indicator ?? stateIndicator;
-      playlistOpeningArea = playlistArea ?? playlistOpeningArea;
+
     });
+  }
+
+  void updateFromDatabase() {
+    setState(() {
+      volume = Player.player.volumeNotifier.value;
+      transitionSpeed = DatabaseStreamerService().transitionSpeed.value;
+      stateIndicator = DatabaseStreamerService().stateIndicator.value;
+    });
+
+    playAnimation();
+    setAnimationSpeed(transitionSpeed);
+  }
+
+  void subscribeDatabase() {
+    DatabaseStreamerService().all.addListener(updateFromDatabase);
+  }
+
+  void unSubscribeDatabase() {
+    DatabaseStreamerService().all.removeListener(updateFromDatabase);
   }
 
   /// Reaction on progress interactive slider
@@ -572,27 +579,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
   // Initializing functions
   //
   //
-
-  /// Load keys from database
-  void loadDatabase() async {
-    double? dbVolume = await Database.get(DatabaseKeys.volume.value);
-    double? transition = await Database.get(DatabaseKeys.transitionSpeed.value);
-    bool? indicator = await Database.get(
-      DatabaseKeys.stateIndicatorState.value,
-    );
-    bool? playlistArea = await Database.get(
-      DatabaseKeys.stateIndicatorState.value,
-    );
-    dbVolume ??= volume;
-    transition ??= transitionSpeed;
-    stateIndicator = indicator ?? stateIndicator;
-    playlistOpeningArea = playlistArea ?? playlistOpeningArea;
-
-    changeVolume(dbVolume);
-    await player.setVolume(dbVolume);
-    playAnimation();
-    setAnimationSpeed(transition);
-  }
 
   /// Initializing player listeners
   void playerListeners() async {
@@ -701,7 +687,7 @@ class _PlaylistPage1State extends State<AndroidWidget>
     backupPlaylist = [...widget.playlist.tracks];
     nowPlayingTrack = player.nowPlayingTrack;
     isPlaying = player.isPlaying;
-    volume = player.playerInstance.volume;
+    volume = player.volumeNotifier.value;
     netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
     NetConductor().init(Player.player, widget.yandexMusic);
 
@@ -745,7 +731,7 @@ class _PlaylistPage1State extends State<AndroidWidget>
     player.shuffleModeNotifier.addListener(_shuffleListener);
     player.repeatModeNotifier.addListener(_repeatListener);
 
-    loadDatabase();
+    updateFromDatabase();
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
       print(
@@ -896,6 +882,8 @@ class _PlaylistPage1State extends State<AndroidWidget>
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              const SizedBox(height: 45),
+
                               GestureDetector(
                                 onTap: () => toggleCover(),
                                 child:
@@ -924,6 +912,25 @@ class _PlaylistPage1State extends State<AndroidWidget>
 
                               const SizedBox(height: 14),
 
+                              Container(
+                                child: // ALBUM TEXT
+                                Text(
+                                  key: ValueKey<PlayerTrack>(nowPlayingTrack),
+                                  nowPlayingTrack.albums.join(','),
+                                  style: GoogleFonts.lexend(
+                                    color: const Color.fromARGB(
+                                      200,
+                                      255,
+                                      255,
+                                      255,
+                                    ),
+                                    fontSize: 15,
+                                    decoration: TextDecoration.none,
+                                    fontWeight: FontWeight.w100,
+                                  ),
+                                ),
+                              ),
+
                               // ALBUM TEXT
                               Row(
                                 children: [
@@ -932,33 +939,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Container(
-                                          // UI KOSTIL'
-                                          padding: EdgeInsetsGeometry.only(
-                                            bottom: 10,
-                                            left: 170,
-                                          ),
-                                          //
-                                          child: // ALBUM TEXT
-                                          Text(
-                                            key: ValueKey<PlayerTrack>(
-                                              nowPlayingTrack,
-                                            ),
-                                            nowPlayingTrack.albums.join(','),
-                                            style: GoogleFonts.lexend(
-                                              color: const Color.fromARGB(
-                                                200,
-                                                255,
-                                                255,
-                                                255,
-                                              ),
-                                              fontSize: 15,
-                                              decoration: TextDecoration.none,
-                                              fontWeight: FontWeight.w100,
-                                            ),
-                                          ),
-                                        ),
-
                                         Container(
                                           padding: EdgeInsetsGeometry.only(
                                             left: 30,
@@ -1253,66 +1233,81 @@ class _PlaylistPage1State extends State<AndroidWidget>
                                   ),
                                 ],
                               ),
+
+                              Container(
+                                alignment: Alignment.center,
+                                height: 80,
+                                padding: EdgeInsetsGeometry.only(top: 5),
+                                child: AnimatedExpand(
+                                  duration: Duration(milliseconds: 500),
+                                  axis: Axis.vertical,
+                                  controller: expandController,
+                                  expandedHeader: _expandedHeader,
+                                  collapsedHeader: _collapsedHeader,
+                                  content: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      animatedExpandButton(() async {
+                                        bool recursiveFilesAdding =
+                                            DatabaseStreamerService()
+                                                .recursiveFilesAdding
+                                                .value;
+
+                                        String? selectedDirectory =
+                                            await FilePicker.platform
+                                                .getDirectoryPath();
+                                        if (selectedDirectory != null) {
+                                          List<PlayerTrack> result =
+                                              await Files()
+                                                  .getFilesFromDirectory(
+                                                    directoryPath:
+                                                        selectedDirectory,
+                                                    recursiveEnable:
+                                                        recursiveFilesAdding,
+                                                  );
+                                          if (result.isNotEmpty) {
+                                            currentPlaylist.addAll(result);
+                                            backupPlaylist.addAll(result);
+                                            await player.updatePlaylist(
+                                              currentPlaylist,
+                                            );
+                                            updatePlaylist();
+                                          }
+                                        }
+                                      }, Symbols.create_new_folder),
+
+                                      animatedExpandButton(
+                                        () => setState(() {
+                                          settingsView = true;
+                                          if (isPlaylistOpened) {
+                                            togglePlaylist();
+                                            openPlaylistNextTime = true;
+                                          }
+                                        }),
+                                        Icons.settings,
+                                      ),
+                                      animatedExpandButton(() async {
+                                        await Player.player.stop();
+                                        setState(() {
+                                          playlistAnimationController
+                                              .reverse()
+                                              .then((_) {
+                                                playlistOverlayEntry?.remove();
+                                                playlistOverlayEntry = null;
+                                                Navigator.pop(context);
+                                              });
+                                        });
+                                      }, Icons.exit_to_app),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-              AnimatedExpand(
-                duration: Duration(milliseconds: 500),
-                axis: Axis.vertical,
-                controller: expandController,
-                expandedHeader: _expandedHeader,
-                collapsedHeader: _collapsedHeader,
-                content: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    animatedExpandButton(() async {
-                      final bool? recursiveFilesAdding = await Database.get(
-                        DatabaseKeys.recursiveFilesAdding.value,
-                      );
-
-                      String? selectedDirectory = await FilePicker.platform
-                          .getDirectoryPath();
-                      if (selectedDirectory != null) {
-                        List<PlayerTrack> result = await Files()
-                            .getFilesFromDirectory(
-                              directoryPath: selectedDirectory,
-                              recursiveEnable: recursiveFilesAdding,
-                            );
-                        if (result.isNotEmpty) {
-                          currentPlaylist.addAll(result);
-                          backupPlaylist.addAll(result);
-                          await player.updatePlaylist(currentPlaylist);
-                          updatePlaylist();
-                        }
-                      }
-                    }, Symbols.create_new_folder),
-
-                    animatedExpandButton(
-                      () => setState(() {
-                        settingsView = true;
-                        if (isPlaylistOpened) {
-                          togglePlaylist();
-                          openPlaylistNextTime = true;
-                        }
-                      }),
-                      Icons.settings,
-                    ),
-                    animatedExpandButton(() async {
-                      await Player.player.stop();
-                      setState(() {
-                        playlistAnimationController.reverse().then((_) {
-                          playlistOverlayEntry?.remove();
-                          playlistOverlayEntry = null;
-                          Navigator.pop(context);
-                        });
-                      });
-                    }, Icons.exit_to_app),
-                  ],
                 ),
               ),
 
@@ -1376,29 +1371,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
                       )
                     : SizedBox.shrink(key: ValueKey('empty')),
               ),
-              if (playlistOpeningArea)
-                Positioned(
-                  left: 0,
-                  child: MouseRegion(
-                    onEnter: (event) {
-                      if (isCompact) {
-                        return;
-                      }
-                      if (event.localPosition.dx > 150 &&
-                          !isManuallyOpenedPlaylist) {
-                        togglePlaylist();
-                      } else if (event.localPosition.dx < 100) {
-                        togglePlaylist();
-                      }
-                    },
-                    child: SizedBox(
-                      height: size.height,
-                      width: (isPlaylistOpened && !isManuallyOpenedPlaylist)
-                          ? size.width
-                          : 50,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),

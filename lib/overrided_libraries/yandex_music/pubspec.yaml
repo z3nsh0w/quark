@@ -1,6 +1,6 @@
 name: yandex_music
 description: "A powerlibrary for accessing Yandex Music API (api.music.yandex.net)."
-version: 1.2.3
+version: 1.2.4
 homepage: https://github.com/z3nsh0w/yandex_music_flutter
 
 environment:

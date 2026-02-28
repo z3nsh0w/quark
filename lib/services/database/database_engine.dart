@@ -3,12 +3,15 @@ import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:quark/services/database/database.dart';
 
+// TODO: Add a setting will determine whether playlists are parsed again, or whether cached values ​​are used (eg liked a track through something else and it will displayed)
+
 /// Wrapper over the database so you don't have to enter keys manually
 ///
 /// Usage:
 /// ```
 /// Database.getValue(DatabaseKeys.volume.value);
 /// ```
+/// 
 enum DatabaseKeys {
   /// ```Double``` Player volume
   volume('volume'),
@@ -41,6 +44,8 @@ enum DatabaseKeys {
   /// Yandex account access token
   yandexMusicToken('yandex_music_token'),
 
+  yandexMusicNewestPlaylistInfo('yandex_music_newest'),
+
   /// ```String```
   /// Yandex account email
   yandexMusicEmail('yandex_music_email'),
@@ -56,6 +61,10 @@ enum DatabaseKeys {
   /// ```String```
   /// Yandex account full name
   yandexMusicFullName('yandex_music_fullname'),
+
+  /// ```String```
+  /// Yandex account full name
+  yandexMusicTokenExpires('yandex_music_token_expires'),
 
   /// ```String```
   /// Yandex account unique id
@@ -119,10 +128,16 @@ class Database {
     try {
       _box = await Hive.openBox('database');
       isInited = true;
+      Logger('DatabaseService').fine('Inited');
       return _box!;
     } catch (e) {
-      Logger('Database').shout('Failed to initialize database.', e);
-      lastError = e;
+      switch (e) {
+        case TypeError():
+          null;
+        default:
+          Logger('Database').shout('Failed to initialize database.', e);
+          lastError = e;
+      }
     } finally {
       _isInitializing = false;
     }

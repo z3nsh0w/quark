@@ -2,15 +2,16 @@ import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
+import 'package:material_symbols_icons/material_symbols_icons.dart';
 import 'package:quark/objects/track.dart';
 import 'package:quark/services/cached_images.dart';
 import 'package:quark/services/player/player.dart';
 import 'package:quark/widgets/players_widgets/macro_player.dart';
+import 'package:quark/widgets/players_widgets/main_player.dart';
 import '../../services/yandex_music_singleton.dart';
-
-/// yandex_music LIBRARY UI EXAMPLE
 
 class YandexPlaylistsInfo extends StatefulWidget {
   final List<PlaylistWShortTracks> playlists;
@@ -356,6 +357,8 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        surfaceTintColor: Colors.white.withOpacity(0.3),
+        shadowColor: Colors.white.withOpacity(0.3),
         titleTextStyle: const TextStyle(
           color: Colors.white,
           fontSize: 18,
@@ -428,108 +431,285 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
           children: [
-            Padding(
-              padding: EdgeInsetsGeometry.only(top: 10),
-              child: CoverView(
-                smallCoverLink: widget.playlist.cover != null
-                    ? YandexMusicSingleton.instance.playlists
-                          .getPlaylistCoverArtUrl(widget.playlist.cover!)
-                    : 'none',
-                bigCoverLink: widget.playlist.cover != null
-                    ? YandexMusicSingleton.instance.playlists
-                          .getPlaylistCoverArtUrl(
-                            widget.playlist.cover!,
-                            imageSize: '1000x1000',
-                          )
-                    : 'none',
-              ),
-            ),
-            const SizedBox(width: 32),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 8),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Text(
-                      'PLAYLIST',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsetsGeometry.only(top: 10),
+                  child: CoverView(
+                    smallCoverLink: widget.playlist.cover != null
+                        ? YandexMusicSingleton.instance.playlists
+                              .getPlaylistCoverArtUrl(widget.playlist.cover!)
+                        : 'none',
+                    bigCoverLink: widget.playlist.cover != null
+                        ? YandexMusicSingleton.instance.playlists
+                              .getPlaylistCoverArtUrl(
+                                widget.playlist.cover!,
+                                imageSize: '1000x1000',
+                              )
+                        : 'none',
                   ),
+                ),
+                const SizedBox(width: 32),
 
-                  const SizedBox(height: 16),
-
-                  Text(
-                    widget.playlist.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 42,
-                      letterSpacing: -1.2,
-                      height: 1.1,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  Text(
-                    'by ${widget.playlist.owner.name ?? 'Unknown'}',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  Wrap(
-                    spacing: 24,
-                    runSpacing: 12,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _itemInfo(
-                        icon: Icons.music_note,
-                        label: 'Tracks',
-                        value: '${widget.playlist.tracks.length}',
+                      const SizedBox(height: 8),
+
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          'PLAYLIST',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                       ),
-                      _itemInfo(
-                        icon: visibility ? Icons.public : Icons.lock,
-                        label: 'Visibility',
-                        value: visibility ? 'Public' : 'Private',
+
+                      const SizedBox(height: 16),
+
+                      Text(
+                        widget.playlist.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 42,
+                          letterSpacing: -1.2,
+                          height: 1.1,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      if (isOwner) _visibilitySwitch(),
+
+                      const SizedBox(height: 12),
+
+                      Text(
+                        'by ${widget.playlist.owner.name ?? 'Unknown'}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Wrap(
+                        spacing: 24,
+                        runSpacing: 12,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          _itemInfo(
+                            icon: Icons.music_note,
+                            label: 'Tracks',
+                            value: '${widget.playlist.tracks.length}',
+                          ),
+                          _itemInfo(
+                            icon: visibility ? Icons.public : Icons.lock,
+                            label: 'Visibility',
+                            value: visibility ? 'Public' : 'Private',
+                          ),
+                          if (isOwner) _visibilitySwitch(),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadiusGeometry.all(Radius.circular(10)),
+                  child: Material(
+                    color: playlistColor.withOpacity(0.2),
+                    child: InkWell(
+                      onTap: () async {},
+                      child: SizedBox(
+                        height: 40,
+                        width: 180,
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 30),
+
+                ClipOval(
+                  child: Material(
+                    color: playlistColor.withOpacity(0.2),
+                    child: InkWell(
+                      onTap: () async {
+                        try {
+                          await YandexMusicSingleton.instance.pin.playlist(
+                            widget.playlist.ownerUid,
+                            widget.playlist.kind,
+                            YandexMusicSingleton.instance.pin.pin,
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Pinned into your library!'),
+                                duration: Duration(seconds: 1),
+                                backgroundColor: Color.alphaBlend(
+                                  Colors.black.withOpacity(0.6),
+                                  playlistColor,
+                                ),
+
+                                behavior: SnackBarBehavior.fixed,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Fail! $e'),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: Color.alphaBlend(
+                                Colors.black.withOpacity(0.6),
+                                playlistColor,
+                              ),
+
+                              behavior: SnackBarBehavior.fixed,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: SizedBox(
+                        height: 40,
+                        width: 40,
+                        child: Icon(
+                          Icons.push_pin,
+                          color: Colors.white,
+                          size: 21,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // const SizedBox(width: 5),
+                // ClipOval(
+                //   child: Material(
+                //     color: playlistColor.withOpacity(0.2),
+                //     child: InkWell(
+                //       onTap: () async {},
+                //       child: SizedBox(
+                //         height: 40,
+                //         width: 40,
+                //         child: Icon(
+                //           Icons.favorite_sharp,
+                //           color: Colors.white,
+                //           size: 21,
+                //         ),
+                //       ),
+                //     ),
+                //   ),
+                // ),
+                // const SizedBox(width: 5),
+                // ClipOval(
+                //   child: Material(
+                //     color: playlistColor.withOpacity(0.2),
+                //     child: InkWell(
+                //       onTap: () async {},
+                //       child: SizedBox(
+                //         height: 40,
+                //         width: 40,
+                //         child: Icon(Icons.waves, color: Colors.white, size: 21),
+                //       ),
+                //     ),
+                //   ),
+                // ),
+                const SizedBox(width: 5),
+                // ClipOval(
+                //   child: Material(
+                //     color: playlistColor.withOpacity(0.2),
+                //     child: InkWell(
+                //       onTap: () async {},
+                //       child: SizedBox(
+                //         height: 40,
+                //         width: 40,
+                //         child: Icon(
+                //           Icons.download_done,
+                //           color: Colors.white,
+                //           size: 21,
+                //         ),
+                //       ),
+                //     ),
+                //   ),
+                // ),
+                ClipOval(
+                  child: Material(
+                    color: playlistColor.withOpacity(0.2),
+                    child: InkWell(
+                      onTap: () async {
+                        final link =
+                            'https://music.yandex.ru/playlists/${widget.playlist.playlistUuid}';
+
+                        await Clipboard.setData(ClipboardData(text: link));
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Copied to clipboard!'),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: Color.alphaBlend(
+                                Colors.black.withOpacity(0.6),
+                                playlistColor,
+                              ),
+
+                              behavior: SnackBarBehavior.fixed,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: SizedBox(
+                        height: 40,
+                        width: 40,
+                        child: Icon(
+                          Symbols.upload,
+                          color: Colors.white,
+                          size: 21,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -856,15 +1036,69 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
             ],
 
             if (tracks != null && tracks!.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'Popular tracks',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 24,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: EdgeInsetsGeometry.symmetric(
+                  horizontal: 36,
+                  vertical: 2,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadiusGeometry.all(Radius.circular(10)),
+                  child: Material(
+                    color: buildColor(Colors.black).withOpacity(0.2),
+                    child: InkWell(
+                      onTap: () async {
+                        final List<PlayerTrack> queue = [];
+                        for (Track albumTrack in tracks!) {
+                          queue.add(
+                            YandexMusicTrack.fromYMTtoLocalTrack(albumTrack),
+                          );
+                        }
+                        await Player.player.playTemporaryQueue(
+                          queue,
+                          startsNow: true,
+                          first: true,
+                        );
+                      },
+                      child: SizedBox(
+                        height: 40,
+                        width: double.infinity,
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
               VerticalSection<Track>(
-                title: 'Popular Tracks',
+                title: '',
                 items: tracks!,
                 itemBuilder: (track) => Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 2,
                   ),
-                  child: TrackCard(track: track, size: '100x100'),
+                  child: TrackCard(
+                    track: track,
+                    size: '100x100',
+                    accentColor: buildColor(Colors.black),
+                  ),
                 ),
               ),
             ],
@@ -1033,12 +1267,13 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
+                      fontFamily: 'noto',
                       fontSize: 48,
                       letterSpacing: -1.5,
                       height: 1.1,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
 
                   Wrap(
                     spacing: 24,
@@ -1064,6 +1299,147 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
                               widget.artist.lastMonthListenersDelta != null,
                           delta: widget.artist.lastMonthListenersDelta,
                         ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadiusGeometry.all(
+                          Radius.circular(10),
+                        ),
+                        child: Material(
+                          color: artistColor.withOpacity(0.2),
+                          child: InkWell(
+                            onTap: () async {
+                              final List<PlayerTrack> queue = tracks != null
+                                  ? tracks!
+                                        .map<PlayerTrack>(
+                                          (e) =>
+                                              YandexMusicTrack.fromYMTtoLocalTrack(
+                                                e,
+                                              ),
+                                        )
+                                        .toList()
+                                  : [];
+
+                              await Player.player.playTemporaryQueue(
+                                queue,
+                                startsNow: true,
+                                first: true,
+                              );
+                            },
+                            child: SizedBox(
+                              height: 40,
+                              width: 100,
+                              child: Icon(
+                                Icons.play_arrow,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // const SizedBox(width: 5),
+
+                      // ClipOval(
+                      //   child: Material(
+                      //     color: artistColor.withOpacity(0.2),
+                      //     child: InkWell(
+                      //       onTap: () async {},
+                      //       child: SizedBox(
+                      //         height: 40,
+                      //         width: 40,
+                      //         child: Icon(
+                      //           Icons.favorite_sharp,
+                      //           color: Colors.white,
+                      //           size: 21,
+                      //         ),
+                      //       ),
+                      //     ),
+                      //   ),
+                      // ),
+                      // const SizedBox(width: 5),
+
+                      // ClipOval(
+                      //   child: Material(
+                      //     color: artistColor.withOpacity(0.2),
+                      //     child: InkWell(
+                      //       onTap: () async {},
+                      //       child: SizedBox(
+                      //         height: 40,
+                      //         width: 40,
+                      //         child: Icon(
+                      //           Icons.push_pin,
+                      //           color: Colors.white,
+                      //           size: 21,
+                      //         ),
+                      //       ),
+                      //     ),
+                      //   ),
+                      // ),
+                      // const SizedBox(width: 5),
+                      // ClipOval(
+                      //   child: Material(
+                      //     color: artistColor.withOpacity(0.2),
+                      //     child: InkWell(
+                      //       onTap: () async {await YandexMusicSingleton.instance.myVibe.},
+                      //       child: SizedBox(
+                      //         height: 40,
+                      //         width: 40,
+                      //         child: Icon(
+                      //           Icons.waves,
+                      //           color: Colors.white,
+                      //           size: 21,
+                      //         ),
+                      //       ),
+                      //     ),
+                      //   ),
+                      // ),
+                      const SizedBox(width: 5),
+                      ClipOval(
+                        child: Material(
+                          color: artistColor.withOpacity(0.2),
+                          child: InkWell(
+                            onTap: () async {
+                              final link =
+                                  'https://music.yandex.ru/artist/${widget.artist.artist.id}';
+
+                              await Clipboard.setData(
+                                ClipboardData(text: link),
+                              );
+
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Copied to clipboard!'),
+                                    duration: Duration(seconds: 1),
+                                    backgroundColor: Color.alphaBlend(
+                                      Colors.black.withOpacity(0.6),
+                                      artistColor,
+                                    ),
+
+                                    behavior: SnackBarBehavior.fixed,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            child: SizedBox(
+                              height: 40,
+                              width: 40,
+                              child: Icon(
+                                Symbols.upload,
+                                color: Colors.white,
+                                size: 21,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -1259,12 +1635,20 @@ class AlbumInfoWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color albumColor = album.colors != null
+        ? Color(
+            int.parse(album.colors!.accent.substring(1), radix: 16) +
+                0xFF000000,
+          )
+        : Colors.white;
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 10, 10, 10),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        surfaceTintColor: albumColor,
+        shadowColor: albumColor,
         titleTextStyle: const TextStyle(
           color: Colors.white,
           fontSize: 18,
@@ -1298,24 +1682,29 @@ class AlbumInfoWidget extends StatelessWidget {
           children: [
             _header(context),
             if (album.tracks.isNotEmpty) ...[
-              VerticalSection<Track>(
-                title: 'Tracks',
-                items: album.tracks,
-                itemBuilder: (track) => Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 2,
-                  ),
-                  child: TrackCard(
-                    track: track,
-                    size: '100x100',
-                    bestTrack: album.bestTracks
-                        .map((toElement) => toElement.toString())
-                        .toList()
-                        .contains(track.id),
+              for (List<Track> tracks in album.tracks) ...[
+                VerticalSection<Track>(
+                  title: album.tracks.length > 1
+                      ? 'Disc ${album.tracks.indexOf(tracks) + 1}'
+                      : "Tracks",
+                  items: tracks,
+                  itemBuilder: (track) => Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 2,
+                    ),
+                    child: TrackCard(
+                      track: track,
+                      size: '100x100',
+                      bestTrack: album.bestTracks
+                          .map((toElement) => toElement.toString())
+                          .toList()
+                          .contains(track.id),
+                      accentColor: albumColor,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
             const SizedBox(height: 40),
           ],
@@ -1331,7 +1720,6 @@ class AlbumInfoWidget extends StatelessWidget {
                 0xFF000000,
           )
         : Colors.white;
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
@@ -1344,144 +1732,426 @@ class AlbumInfoWidget extends StatelessWidget {
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: EdgeInsetsGeometry.only(top: 10),
-              child: CoverView(
-                smallCoverLink:
-                    'https://${album.cover.uri.replaceAll('%%', '300x300')}',
-                bigCoverLink:
-                    'https://${album.cover.uri.replaceAll('%%', '1000x1000')}',
-              ),
-            ),
-            const SizedBox(width: 32),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 8),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                        width: 1,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    Padding(
+                      padding: EdgeInsetsGeometry.only(top: 10),
+                      child: CoverView(
+                        smallCoverLink:
+                            'https://${album.cover.uri.replaceAll('%%', '300x300')}',
+                        bigCoverLink:
+                            'https://${album.cover.uri.replaceAll('%%', '1000x1000')}',
                       ),
                     ),
-                    child: Text(
-                      'ALBUM',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
+                    const SizedBox(height: 5),
+                  ],
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(width: 32),
 
-                  Row(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Flexible(
-                        child: Text(
-                          album.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 42,
-                            letterSpacing: -1.2,
-                            height: 1.1,
+                      const SizedBox(height: 8),
+
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1,
                           ),
-                          maxLines: 2,
+                        ),
+                        child: Text(
+                          'ALBUM',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              album.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontFamily: 'noto',
+                                fontSize: 42,
+                                letterSpacing: -1.2,
+                                height: 1.1,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (album.contentWarning != null) ...[
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: Colors.red.withOpacity(0.4),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                album.contentWarning!.toUpperCase(),
+                                style: const TextStyle(
+                                  fontFamily: 'noto',
+                                  color: Colors.red,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      InkWell(
+                        onTap: () async {
+                          int val = 0;
+                          if (album.artists.length > 1) {
+                            final value = await showDialog<int>(
+                              context: context,
+                              builder: (context) => WarningMessage(
+                                messageHeader: 'Choose an artist',
+                                messageDiscription: '',
+                                buttons: album.artists
+                                    .map((toElement) => toElement.title)
+                                    .toList(),
+                              ),
+                            );
+
+                            if (value == null) return;
+                            val = value;
+                          }
+
+                          final artist = await YandexMusicSingleton
+                              .instance
+                              .artists
+                              .getInfo(album.artists[val]);
+                          Navigator.push(
+                            context,
+                            CupertinoPageRoute(
+                              builder: (builder) =>
+                                  ArtistInfoWidget(artist: artist),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          album.artists
+                              .map((artist) => artist.title)
+                              .join(', '),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (album.contentWarning != null) ...[
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+
+                      const SizedBox(height: 16),
+
+                      Wrap(
+                        spacing: 24,
+                        runSpacing: 12,
+                        children: [
+                          _itemInfo(
+                            icon: Icons.calendar_today,
+                            label: 'Year',
+                            value: album.year.toString(),
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: Colors.red.withOpacity(0.4),
-                              width: 1,
+                          if (album.releaseDate != null)
+                            _itemInfo(
+                              icon: Icons.event,
+                              label: 'Released',
+                              value: DateFormat(
+                                'MMM d, yyyy',
+                              ).format(DateTime.parse(album.releaseDate!)),
                             ),
+                          _itemInfo(
+                            icon: Icons.music_note,
+                            label: 'Tracks',
+                            value: '${album.tracks.length}',
                           ),
-                          child: Text(
-                            album.contentWarning!.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                            ),
+                          _itemInfo(
+                            icon: Icons.category,
+                            label: 'Genre',
+                            value: album.genre,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ],
                   ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadiusGeometry.all(Radius.circular(10)),
+                  child: Material(
+                    color: albumColor.withOpacity(0.2),
+                    child: InkWell(
+                      onTap: () async {
+                        final List<Track> allTracks = album.tracks
+                            .expand((trackList) => trackList)
+                            .toList();
+                        final List<PlayerTrack> toQ = allTracks
+                            .map((e) => YandexMusicTrack.fromYMTtoLocalTrack(e))
+                            .toList();
 
-                  const SizedBox(height: 12),
-
-                  Text(
-                    album.artists.map((artist) => artist.title).join(', '),
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
+                        await Player.player.playTemporaryQueue(
+                          toQ,
+                          startsNow: true,
+                          first: true,
+                        );
+                      },
+                      child: SizedBox(
+                        height: 40,
+                        width: 180,
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
+                ),
+                const SizedBox(width: 30),
 
-                  const SizedBox(height: 20),
+                ClipOval(
+                  child: Material(
+                    color: albumColor.withOpacity(0.2),
+                    child: InkWell(
+                      onTap: () async {
+                        try {
+                          await YandexMusicSingleton.instance.pin.album(
+                            album.id.toString(),
+                            YandexMusicSingleton.instance.pin.pin,
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Pinned into your library!'),
+                                duration: Duration(seconds: 1),
+                                backgroundColor: Color.alphaBlend(
+                                  Colors.black.withOpacity(0.6),
+                                  albumColor,
+                                ),
 
-                  Wrap(
-                    spacing: 24,
-                    runSpacing: 12,
-                    children: [
-                      _itemInfo(
-                        icon: Icons.calendar_today,
-                        label: 'Year',
-                        value: album.year.toString(),
-                      ),
-                      if (album.releaseDate != null)
-                        _itemInfo(
-                          icon: Icons.event,
-                          label: 'Released',
-                          value: DateFormat(
-                            'MMM d, yyyy',
-                          ).format(DateTime.parse(album.releaseDate!)),
+                                behavior: SnackBarBehavior.fixed,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Fail! $e'),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: Color.alphaBlend(
+                                Colors.black.withOpacity(0.6),
+                                albumColor,
+                              ),
+
+                              behavior: SnackBarBehavior.fixed,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: SizedBox(
+                        height: 40,
+                        width: 40,
+                        child: Icon(
+                          Icons.push_pin,
+                          color: Colors.white,
+                          size: 21,
                         ),
-                      _itemInfo(
-                        icon: Icons.music_note,
-                        label: 'Tracks',
-                        value: '${album.tracks.length}',
                       ),
-                      _itemInfo(
-                        icon: Icons.category,
-                        label: 'Genre',
-                        value: album.genre,
-                      ),
-                    ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+                // const SizedBox(width: 5),
+                // ClipOval(
+                //   child: Material(
+                //     color: albumColor.withOpacity(0.2),
+                //     child: InkWell(
+
+                //       child: SizedBox(
+                //         height: 40,
+                //         width: 40,
+                //         child: Icon(
+                //           Icons.favorite_sharp,
+                //           color: Colors.white,
+                //           size: 21,
+                //         ),
+                //       ),
+                //     ),
+                //   ),
+                // ),
+                // const SizedBox(width: 5),
+                // ClipOval(
+                //   child: Material(
+                //     color: albumColor.withOpacity(0.2),
+                //     child: InkWell(
+                //       onTap: () async {},
+                //       child: SizedBox(
+                //         height: 40,
+                //         width: 40,
+                //         child: Icon(Icons.waves, color: Colors.white, size: 21),
+                //       ),
+                //     ),
+                //   ),
+                // ),
+                // const SizedBox(width: 5),
+                // ClipOval(
+                //   child: Material(
+                //     color: albumColor.withOpacity(0.2),
+                //     child: InkWell(
+                //       onTap: () async {},
+                //       child: SizedBox(
+                //         height: 40,
+                //         width: 40,
+                //         child: Icon(
+                //           Icons.download_done,
+                //           color: Colors.white,
+                //           size: 21,
+                //         ),
+                //       ),
+                //     ),
+                //   ),
+                // ),
+                const SizedBox(width: 5),
+                ClipOval(
+                  child: Material(
+                    color: albumColor.withOpacity(0.2),
+                    child: InkWell(
+                      onTap: () async {
+                        final link =
+                            'https://music.yandex.ru/album/${album.id}';
+
+                        await Clipboard.setData(ClipboardData(text: link));
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Copied to clipboard!'),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: Color.alphaBlend(
+                                Colors.black.withOpacity(0.6),
+                                albumColor,
+                              ),
+
+                              behavior: SnackBarBehavior.fixed,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: SizedBox(
+                        height: 40,
+                        width: 40,
+                        child: Icon(
+                          Symbols.upload,
+                          color: Colors.white,
+                          size: 21,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // // SPOTIFY PROTOTYPE
+                // SizedBox(
+                //   height: 28,
+                //   width: 28,
+                //   child: AnimatedIconButton(
+                //     icon: Icons.push_pin_outlined,
+                //     color: Colors.white,
+                //     size: 26,
+                //     onTap: () => print('tapped'),
+                //   ),
+                // ),
+                // const SizedBox(width: 5),
+                // const SizedBox(width: 5),
+                // const SizedBox(width: 5),
+                // SizedBox(
+                //   height: 28,
+                //   width: 28,
+                //   child: AnimatedIconButton(
+                //     icon: Icons.favorite_outline,
+                //     color: Colors.white,
+                //     size: 26,
+                //     onTap: () => print('tapped'),
+                //   ),
+                // ),
+                // const SizedBox(width: 5),
+                // const SizedBox(width: 5),
+                // const SizedBox(width: 5),
+                // SizedBox(
+                //   height: 28,
+                //   width: 28,
+                //   child: AnimatedIconButton(
+                //     icon: Icons.queue_outlined,
+                //     color: Colors.white,
+                //     size: 26,
+                //     onTap: () => print('tapped'),
+                //   ),
+                // ),
+                // const SizedBox(width: 5),
+                // const SizedBox(width: 5),
+                // const SizedBox(width: 5),
+                // SizedBox(
+                //   height: 28,
+                //   width: 28,
+                //   child: AnimatedIconButton(
+                //     icon: Icons.remove_circle_outline,
+                //     color: Colors.white,
+                //     size: 26,
+                //     onTap: () => print('tapped'),
+                //   ),
+                // ),
+              ],
             ),
           ],
         ),
@@ -1596,18 +2266,21 @@ class VerticalSection<T> extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 24,
+        if (title != '') ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 24,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
+
         ListView.builder(
           shrinkWrap: shrinkWrap,
           physics: const NeverScrollableScrollPhysics(),
@@ -1844,17 +2517,197 @@ class PlaylistCard extends StatelessWidget {
   }
 }
 
+PopupMenuItem<String> _buildMenuItem({
+  required IconData icon,
+  required String label,
+  required String value,
+  required VoidCallback onTap,
+  Color? color,
+  VoidCallback? onHover,
+  VoidCallback? onExit,
+}) {
+  return PopupMenuItem<String>(
+    onTap: onTap,
+    value: value,
+    child: MouseRegion(
+      onEnter: (a) => onHover,
+      onExit: (a) => onExit,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color ?? Colors.white70),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(color: color ?? Colors.white, fontSize: 13),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class TrackCard extends StatelessWidget {
   final Track track;
   final String size;
   final bool bestTrack;
+  final Color accentColor;
 
   const TrackCard({
     super.key,
     required this.track,
     this.size = '300x300',
     this.bestTrack = false,
+    this.accentColor = Colors.grey,
   });
+
+  List<PopupMenuEntry> popumItems(BuildContext context) {
+    bool liked = YandexMusicSingleton.likedTracks
+        .map((e) => e.trackID)
+        .toList()
+        .contains(track.id);
+    final List<PopupMenuEntry> items = [];
+    items.add(
+      _buildMenuItem(
+        icon: Icons.play_arrow,
+        label: "Add to queue",
+        value: 'queue',
+        onTap: () async {
+          Player.player.insertInQueue(
+            YandexMusicTrack.fromYMTtoLocalTrack(track),
+          );
+        },
+      ),
+    );
+
+    items.add(const PopupMenuDivider(height: 1, color: Colors.white10));
+    items.add(
+      _buildMenuItem(
+        icon: liked ? Icons.favorite : Icons.favorite_outline,
+        label: liked ? 'Unlike' : "Like",
+        value: 'favourite',
+        onTap: () async {
+          if (liked) {
+            await YandexMusicSingleton.unlikeTrack(track.id);
+          } else {
+            await YandexMusicSingleton.likeTrack(track.id);
+          }
+        },
+      ),
+    );
+    items.add(
+      _buildMenuItem(
+        icon: Icons.queue_outlined,
+        label: "Add to yandex playlist",
+        value: 'playlist',
+        onTap: () async {
+          int selected = 0;
+          final value = await showDialog<int>(
+            context: context,
+            builder: (context) => WarningMessage(
+              messageHeader: 'Choose playlist',
+              messageDiscription: '',
+              transparency: 255,
+              borderColor: Colors.transparent,
+              color: Color.alphaBlend(
+                const Color.fromRGBO(0, 0, 0, 0.9),
+                accentColor,
+              ),
+              buttons: YandexMusicSingleton.playlists
+                  .map((e) => e.title)
+                  .toList(),
+            ),
+          );
+
+          if (value == null) return;
+          selected = value;
+          try {
+            await YandexMusicSingleton.instance.playlists.insertTrack(
+              YandexMusicSingleton.playlists[selected].kind,
+              track.id,
+              track.albums[0].id.toString(),
+            );
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Fail! $e'),
+                duration: Duration(seconds: 1),
+                backgroundColor: Color.alphaBlend(
+                  Colors.black.withOpacity(0.6),
+                  accentColor,
+                ),
+
+                behavior: SnackBarBehavior.fixed,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            );
+          }
+        },
+      ),
+    );
+    items.add(const PopupMenuDivider(height: 1, color: Colors.white10));
+    items.add(
+      _buildMenuItem(
+        icon: Symbols.person,
+        label: 'Go to Artist',
+        value: 'artist',
+        onTap: () async {
+          int selected = 0;
+          if (track.artists.length > 1) {
+            final value = await showDialog<int>(
+              context: context,
+              builder: (context) => WarningMessage(
+                messageHeader: 'Choose an artist',
+                messageDiscription: '',
+                transparency: 255,
+                borderColor: Colors.transparent,
+                color: Color.alphaBlend(
+                  const Color.fromRGBO(0, 0, 0, 0.9),
+                  accentColor,
+                ),
+                buttons: track.artists
+                    .map((toElement) => toElement.title)
+                    .toList(),
+              ),
+            );
+
+            if (value == null) return;
+            selected = value;
+          }
+          final artist = await YandexMusicSingleton.instance.artists.getInfo(
+            track.artists[selected],
+          );
+          Navigator.push(
+            context,
+            CupertinoPageRoute(
+              builder: (builder) => ArtistInfoWidget(artist: artist),
+            ),
+          );
+        },
+      ),
+    );
+
+    items.add(
+      _buildMenuItem(
+        icon: Icons.album,
+        label: 'Go to Album',
+        value: 'album',
+        onTap: () async {},
+      ),
+    );
+
+    items.add(
+      _buildMenuItem(
+        icon: Icons.info_outline,
+        label: 'View track info',
+        value: 'info',
+        onTap: () async {},
+      ),
+    );
+
+    return items;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1864,18 +2717,10 @@ class TrackCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () async {
-            final path = await getTrackPath(track.id);
-            final track2 = YandexMusicTrack(
-              track: track,
-              title: track.title,
-              artists: track.artists
-                  .map((toElement) => toElement.title)
-                  .toList(),
-              albums: track.albums.map((toElement) => toElement.title).toList(),
-              filepath: path,
+            Player.player.insertInQueue(
+              YandexMusicTrack.fromYMTtoLocalTrack(track),
             );
-            track2.cover = track.coverUri ?? 'none';
-            await Player.player.playCustom(track2);
+            await Player.player.playNext(forceNext: true, completed: false);
           },
           child: Row(
             children: [
@@ -1932,33 +2777,7 @@ class TrackCard extends StatelessWidget {
                 iconColor: Colors.white,
 
                 itemBuilder: (itemBuilder) {
-                  final List<PopupMenuEntry> items = [];
-                  for (Artist artist in track.artists) {
-                    if (artist is! UGCArtist) {
-                      items.add(
-                        PopupMenuItem(
-                          child: Text(
-                            'Go to ${artist.title}',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          onTap: () async {
-                            final artists = await YandexMusicSingleton
-                                .instance
-                                .artists
-                                .getInfo((artist as OfficialArtist).id);
-                            Navigator.push(
-                              context,
-                              CupertinoPageRoute(
-                                builder: (builder) =>
-                                    ArtistInfoWidget(artist: artists),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    }
-                  }
-                  return items;
+                  return popumItems(context);
                 },
               ),
             ],
@@ -2095,6 +2914,66 @@ class CoverView extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class AnimatedIconButton extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final double size;
+  final VoidCallback? onTap;
+
+  const AnimatedIconButton({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.size,
+    this.onTap,
+  });
+
+  @override
+  State<AnimatedIconButton> createState() => _AnimatedIconButtonState();
+}
+
+class _AnimatedIconButtonState extends State<AnimatedIconButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final double currentSize = _pressed
+        ? widget.size - 1
+        : _hovered
+        ? widget.size + 2
+        : widget.size;
+
+    final Color currentColor = _pressed
+        ? widget.color.withAlpha(100)
+        : widget.color;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      cursor: SystemMouseCursors.click,
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 150),
+            style: const TextStyle(),
+            child: Icon(widget.icon, color: currentColor, size: currentSize),
+          ),
         ),
       ),
     );

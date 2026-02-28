@@ -5,7 +5,7 @@ enum StateIndicatorOperation { none, error, success, loading }
 class StateIndicator extends StatelessWidget {
   final StateIndicatorOperation operation;
 
-  const StateIndicator({Key? key, required this.operation}) : super(key: key);
+  const StateIndicator({super.key, required this.operation});
 
   static Color _getColor(StateIndicatorOperation operation) {
     switch (operation) {

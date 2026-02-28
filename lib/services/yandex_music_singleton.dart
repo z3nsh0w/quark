@@ -9,6 +9,7 @@ abstract class YandexMusicSingleton {
 
   static List<ShortTrack> likedTracks = [];
 
+
   static List<PlaylistWShortTracks> playlists = [];
 
   static ValueNotifier<List<String>> likedTracksNotifier = ValueNotifier<List<String>>([]);
@@ -18,7 +19,10 @@ abstract class YandexMusicSingleton {
     inited = true;
     updateLiked();
     updateUserPlaylists();
+    Logger('YandexMusicService').fine('Inited');
   }
+
+  
 
   static Future<void> updateLiked() async {
     try {
@@ -31,6 +35,19 @@ abstract class YandexMusicSingleton {
     } catch (e) {
       Logger('YandexMusicService').shout('Failed to update liked tracks', e);
     }
+  }
+
+  static Future<void> updatePinned() async {
+    // try {
+    //   // final tracks = await instance.landing.;
+    //   likedTracks.clear();
+    //   likedTracksNotifier.value = tracks
+    //       .map((toElement) => toElement.trackID)
+    //       .toList();
+    //   likedTracks.addAll(tracks);
+    // } catch (e) {
+    //   Logger('YandexMusicService').shout('Failed to update liked tracks', e);
+    // }
   }
 
   static Future<void> unlikeTrack(String trackId) async {

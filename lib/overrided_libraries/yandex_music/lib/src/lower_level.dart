@@ -109,28 +109,6 @@ class YandexMusicApiAsync {
     return responce;
   }
 
-  Future<dynamic> moveTrack(
-    int userId,
-    int kind,
-    int from,
-    int to,
-    List tracks,
-    int revision, {
-    CancelToken? cancelToken,
-  }) async {
-    final diffString = jsonEncode([
-      {"op": "move", "from": from, "to": to, "tracks": tracks},
-    ]);
-    final data = {'revision': revision.toString(), 'diff': diffString};
-    final responce = await requests.post(
-      '/users/$userId/playlists/$kind/change-relative',
-      data: data,
-      cancelToken: cancelToken,
-    );
-
-    return responce;
-  }
-
   Future<dynamic> renameTrack(
     String trackId,
     String trackName,
@@ -405,85 +383,83 @@ class YandexMusicApiAsync {
   }
   // Сюда было потрачено > 5-6 часов реального времени. питон рулит
 
-  Future<dynamic> addTracksToPlaylist(
-    int userId,
-    int kind,
-    List<Map<String, dynamic>> tracks,
-    int revision, {
-    int? at,
-    CancelToken? cancelToken,
-  }) async {
-    at ??= 0;
-    final diffString = jsonEncode([
-      {"op": "insert", "at": at, "tracks": tracks},
-    ]);
-    final data = {
-      'kind': kind.toString(),
-      'revision': revision.toString(),
-      'diff': diffString,
-    };
-    final responce = await requests.post(
-      '/users/$userId/playlists/$kind/change',
-      data: data,
-      cancelToken: cancelToken,
-    );
-    return responce;
-  }
+Future<dynamic> addTracksToPlaylist(
+  int userId,
+  int kind,
+  List<Map<String, dynamic>> tracks,
+  int revision, {
+  int at = 0,
+  CancelToken? cancelToken,
+}) async {
+  final diff = jsonEncode([
+    {'op': 'insert', 'at': at, 'tracks': tracks},
+  ]);
+  return await requests.post(
+    '/users/$userId/playlists/$kind/change-relative',
+    queryParameters: {'diff': diff, 'revision': revision},
+    data: {'diff': diff, 'revision': revision},
+    cancelToken: cancelToken,
+  );
+}
 
-  Future<dynamic> insertTrackIntoPlaylist(
-    int userId,
-    int kind,
-    String trackId,
-    String albumId,
-    int revision, {
-    int? at,
-    CancelToken? cancelToken,
-  }) async {
-    at ??= 0;
-    List tracks = [
-      {"id": trackId, albumId: albumId},
-    ];
-    final diffString = jsonEncode([
-      {"op": "insert", "at": at, "tracks": tracks},
-    ]);
-    final data = {
-      'kind': kind.toString(),
-      'revision': revision.toString(),
-      'diff': diffString,
-    };
-    final responce = await requests.post(
-      '/users/$userId/playlists/$kind/change',
-      data: data,
-      cancelToken: cancelToken,
-    );
-    return responce;
-  }
+Future<dynamic> insertTrackIntoPlaylist(
+  int userId,
+  int kind,
+  String trackId,
+  String albumId,
+  int revision, {
+  int at = 0,
+  CancelToken? cancelToken,
+}) async {
+  final diff = jsonEncode([
+    {'op': 'insert', 'at': at, 'tracks': [{'id': trackId, 'albumId': int.parse(albumId)}]},
+  ]);
+  return await requests.post(
+    '/users/$userId/playlists/$kind/change-relative',
+    queryParameters: {'diff': diff, 'revision': revision},
+    data: {'diff': diff, 'revision': revision},
+    cancelToken: cancelToken,
+  );
+}
 
-  Future<dynamic> deleteTracksFromPlaylist(
-    int userId,
-    int kind,
-    int from,
-    int to,
-    int revision, {
-    CancelToken? cancelToken,
-  }) async {
-    final diffString = jsonEncode([
-      {"op": "delete", "from": from, "to": to},
-    ]);
-    final data = {
-      'kind': kind.toString(),
-      'revision': revision.toString(),
-      'diff': diffString,
-    };
-    final responce = await requests.post(
-      '/users/$userId/playlists/$kind/change',
-      data: data,
-      cancelToken: cancelToken,
-    );
+Future<dynamic> deleteTracksFromPlaylist(
+  int userId,
+  int kind,
+  int from,
+  int to,
+  int revision, {
+  CancelToken? cancelToken,
+}) async {
+  final diff = jsonEncode([
+    {'op': 'delete', 'from': from, 'to': to},
+  ]);
+  return await requests.post(
+    '/users/$userId/playlists/$kind/change-relative',
+    queryParameters: {'diff': diff, 'revision': revision},
+    data: {'diff': diff, 'revision': revision},
+    cancelToken: cancelToken,
+  );
+}
 
-    return responce;
-  }
-
+Future<dynamic> moveTrack(
+  int userId,
+  int kind,
+  int from,
+  int to,
+  List<Map<String, dynamic>> tracks,
+  int revision, {
+  CancelToken? cancelToken,
+}) async {
+  final diff = jsonEncode([
+    {'op': 'move', 'from': from, 'to': to, 'tracks': tracks},
+  ]);
+  return await requests.post(
+    '/users/$userId/playlists/$kind/change-relative',
+    queryParameters: {'diff': diff, 'revision': revision},
+    data: {'diff': diff, 'revision': revision},
+    cancelToken: cancelToken,
+  );
+}
   Future<dynamic> changeVisibility(
     int userId,
     int kind,

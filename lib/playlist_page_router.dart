@@ -30,6 +30,8 @@ class PlaylistPage extends StatefulWidget {
 
 class _PlaylistPageState extends State<PlaylistPage> {
   void dis() async {
+    await Player.player.disableRepeat();
+    await Player.player.unShuffle();
     await Player.player.pause();
   }
 

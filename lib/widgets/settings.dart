@@ -1,15 +1,14 @@
-
 import 'dart:math';
 import 'dart:ui';
 import 'dart:async';
-import 'package:quark/services/database/listen_logger.dart';
-import 'package:quark/services/native_controls/native_control.dart';
-
 import 'state_indicator.dart';
-import '../services/database/database_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:yandex_music/yandex_music.dart';
+import '../services/database/database_engine.dart';
+import 'package:quark/services/database/database.dart';
+import 'package:quark/services/database/listen_logger.dart';
 import 'package:interactive_slider/interactive_slider.dart';
+import 'package:quark/services/native_controls/native_control.dart';
 
 class Settings extends StatefulWidget {
   final Function() closeView;
@@ -142,8 +141,6 @@ class _LocalSettings extends StatefulWidget {
 
 class __LocalSettingsWidget extends State<_LocalSettings> {
   bool stateIndicatorState = true;
-  bool gradientAsBackground = false;
-  bool windowManagerPlugin = false;
   bool playlistOpeningArea = true;
   bool recursiveFilesAdding = true;
   int clicks = 0;
@@ -154,35 +151,14 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
 
   void initDatabase() async {
     try {
-      bool indicator = await Database.get(
-        DatabaseKeys.stateIndicatorState.value,
-        defaultValue: true,
-      );
-      bool gradient = await Database.get(
-        DatabaseKeys.gradientMode.value,
-        defaultValue: false,
-      );
-      bool windowManager = await Database.get(
-        DatabaseKeys.windowManager.value,
-        defaultValue: false,
-      );
-      double transitionSpeed = await Database.get(
-        DatabaseKeys.transitionSpeed.value,
-        defaultValue: 1.0,
-      );
-      bool playlistArea = await Database.get(
-        DatabaseKeys.playlistOpeningArea.value,
-        defaultValue: true,
-      );
-      bool recursiveFilesAdding2 = await Database.get(
-        DatabaseKeys.recursiveFilesAdding.value,
-        defaultValue: true,
-      );
+      bool indicator = DatabaseStreamerService().stateIndicator.value;
+      double transitionSpeed = DatabaseStreamerService().transitionSpeed.value;
+      bool playlistArea = DatabaseStreamerService().playlistOpeningArea.value;
+      bool recursiveFilesAdding2 =
+          DatabaseStreamerService().recursiveFilesAdding.value;
       if (!mounted) return;
       setState(() {
         stateIndicatorState = indicator;
-        gradientAsBackground = gradient;
-        windowManagerPlugin = windowManager;
         playlistOpeningArea = playlistArea;
         recursiveFilesAdding = recursiveFilesAdding2;
         transitionSpeedController.value = transitionSpeed;
@@ -196,19 +172,19 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
   }
 
   void restoreDefaults() async {
-    await Database.clear();
+    await DatabaseStreamerService().reload();
   }
 
   void setIndicator(bool value) async {
-    await Database.put(DatabaseKeys.stateIndicatorState.value, value);
+    DatabaseStreamerService().stateIndicator.value = value;
   }
 
   void setPlaylistArea(bool value) async {
-    await Database.put(DatabaseKeys.playlistOpeningArea.value, value);
+    DatabaseStreamerService().playlistOpeningArea.value = value;
   }
 
   void setRecursive(bool value) async {
-    await Database.put(DatabaseKeys.recursiveFilesAdding.value, value);
+    DatabaseStreamerService().recursiveFilesAdding.value = value;
   }
 
   @override
@@ -228,7 +204,7 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
           if (databaseError == true || Database.lastError != null)
             button(
               'WARNING',
-              'The database is unavailable or contains errors. All changes may not be saved. Check the logs.',
+              'The database is unavailable or contains errors. Changes may not be saved. Check the logs.',
               SizedBox.shrink(),
               maxWidth,
               rightPadding,
@@ -315,7 +291,7 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
                 min: 0.0,
                 max: 2.5,
                 onProgressUpdated: (value) async {
-                  await Database.put(DatabaseKeys.transitionSpeed.value, value);
+                  DatabaseStreamerService().transitionSpeed.value = value;
                 },
                 onFocused: (value) {},
 
@@ -395,18 +371,17 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
     'Lossless (Max)',
     'Normal (256kbps)',
     'Low (64kbps)',
-    'MP3 (320kbps)',
   ];
   Map<String, String> qualityMap = {
     'lossless': 'Lossless (Max)',
     'nq': 'Normal (256kbps)',
     'lq': 'Low (64kbps)',
-    'mp3': 'MP3 (320kbps)',
   };
   Timer? searchDebounceTimer;
   StateIndicatorOperation operation = StateIndicatorOperation.none;
   TextEditingController controller = TextEditingController(text: '');
   final Duration _searchDebounceDuration = const Duration(milliseconds: 500);
+  final db = DatabaseStreamerService();
 
   void yandexMusicChecker(String value) async {
     searchDebounceTimer?.cancel();
@@ -426,14 +401,13 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
         String fullName = await yandexMusic.account.getFullName();
         String login = await yandexMusic.account.getLogin();
 
-        await Database.putAll({
-          DatabaseKeys.yandexMusicToken.value: value,
-          DatabaseKeys.yandexMusicLogin.value: login,
-          DatabaseKeys.yandexMusicFullName.value: fullName,
-          DatabaseKeys.yandexMusicDisplayName.value: displayName,
-          DatabaseKeys.yandexMusicUid.value: yandexMusic.accountID,
-          DatabaseKeys.yandexMusicEmail.value: email,
-        });
+        db.yandexMusicToken.value = value;
+        db.yandexMusicLogin.value = login;
+        db.yandexMusicFullName.value = fullName;
+        db.yandexMusicDisplayName.value = displayName;
+        db.yandexMusicUid.value = yandexMusic.accountID;
+        db.yandexMusicEmail.value = email;
+
         if (!mounted) return;
         setState(() {
           operation = StateIndicatorOperation.success;
@@ -452,7 +426,7 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
       for (var entry in qualityMap.entries) entry.value: entry.key,
     };
     String? quality2 = qualityReverse[value];
-    await Database.put(DatabaseKeys.yandexMusicTrackQuality.value, quality2!);
+    db.yandexMusicQuality.value = quality2!;
     if (!mounted) return;
     setState(() {
       quality = value;
@@ -460,28 +434,21 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
   }
 
   void setSearch(bool value) async {
-    await Database.put(DatabaseKeys.yandexMusicSearch.value, value);
+    db.yandexMusicSearch.value = value;
   }
 
   void setPreload(bool value) async {
-    await Database.put(DatabaseKeys.yandexMusicPreload.value, value);
+    db.yandexMusicPreload.value = value;
   }
 
-  void initDatabase() async {
-    final token = await Database.get(DatabaseKeys.yandexMusicToken.value);
-    final qualityl = await Database.get(
-      DatabaseKeys.yandexMusicTrackQuality.value,
-    );
-    final search2 = await Database.get(DatabaseKeys.yandexMusicSearch.value);
-    final preload = await Database.get(DatabaseKeys.yandexMusicPreload.value);
-    if (!mounted) return;
+  void initDatabase() {
     setState(() {
-      controller.text = token ?? '';
-      quality = qualityl != null ? qualityMap[qualityl]! : quality;
-      search = search2 ?? search;
-      yandexMusicPreload = preload ?? yandexMusicPreload;
+      controller.text = db.yandexMusicToken.value;
+      quality = qualityMap[db.yandexMusicQuality.value] ?? quality;
+      search = db.yandexMusicSearch.value;
+      yandexMusicPreload = db.yandexMusicPreload.value;
     });
-    yandexMusicChecker(token ?? '');
+    yandexMusicChecker(db.yandexMusicToken.value);
   }
 
   @override
@@ -547,7 +514,7 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
             "Quality of downloaded tracks.",
             DropdownButton<String>(
               dropdownColor: const Color.fromRGBO(44, 44, 44, 0.2),
-              value: quality,
+              value: qualityList.contains(quality) ? quality : 'Normal (256kbps)',
               borderRadius: BorderRadius.all(Radius.circular(5)),
               elevation: 16,
               focusColor: const Color.fromARGB(113, 255, 255, 255),
@@ -667,7 +634,7 @@ class __DebugSettingsWidget extends State<_DebugSettings> {
     return Center(
       child: Column(
         children: [
-           InkWell(
+          InkWell(
             onTap: () async {
               await showDialog(
                 context: context,
@@ -677,24 +644,27 @@ class __DebugSettingsWidget extends State<_DebugSettings> {
                     child: SizedBox(
                       width: maxWidth,
                       height: maxWidth,
-                      child: Center(child: Text(
-                        Database.lastError.toString(),
-                        style: TextStyle(color: Colors.white),
-                        textAlign: TextAlign.center,
+                      child: Center(
+                        child: Text(
+                          Database.lastError.toString(),
+                          style: TextStyle(color: Colors.white),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    )),
+                    ),
                   ),
                 ),
               );
             },
-            child:  button(
-            'Database',
-            'Inited: ${Database.isInited} || LastError: ${Database.lastError}',
-            SizedBox.shrink(),
-            maxWidth,
-            rightPadding,
-            ButtonPosition.start,
-           )),
+            child: button(
+              'Database',
+              'Inited: ${Database.isInited} || LastError: ${Database.lastError}',
+              SizedBox.shrink(),
+              maxWidth,
+              rightPadding,
+              ButtonPosition.start,
+            ),
+          ),
           // SizedBox(height: 1),
           // button(
           //   'ListenLogger',
@@ -715,12 +685,14 @@ class __DebugSettingsWidget extends State<_DebugSettings> {
                     child: SizedBox(
                       width: maxWidth,
                       height: maxWidth,
-                      child: Center(child: Text(
-                        NativeControl().lastError.toString(),
-                        style: TextStyle(color: Colors.white),
-                        textAlign: TextAlign.center,
+                      child: Center(
+                        child: Text(
+                          NativeControl().lastError.toString(),
+                          style: TextStyle(color: Colors.white),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    )),
+                    ),
                   ),
                 ),
               );

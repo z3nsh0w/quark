@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
+import 'package:quark/services/database/database.dart';
 import '../../services/cached_images.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -160,9 +161,7 @@ class _AndroidPlaylistOverlayState extends State<AndroidPlaylistOverlay> {
       final currentQuery = query;
 
       _searchDebounceTimer = Timer(_searchDebounceDuration, () async {
-        bool? enabled = await Database.get(
-          DatabaseKeys.yandexMusicSearch.value,
-        );
+        bool enabled = DatabaseStreamerService().yandexMusicSearch.value;
         if (query.isEmpty || currentQuery != query || enabled == false) {
           return;
         }

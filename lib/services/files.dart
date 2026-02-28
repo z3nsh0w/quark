@@ -1,10 +1,31 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:logging/logging.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '/objects/track.dart';
 import 'package:path/path.dart' as path;
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
+
+class ApplicationCacheDirectory {
+  ApplicationCacheDirectory._();
+
+  static final ApplicationCacheDirectory _instance =
+      ApplicationCacheDirectory._();
+
+  static ApplicationCacheDirectory get instance => _instance;
+
+  Directory? _directory;
+
+  Future<void> init() async {
+    if (_directory != null) return;
+    _directory = await getApplicationCacheDirectory();
+  }
+
+  Directory get directory {
+    return _directory!;
+  }
+}
 
 class Files {
   Future<LocalTrack> _getTrackInfo(FileSystemEntity entity) async {
@@ -21,7 +42,6 @@ class Files {
         artists: [tagsFromFile.artist ??= 'Unknown'],
         filepath: entity.path,
         albums: ['Unknown'],
-        // cover22: cover != null ? BytedCover(bytes: cover, source: CoverSource.bytes) : NoCover(source: CoverSource.no)
       );
 
       track.coverByted = cover!;
@@ -36,6 +56,14 @@ class Files {
         albums: ['Unknown'],
       );
       return track;
+    }
+  }
+
+  static AudioMetadata? getFileTags(String path, {bool getImage = false}) {
+    try {
+      return readMetadata(File(path), getImage: getImage);
+    } catch (e) {
+      return null;
     }
   }
 

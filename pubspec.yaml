@@ -26,7 +26,6 @@ dependencies:
   animated_expand: ^1.0.2
   interactive_slider: ^0.5.1
   audio_service_mpris: ^0.2.0
-  # cached_network_image: ^3.4.1
   flutter_inappwebview: ^6.2.0-beta.2
   audio_metadata_reader: ^1.4.2
   material_symbols_icons: ^4.2892.0
@@ -39,8 +38,7 @@ dependencies:
   animated_text_kit: ^4.3.0
   intl: ^0.20.2
   # isar_flutter_libs: ^3.1.0+1
-  google_fonts: ^6.3.2
-  
+  google_fonts: ^6.3.2  
 
 
 dependency_overrides:
@@ -49,7 +47,12 @@ dependency_overrides:
   animated_expand:
     path: ./lib/overrided_libraries/animated_expand
 
-
+linter:
+  rules:
+    - no_assignments_in_conditions
+    - prefer_equal_for_default_values
+    - always_put_control_body_on_new_line
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -62,3 +65,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon512.png
+  shaders:
+    - shaders/vibe.frag

@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -5,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/objects/playlist.dart';
 import 'package:quark/objects/track.dart';
 import 'package:audioplayers/audioplayers.dart';
+
+// TODO: LOW LATENCY TRACK CHANGE
 
 enum ShuffleMode {
   /// Completely randomizes the list.
@@ -26,10 +29,10 @@ enum ChangeReason {
 }
 
 class TrackChange {
-  final PlayerTrack track;
+  final PlayerTrack newTrack;
   final ChangeReason reason;
 
-  const TrackChange({required this.track, required this.reason});
+  const TrackChange({required this.newTrack, required this.reason});
 }
 
 class PlaylistInfo {
@@ -71,6 +74,11 @@ class Player {
 
   static Player get player => _player;
 
+  PlayerTrack nowPlayingTrack;
+  List<PlayerTrack> playlist;
+
+  Player({required this.playlist, required this.nowPlayingTrack});
+
   // SETUP NOTIFIERS FOR UI LISTENERS
   @Deprecated(
     "Use trackChangeNotifier ```player.trackChangeNotifier.value.track```",
@@ -81,7 +89,7 @@ class Player {
 
   final trackChangeNotifier = ValueNotifier<TrackChange>(
     TrackChange(
-      track: LocalTrack(title: '', filepath: '', artists: [], albums: []),
+      newTrack: LocalTrack(title: '', filepath: '', artists: [], albums: []),
       reason: ChangeReason.external,
     ),
   );
@@ -91,17 +99,15 @@ class Player {
   final repeatModeNotifier = ValueNotifier<bool>(false);
   final shuffleModeNotifier = ValueNotifier<bool>(false);
   final volumeNotifier = ValueNotifier<double>(0.5);
+  final queueNotifier = ValueNotifier<Queue<PlayerTrack>>(
+    Queue<PlayerTrack>.from([]),
+  );
 
   /// Notifies whether the playback is playing or stopped
   final playingNotifier = ValueNotifier<bool>(false);
 
-  PlayerTrack nowPlayingTrack;
-  List<PlayerTrack> playlist;
-
   /// It is not recommended to change this value yourself by using ```Player.unShuffledPlaylist = []```.
   late List<PlayerTrack> unShuffledPlaylist;
-
-  Player({required this.playlist, required this.nowPlayingTrack});
 
   final playerInstance = AudioPlayer();
 
@@ -117,6 +123,9 @@ class Player {
   ShuffleMode shuffleMode = ShuffleMode.nowOnTop;
 
   PlaylistInfo playlistInfo = PlaylistInfo();
+
+  Queue<PlayerTrack> queue = Queue<PlayerTrack>.from([]);
+  PlayerTrack? unQueuedLastTrack;
 
   Future<void> init() async {
     playlistNotifier.value = playlist;
@@ -164,10 +173,39 @@ class Player {
     if (Platform.isLinux) {
       // Fixing the bug where changing the source cause the maximum player's volume (1.0 instead previous value)
       await playerInstance.setVolume(volumeNotifier.value);
+      await playerInstance.setPlaybackRate(playerInstance.playbackRate);
     }
   }
 
   Future<void> playNext({bool? forceNext, bool? completed}) async {
+    if (queue.isNotEmpty) {
+      queue.removeFirst();
+      _notifyQueueListeners();
+      if (queue.isEmpty) {
+        if (unQueuedLastTrack != null) {
+          int nowIndex = playlist.indexWhere((t) => t == unQueuedLastTrack);
+          int nextIndex = (isRepeat && forceNext == null)
+              ? nowIndex
+              : playlist.length - 1 != nowIndex
+              ? nowIndex + 1
+              : 0;
+          nowPlayingTrack = playlist[nextIndex];
+        }
+      } else {
+        nowPlayingTrack = queue.first;
+      }
+      trackNotifier.value = nowPlayingTrack;
+      trackChangeNotifier.value = TrackChange(
+        newTrack: nowPlayingTrack,
+        reason: (completed ?? false)
+            ? ChangeReason.completed
+            : ChangeReason.external,
+      );
+      await playerInstance.stop();
+      await _playIsPlaying();
+      return;
+    }
+
     int nowIndex = playlist.indexWhere((t) => t == nowPlayingTrack);
 
     int nextIndex = (isRepeat && forceNext == null)
@@ -178,13 +216,14 @@ class Player {
     nowPlayingTrack = playlist[nextIndex];
     trackNotifier.value = nowPlayingTrack;
     trackChangeNotifier.value = TrackChange(
-      track: nowPlayingTrack,
+      newTrack: nowPlayingTrack,
       reason: (completed ?? false)
           ? ChangeReason.completed
           : ChangeReason.external,
     );
     await playerInstance.stop();
     await _playIsPlaying();
+    return;
   }
 
   Future<void> _playIsPlaying() async {
@@ -200,6 +239,17 @@ class Player {
   }
 
   Future<void> playPrevious() async {
+    if (queue.isNotEmpty) {
+      nowPlayingTrack = queue.first;
+      trackNotifier.value = nowPlayingTrack;
+      trackChangeNotifier.value = TrackChange(
+        newTrack: nowPlayingTrack,
+        reason: ChangeReason.external,
+      );
+      await playerInstance.stop();
+      await _playIsPlaying();
+    }
+
     int nowIndex = playlist.indexWhere((t) => t == nowPlayingTrack);
     int nextIndex = nowIndex == 0
         ? playlist.length - 1
@@ -209,7 +259,7 @@ class Player {
     nowPlayingTrack = playlist[nextIndex];
     trackNotifier.value = nowPlayingTrack;
     trackChangeNotifier.value = TrackChange(
-      track: nowPlayingTrack,
+      newTrack: nowPlayingTrack,
       reason: ChangeReason.external,
     );
     await playerInstance.stop();
@@ -235,9 +285,6 @@ class Player {
     playlist = newPlaylist;
     unShuffledPlaylist = newPlaylist;
     playlistNotifier.value = newPlaylist;
-    if (isShuffle) {
-      playlist = await shuffle(shuffleMode);
-    }
   }
 
   Future<void> insertTrack(
@@ -269,7 +316,7 @@ class Player {
     }
   }
 
-  Future<void> addQueue(List<PlayerTrack> tracks, {PlayerTrack? after}) async {
+  Future<void> addTracks(List<PlayerTrack> tracks, {PlayerTrack? after}) async {
     after ??= nowPlayingTrack;
     int index = playlist.indexOf(after) + 1;
     if (index == -1) return;
@@ -280,11 +327,56 @@ class Player {
     playlistNotifier.value = playlist;
   }
 
+  Future<void> playTemporaryQueue(
+    List<PlayerTrack> tracks, {
+    bool? startsNow,
+    bool? first,
+  }) async {
+    if (tracks.isEmpty) {
+      return;
+    }
+    _createQueue();
+    startsNow ??= false;
+    if (first == true) {
+      for (PlayerTrack track in tracks.reversed) {
+        queue.addFirst(track);
+      }
+    } else {
+      queue.addAll(tracks);
+    }
+    queue.addFirst(nowPlayingTrack);
+
+    _notifyQueueListeners();
+    if (startsNow) {
+      await Player.player.playNext(forceNext: true, completed: false);
+    }
+    return;
+  }
+
+  void insertInQueue(PlayerTrack track) {
+    _createQueue();
+    queue.addFirst(track);
+    queue.addFirst(track);
+    _notifyQueueListeners();
+  }
+
+  void addEndQueue(PlayerTrack track) {
+    _createQueue();
+    queue.addLast(track);
+    _notifyQueueListeners();
+  }
+
+  void _createQueue() {
+    if (queue.isEmpty) {
+      unQueuedLastTrack = nowPlayingTrack;
+    }
+  }
+
   Future<void> playNetTrack(String link, PlayerTrack track) async {
     nowPlayingTrack = track;
     trackNotifier.value = nowPlayingTrack;
     trackChangeNotifier.value = TrackChange(
-      track: nowPlayingTrack,
+      newTrack: nowPlayingTrack,
       reason: ChangeReason.external,
     );
     await playerInstance.stop();
@@ -300,6 +392,11 @@ class Player {
     repeatModeNotifier.value = true;
   }
 
+  Future<void> removeFromQueue(PlayerTrack track) async {
+    queue.remove(track);
+    _notifyQueueListeners();
+  }
+
   Future<void> disableRepeat() async {
     isRepeat = false;
     repeatModeNotifier.value = false;
@@ -310,6 +407,7 @@ class Player {
   }
 
   Future<List<PlayerTrack>> shuffle(ShuffleMode? shuffleMode1) async {
+    _clearQueue();
     shuffleMode1 ??= ShuffleMode.nowOnTop;
     shuffleMode = shuffleMode1;
 
@@ -339,7 +437,25 @@ class Player {
     return playlist;
   }
 
+  /// completely
+  void _clearQueue() {
+    queue.clear();
+    unQueuedLastTrack = null;
+    _notifyQueueListeners();
+  }
+
+  void clearQueue() {
+    queue.clear();
+    queue.add(nowPlayingTrack);
+    _notifyQueueListeners();
+  }
+
+  void _notifyQueueListeners() {
+    queueNotifier.value = queue;
+  }
+
   Future<List<PlayerTrack>> unShuffle() async {
+    queue.clear();
     isShuffle = false;
     playlist = unShuffledPlaylist;
     shuffleModeNotifier.value = false;
@@ -348,14 +464,19 @@ class Player {
   }
 
   Future<void> playCustom(PlayerTrack track) async {
+    if (queue.contains(track)) {
+      queue = Queue.from(queue.skipWhile((e) => e != track));
+      _notifyQueueListeners();
+    } else {
+      _clearQueue();
+    }
     nowPlayingTrack = track;
     trackNotifier.value = nowPlayingTrack;
     trackChangeNotifier.value = TrackChange(
-      track: nowPlayingTrack,
+      newTrack: nowPlayingTrack,
       reason: ChangeReason.external,
     );
     await playerInstance.stop();
-    // await playerInstance.setSource(DeviceFileSource(track.filepath));
     await _playIsPlaying();
   }
 
