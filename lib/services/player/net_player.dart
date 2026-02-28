@@ -1,3 +1,5 @@
+import 'package:quark/services/database/database.dart';
+
 import 'player.dart';
 import 'package:async/async.dart';
 import 'package:logging/logging.dart';
@@ -15,6 +17,7 @@ class NetPlayer {
 
   Future<void> init(YandexMusic instance) async {
     yandexMusic = instance;
+    Logger('NetPlayerService').fine('Inited');
   }
 
   Future<void> playYandex(PlayerTrack track) async {
@@ -61,6 +64,7 @@ class NetConductor {
     _yandex = yandex;
     _player.trackChangeNotifier.addListener(_onTrackChanged);
     _isInitialized = true;
+    Logger('NetConductorSerivce').fine('Inited');
   }
 
   void _onTrackChanged() async {
@@ -74,7 +78,6 @@ class NetConductor {
 
     if (track is YandexMusicTrack && !await File(track.filepath).exists()) {
       try {
-        print('changed');
         _operation = CancelableOperation.fromFuture(_getLinkAndPlay(track));
         await _operation!.value;
       } catch (e) {
@@ -87,9 +90,18 @@ class NetConductor {
   }
 
   Future<void> _getLinkAndPlay(PlayerTrack track) async {
-    if (_operation?.isCanceled ?? true) return;
+    if (_operation?.isCanceled ?? false) return;
+    final quality = DatabaseStreamerService().yandexMusicQuality.value;
+            AudioQuality downloadQuality = switch (quality) {
+        'lossless' => AudioQuality.lossless,
+        'nq' => AudioQuality.normal,
+        'lq' => AudioQuality.low,
+        'mp3' => AudioQuality.normal,
+        _ => AudioQuality.normal,
+      };
     final link = await _yandex.tracks.getDownloadLink(
       (track as YandexMusicTrack).track.id,
+      quality:  downloadQuality
     );
     if (_operation?.isCanceled ?? true) return;
     await _player.playNetTrack(link, track);
@@ -121,15 +133,12 @@ class NetConductor {
       return;
     }
     if (track is YandexMusicTrack) {
-      String? quality = await Database.get(
-        DatabaseKeys.yandexMusicTrackQuality.value,
-      );
-      quality ??= 'nq';
+    final quality = DatabaseStreamerService().yandexMusicQuality.value;
       AudioQuality downloadQuality = switch (quality) {
         'lossless' => AudioQuality.lossless,
         'nq' => AudioQuality.normal,
         'lq' => AudioQuality.low,
-        'mp3' => AudioQuality.mp3,
+        'mp3' => AudioQuality.normal,
         _ => AudioQuality.normal,
       };
       caching.add(track.filepath);

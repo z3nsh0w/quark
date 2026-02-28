@@ -4,6 +4,7 @@ import 'artist.dart';
 enum TrackSource {
   /// Track from the official Yandex library
   OWN('OWN'),
+
   /// Track uploaded by user
   UGC('UGC');
 
@@ -18,6 +19,26 @@ enum TrackSource {
       }
     }
     return TrackSource.OWN;
+  }
+}
+
+class LyricsInfo {
+  /// Is Lyrics with timestamp available
+  final bool hasAvailableSyncLyrics;
+
+  /// Is Lyrics without timestamp available
+  final bool hasAvailableTextLyrics;
+
+  const LyricsInfo({
+    required this.hasAvailableSyncLyrics,
+    required this.hasAvailableTextLyrics,
+  });
+
+  static LyricsInfo fromJson(Map map) {
+    return LyricsInfo(
+      hasAvailableSyncLyrics: map['hasAvailableSyncLyrics'],
+      hasAvailableTextLyrics: map['hasAvailableTextLyrics'],
+    );
   }
 }
 
@@ -59,6 +80,9 @@ class Track {
 
   final String? ogImage;
 
+  /// Always llnot be null if track is not UGC
+  final LyricsInfo? lyricsInfo;
+
   /// Track source
   ///
   /// UGC -User uploaded content (The track was uploaded by the user)
@@ -71,7 +95,11 @@ class Track {
   Track(Map<String, dynamic> json)
     : title = json['title'].toString(),
       id = json['id'].toString(),
+      trackSource = TrackSource.tryFromString(json['trackSource'] ?? ''),
       realId = json['realId']?.toString(),
+      lyricsInfo = json['trackSource'] != 'UGC'
+          ? LyricsInfo.fromJson(json['lyricsInfo'])
+          : null,
       artists = json['artists'] != null
           ? (json['artists'] as List).map((t) {
               if (json['trackSource'] == TrackSource.UGC.value) {
@@ -88,7 +116,6 @@ class Track {
       durationMs = json['durationMs'],
       available = json['available'] ??= false,
       ogImage = json['ogImage'] ??= '',
-      trackSource = TrackSource.tryFromString(json['trackSource'] != null ? json['trackSource'] : ''),
       matchedTrack = json['matchedTrack'] != null
           ? Track(json['matchedTrack'])
           : null,

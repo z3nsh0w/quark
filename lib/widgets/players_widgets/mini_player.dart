@@ -1,6 +1,5 @@
 // Flutter packages
 import 'dart:ui';
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -10,26 +9,19 @@ import 'package:quark/objects/track.dart';
 import 'package:logging/logging.dart';
 import 'package:quark/services/cached_images.dart';
 import 'package:quark/services/yandex_music_singleton.dart';
-import 'package:yandex_music/yandex_music.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:animated_expand/animated_expand.dart';
 import 'package:interactive_slider/interactive_slider.dart';
 
 // Local components&modules
 import '../player_buttons.dart';
 import '/objects/playlist.dart';
-import '/widgets/state_indicator.dart';
 import '../../services/player/player.dart';
 import '../../services/database/database_engine.dart';
-import '../../services/player/net_player.dart';
 
 class MiniPlayerWidget extends StatefulWidget {
   final PlayerPlaylist playlist;
 
-  const MiniPlayerWidget({
-    super.key,
-    required this.playlist,
-  });
+  const MiniPlayerWidget({super.key, required this.playlist});
 
   @override
   State<MiniPlayerWidget> createState() => _PlaylistPage1State();
@@ -60,14 +52,6 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
 
   final log = Logger('PlaylistPage');
 
-  List<PlayerTrack> yandexUploadingTracks = [];
-
-  /// Main playlist
-  late List<PlayerTrack> currentPlaylist;
-
-  /// Unshuffled playlist
-  late List<PlayerTrack> backupPlaylist;
-
   /// Now playing track
   late PlayerTrack nowPlayingTrack;
 
@@ -82,46 +66,10 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
   /// Main Player instance
   Player player = Player.player;
 
-  Color popupIconsColor = const Color.fromARGB(
-    255,
-    255,
-    255,
-    255,
-  ).withAlpha(170); // TODO: MAKE ACCENT COLORS AS SETTINGS
-  Color popupTextColor = Colors.white.withAlpha(220);
-
-  StateIndicatorOperation operation = StateIndicatorOperation.none;
-
-  InteractiveSliderController positionController = InteractiveSliderController(
-    0.0,
-  );
-
-  final expandController = ExpandController(
-    initialValue: ExpandState.collapsed,
-  );
-
-  late AnimationController playlistAnimationController;
-  late Animation<Offset> playlistOffsetAnimation;
-  OverlayEntry? playlistOverlayEntry;
-  OverlayEntry? coverOverlayEntry;
-  late AnimationController coverAnimationController;
-  late Animation<double> coverDoubleAnimation;
-
   late final VoidCallback _playingListener;
   late final VoidCallback _trackListener;
   late final VoidCallback _repeatListener;
   late final VoidCallback _shuffleListener;
-
-
-  /// Function for changing the indicator status
-  void showOperation(StateIndicatorOperation newOperation) {
-    if (mounted) {
-      setState(() => operation = newOperation);
-      Future.delayed(Duration(seconds: 2), () {
-        if (mounted) setState(() => operation = StateIndicatorOperation.none);
-      });
-    }
-  }
 
   /// Forced animation playback
   void playAnimation() async {
@@ -129,22 +77,6 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
     setState(() {
       animationInitiator = Uint8List(0);
     });
-  }
-
-  /// Update database playlist
-  void updateDatabasePlaylist() async {
-    if (isShuffleEnable) {
-      return;
-    }
-    PlayerPlaylist pl = PlayerPlaylist(
-      ownerUid: widget.playlist.ownerUid,
-      kind: widget.playlist.kind,
-      name: widget.playlist.name,
-      tracks: currentPlaylist,
-      source: widget.playlist.source,
-    );
-    Map play = await serializePlaylist(pl);
-    await Database.put(DatabaseKeys.lastPlaylist.value, play);
   }
 
   /// Reaction on like button
@@ -158,11 +90,11 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
       await YandexMusicSingleton.likeTrack(track.id);
     }
   }
+
   /// Reaction on volume interactive slider
   void changeVolume(value) async {
     volume = value;
     await player.setVolume(value);
-    await Database.put(DatabaseKeys.volume.value, value);
     setState(() {
       volume = value;
     });
@@ -173,26 +105,6 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
   // Initializing functions
   //
   //
-
-  /// Load keys from database
-  void loadDatabase() async {
-    double? dbVolume = await Database.get(DatabaseKeys.volume.value);
-    double? transition = await Database.get(DatabaseKeys.transitionSpeed.value);
-    bool? indicator = await Database.get(
-      DatabaseKeys.stateIndicatorState.value,
-    );
-    bool? playlistArea = await Database.get(
-      DatabaseKeys.stateIndicatorState.value,
-    );
-    dbVolume ??= volume;
-    transition ??= transitionSpeed;
-    stateIndicator = indicator ?? stateIndicator;
-    playlistOpeningArea = playlistArea ?? playlistOpeningArea;
-
-    changeVolume(dbVolume);
-    await player.setVolume(dbVolume);
-    playAnimation();
-  }
 
   /// Initializing player listeners
   void playerListeners() async {
@@ -233,38 +145,9 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
     // Init playlists
 
     super.initState();
-
-    currentPlaylist = [...widget.playlist.tracks];
-    backupPlaylist = [...widget.playlist.tracks];
     nowPlayingTrack = player.nowPlayingTrack;
     isPlaying = player.isPlaying;
-    volume = player.playerInstance.volume;
-
-    // Controllers
-
-    playlistAnimationController = AnimationController(
-      duration: Duration(milliseconds: (650 * transitionSpeed).round()),
-      vsync: this,
-    );
-
-    playlistOffsetAnimation =
-        Tween<Offset>(begin: const Offset(-1.0, 0), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: playlistAnimationController,
-            curve: Curves.ease,
-          ),
-        );
-    coverAnimationController = AnimationController(
-      duration: Duration(milliseconds: (500 * transitionSpeed).round()),
-      reverseDuration: Duration(milliseconds: (400 * transitionSpeed).round()),
-      vsync: this,
-    );
-    coverDoubleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: coverAnimationController,
-        curve: Curves.easeOutQuint,
-      ),
-    );
+    volume = player.volumeNotifier.value;
 
     // Update UI
     playerListeners();
@@ -273,8 +156,7 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
     player.trackNotifier.addListener(_trackListener);
     player.shuffleModeNotifier.addListener(_shuffleListener);
     player.repeatModeNotifier.addListener(_repeatListener);
-
-    loadDatabase();
+    playAnimation();
   }
 
   @override
@@ -283,46 +165,23 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
     player.trackNotifier.removeListener(_trackListener);
     player.shuffleModeNotifier.removeListener(_shuffleListener);
     player.repeatModeNotifier.removeListener(_repeatListener);
-    playlistAnimationController.dispose();
     super.dispose();
-  }
-
-  Widget animatedExpandButton(Function() onTap, IconData icon) {
-    return InkWell(
-      onTap: () async {
-        await onTap();
-      },
-      borderRadius: BorderRadius.circular(30),
-      splashColor: Color.fromRGBO(255, 255, 255, 0.5),
-      highlightColor: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        child: Icon(icon, size: 20, color: Colors.grey),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    if (!isPlaylistOpened) {
-      playerPadding = 0.0;
-    } else if (size.width > 810 && size.height > 600) {
-      playerPadding = 400.0;
-    } else if (size.width > 810) {
-      playerPadding = 400.0;
-    } else {
-      playerPadding = 0.0;
-    }
-
     bool isCompact = MediaQuery.of(context).size.width > 350;
     double isCompactPadding = isCompact ? 25 : 18;
+    final double buttonSize = (MediaQuery.of(context).size.width * 0.1).clamp(
+      30.0,
+      40.0,
+    );
 
     ImageProvider<Object> imageProvider;
 
     if (nowPlayingTrack is LocalTrack &&
         !listEquals(nowPlayingTrack.coverByted, Uint8List(0))) {
-      imageProvider = MemoryBytesImageProvider(nowPlayingTrack.coverByted);
+      imageProvider = MemoryImage(nowPlayingTrack.coverByted);
     } else {
       imageProvider = CachedImageProvider(
         'https://${nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
@@ -458,11 +317,15 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                       functionPlayerButton(
                                         Icons.favorite_outlined,
                                         Icons.favorite_outlined,
-                                        YandexMusicSingleton.likedTracksNotifier.value.contains(
-                                          (nowPlayingTrack as YandexMusicTrack)
-                                              .track
-                                              .id,
-                                        ),
+                                        YandexMusicSingleton
+                                            .likedTracksNotifier
+                                            .value
+                                            .contains(
+                                              (nowPlayingTrack
+                                                      as YandexMusicTrack)
+                                                  .track
+                                                  .id,
+                                            ),
                                         () => likeUnlike(),
                                       ),
                                     SizedBox(width: 7),
@@ -471,16 +334,16 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
 
                                 const SizedBox(height: 10),
 
-                                AnimatedContainer(
-                                  duration: Duration(milliseconds: 1000),
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: 350),
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.min,
+
                                     children: [
-                                      AnimatedContainer(
-                                        duration: Duration(milliseconds: 600),
-                                        height: isCompact ? 40 : 30,
-                                        width: isCompact ? 40 : 30,
+                                      SizedBox(
+                                        height: buttonSize,
+                                        width: buttonSize,
                                         child: functionPlayerButton(
                                           Icons.shuffle,
                                           Icons.shuffle_outlined,
@@ -493,15 +356,8 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                         ),
                                       ),
 
-                                      AnimatedPadding(
-                                        padding: EdgeInsetsGeometry.only(
-                                          right: isCompactPadding,
-                                        ),
-                                        duration: Duration(milliseconds: 1000),
-                                        curve: Curves.ease,
-                                      ),
+                                      Spacer(),
 
-                                      // SizedBox(width: isCompact ? 32 : 18 ),
                                       InkWell(
                                         borderRadius: BorderRadius.all(
                                           Radius.circular(30),
@@ -510,10 +366,9 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                           await Player.player.playPrevious();
                                         },
 
-                                        child: AnimatedContainer(
-                                          duration: Duration(milliseconds: 600),
-                                          height: isCompact ? 40 : 30,
-                                          width: isCompact ? 40 : 30,
+                                        child: Container(
+                                          height: buttonSize,
+                                          width: buttonSize,
 
                                           decoration: buttonDecoration(),
                                           child: Row(
@@ -530,13 +385,7 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                         ),
                                       ),
 
-                                      AnimatedPadding(
-                                        padding: EdgeInsetsGeometry.only(
-                                          right: isCompactPadding,
-                                        ),
-                                        duration: Duration(milliseconds: 1000),
-                                      ),
-
+                                      Spacer(),
                                       InkWell(
                                         borderRadius: BorderRadius.all(
                                           Radius.circular(30),
@@ -547,11 +396,9 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                           );
                                         },
 
-                                        child: AnimatedContainer(
-                                          duration: Duration(milliseconds: 600),
-                                          height: isCompact ? 45 : 35,
-                                          width: isCompact ? 45 : 35,
-
+                                        child: Container(
+                                          height: buttonSize + 5,
+                                          width: buttonSize + 5,
                                           decoration: buttonDecoration(),
                                           child: Row(
                                             mainAxisAlignment:
@@ -569,14 +416,7 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                           ),
                                         ),
                                       ),
-
-                                      AnimatedPadding(
-                                        padding: EdgeInsetsGeometry.only(
-                                          right: isCompactPadding,
-                                        ),
-                                        duration: Duration(milliseconds: 1000),
-                                      ),
-
+                                      Spacer(),
                                       InkWell(
                                         borderRadius: BorderRadius.all(
                                           Radius.circular(30),
@@ -586,11 +426,9 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                             forceNext: true,
                                           );
                                         },
-                                        child: AnimatedContainer(
-                                          duration: Duration(milliseconds: 600),
-                                          height: isCompact ? 40 : 30,
-                                          width: isCompact ? 40 : 30,
-
+                                        child: Container(
+                                          height: buttonSize,
+                                          width: buttonSize,
                                           decoration: buttonDecoration(),
                                           child: Row(
                                             mainAxisAlignment:
@@ -605,17 +443,10 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                           ),
                                         ),
                                       ),
-                                      AnimatedPadding(
-                                        padding: EdgeInsetsGeometry.only(
-                                          left: isCompactPadding,
-                                        ),
-                                        duration: Duration(milliseconds: 1000),
-                                      ),
-
-                                      AnimatedContainer(
-                                        duration: Duration(milliseconds: 600),
-                                        height: isCompact ? 40 : 30,
-                                        width: isCompact ? 40 : 30,
+                                      Spacer(),
+                                      SizedBox(
+                                        height: buttonSize,
+                                        width: buttonSize,
                                         child: functionPlayerButton(
                                           Icons.repeat_one_outlined,
                                           Icons.repeat_one_outlined,
@@ -631,34 +462,23 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                   ),
                                 ),
 
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      width: 250,
-                                      height: 30,
-                                      child: InteractiveSlider(
-                                        padding: EdgeInsets.only(
-                                          top: 8,
-                                          bottom: 0,
-                                        ),
-                                        startIcon: const Icon(
-                                          Icons.volume_down,
-                                        ),
-                                        endIcon: const Icon(Icons.volume_up),
-                                        min: 0.0,
-                                        max: 1.0,
-                                        brightness: Brightness.light,
-                                        initialProgress: volume,
-                                        iconColor: Colors.white,
-                                        gradient: LinearGradient(
-                                          colors: [Colors.white, Colors.white],
-                                        ),
-                                        onChanged: (value) =>
-                                            changeVolume(value),
-                                      ),
+                                SizedBox(
+                                  width: 250,
+                                  height: 30,
+                                  child: InteractiveSlider(
+                                    padding: EdgeInsets.only(top: 8, bottom: 0),
+                                    startIcon: const Icon(Icons.volume_down),
+                                    endIcon: const Icon(Icons.volume_up),
+                                    min: 0.0,
+                                    max: 1.0,
+                                    brightness: Brightness.light,
+                                    initialProgress: volume,
+                                    iconColor: Colors.white,
+                                    gradient: LinearGradient(
+                                      colors: [Colors.white, Colors.white],
                                     ),
-                                  ],
+                                    onChanged: (value) => changeVolume(value),
+                                  ),
                                 ),
 
                                 DragToMoveArea(

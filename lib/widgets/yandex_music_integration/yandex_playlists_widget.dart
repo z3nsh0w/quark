@@ -98,26 +98,7 @@ class _YandexPlaylistsState extends State<YandexPlaylists> {
                           List<YandexMusicTrack> output = [];
 
                           for (Track track in playlistTracks) {
-                            String path = await getTrackPath(track.id);
-                            YandexMusicTrack tr = YandexMusicTrack(
-                              filepath: path,
-                              title: track.title,
-                              albums: track.albums.isNotEmpty
-                                  ? track.albums
-                                        .map((album) => album.title)
-                                        .toList()
-                                  : ['Unknown album'],
-                              artists: track.artists.isNotEmpty
-                                  ? track.artists
-                                        .map((album) => album.title)
-                                        .toList()
-                                  : ['Unknown artist'],
-                              track: track,
-                            );
-                            String? cover = track.coverUri;
-                            cover ??= tr.cover;
-                            tr.cover = cover;
-                            output.add(tr);
+                            output.add(YandexMusicTrack.fromYMTtoLocalTrack(track));
                           }
                           output.removeWhere(
                             (track) => track.track.available != true,

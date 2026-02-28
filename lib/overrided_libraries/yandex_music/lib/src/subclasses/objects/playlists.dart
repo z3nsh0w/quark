@@ -219,7 +219,7 @@ class YandexMusicPlaylists {
   Future<Map<String, dynamic>> addTracks(
     int kind,
     List<Map<String, dynamic>> trackIds, {
-    int? at,
+    int at = 0,
     int? revision,
     CancelToken? cancelToken,
   }) async {
@@ -251,7 +251,7 @@ class YandexMusicPlaylists {
     int kind,
     String trackId,
     String albumId, {
-    int? at,
+    int at = 0,
     int? revision,
     CancelToken? cancelToken,
   }) async {

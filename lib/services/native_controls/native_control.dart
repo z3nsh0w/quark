@@ -54,6 +54,7 @@ class NativeControl {
       };
       Player.player.playingNotifier.addListener(_playingListener);
       Player.player.trackNotifier.addListener(_nowPlayingListener);
+      Logger('NativeControlService').fine('Inited');
     } catch (e) {
       Logger(
         'NativeControl',
@@ -158,15 +159,15 @@ class NativeControl {
     inited = true;
   }
 
-Future<void> setPlaybackStatus(bool status) async {
-  if (Platform.isWindows) {
-    status
-        ? await control.setPlaybackStatus(PlaybackStatus.paused)
-        : await control.setPlaybackStatus(PlaybackStatus.playing);
-  } else {
-    await (control as MyAudioHandler).updatePlayingStatus(!status);
+  Future<void> setPlaybackStatus(bool status) async {
+    if (Platform.isWindows) {
+      status
+          ? await control.setPlaybackStatus(PlaybackStatus.paused)
+          : await control.setPlaybackStatus(PlaybackStatus.playing);
+    } else {
+      await (control as MyAudioHandler).updatePlayingStatus(!status);
+    }
   }
-}
 
   Future<void> updateData(PlayerTrack track, {String? customImage}) async {
     if (Platform.isWindows) {

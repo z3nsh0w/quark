@@ -1,17 +1,17 @@
-import 'dart:io';
 import 'dart:ui';
 import 'dart:math';
 import 'dart:async';
-import '../../services/database/database_engine.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:yandex_music/yandex_music.dart';
+import '../../services/database/database_engine.dart';
+import 'package:quark/services/database/database.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 class YandexLogin extends StatefulWidget {
   final Function() closeView;
-  YandexLogin({required this.closeView});
+  const YandexLogin({super.key, required this.closeView});
 
   @override
   State<StatefulWidget> createState() => _YandexLoginState();
@@ -29,7 +29,7 @@ class _YandexLoginState extends State<YandexLogin> {
     'https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d',
   );
 
-  late bool webview2;
+  late bool webview2 = false;
 
   InAppWebViewController? webViewController;
 
@@ -54,14 +54,13 @@ class _YandexLoginState extends State<YandexLogin> {
         String displayName = await yandexMusic.account.getDisplayName();
         String fullName = await yandexMusic.account.getFullName();
         String login = await yandexMusic.account.getLogin();
-        await Database.putAll({
-          DatabaseKeys.yandexMusicToken.value: value,
-          DatabaseKeys.yandexMusicLogin.value: login,
-          DatabaseKeys.yandexMusicFullName.value: fullName,
-          DatabaseKeys.yandexMusicDisplayName.value: displayName,
-          DatabaseKeys.yandexMusicUid.value: yandexMusic.accountID,
-          DatabaseKeys.yandexMusicEmail.value: email,
-        });
+        final db = DatabaseStreamerService();
+        db.yandexMusicToken.value = value;
+        db.yandexMusicLogin.value = login;
+        db.yandexMusicFullName.value = fullName;
+        db.yandexMusicDisplayName.value = displayName;
+        db.yandexMusicUid.value = yandexMusic.accountID;
+        db.yandexMusicEmail.value = email;
         widget.closeView();
       } on YandexMusicException {
         setState(() {
@@ -80,9 +79,14 @@ class _YandexLoginState extends State<YandexLogin> {
   Future<void> _checkWebView2Inapp() async {
     try {
       String? version = await WebViewEnvironment.getAvailableVersion();
-      webview2 = version == null ? false : true;
+      print(version);
+      setState(() {
+        webview2 = version == null ? false : true;
+      });
     } catch (e) {
-      webview2 = false;
+      setState(() {
+        webview2 = false;
+      });
     }
   }
 
@@ -90,19 +94,13 @@ class _YandexLoginState extends State<YandexLogin> {
   void initState() {
     super.initState();
     _checkWebView2Inapp();
-    Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen((record) {
-      print(
-        '${record.level.name}: ${record.time.toIso8601String()}: ${record.message} ${record.error}',
-      );
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    if (Platform.isLinux || !webview2) {
+    if (!webview2) {
       return Center(
         child: Container(
           alignment: AlignmentDirectional.center,
@@ -306,6 +304,13 @@ class _YandexLoginState extends State<YandexLogin> {
                                 .split('#')[1]
                                 .split('&')[0]
                                 .replaceAll('access_token=', '');
+                            final uri = Uri.parse(
+                              url.toString().replaceFirst('#', '?'),
+                            );
+                            final expiresIn = int.parse(
+                              uri.queryParameters['expires_in']!,
+                            );
+
                             if (token.length > 3) {
                               yandexMusic = YandexMusic(token: token);
                               try {
@@ -325,18 +330,13 @@ class _YandexLoginState extends State<YandexLogin> {
                                   .getFullName();
                               String login = await yandexMusic.account
                                   .getLogin();
-
-                              await Database.putAll({
-                                DatabaseKeys.yandexMusicToken.value: token,
-                                DatabaseKeys.yandexMusicLogin.value: login,
-                                DatabaseKeys.yandexMusicFullName.value:
-                                    fullName,
-                                DatabaseKeys.yandexMusicDisplayName.value:
-                                    displayName,
-                                DatabaseKeys.yandexMusicUid.value:
-                                    yandexMusic.accountID,
-                                DatabaseKeys.yandexMusicEmail.value: email,
-                              });
+                              final db = DatabaseStreamerService();
+                              db.yandexMusicToken.value = token;
+                              db.yandexMusicLogin.value = login;
+                              db.yandexMusicFullName.value = fullName;
+                              db.yandexMusicDisplayName.value = displayName;
+                              db.yandexMusicUid.value = yandexMusic.accountID;
+                              db.yandexMusicEmail.value = email;
                               widget.closeView();
                             }
                           } catch (ex) {

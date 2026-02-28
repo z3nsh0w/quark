@@ -5,7 +5,6 @@ import 'track.dart';
 import 'wave.dart';
 import 'package:yandex_music/src/objects/cover.dart';
 
-
 class Album {
   /// Album ID
   final int id;
@@ -51,7 +50,6 @@ class Album {
       raw = json;
 }
 
-
 class AlbumInfo {
   final int id;
   final String title;
@@ -73,7 +71,6 @@ class AlbumInfo {
           : <OfficialArtist2>[];
 }
 
-
 class Album2 {
   final int id;
   final String title;
@@ -81,6 +78,7 @@ class Album2 {
   final String? metaType;
   final String? contentWarning;
   final int year;
+
   /// ISO8601
   final String? releaseDate;
   final String coverUri;
@@ -96,7 +94,7 @@ class Album2 {
   final String? sortOrder;
   final List<Label>? labels;
 
-  final List<Track> tracks;
+  final List<List<Track>> tracks;
   final List bestTracks;
   final DerivedColors? colors;
   final List? disclaimers;
@@ -131,15 +129,20 @@ class Album2 {
       artists = (fromJson['artists'] as List)
           .map((toElement) => OfficialArtist(toElement))
           .toList(),
-      labels = fromJson['labels'] != null ?(fromJson['labels'] as List)
-          .map((toElement) => Label.fromJson(toElement))
-          .toList() : null,
+      labels = fromJson['labels'] != null
+          ? (fromJson['labels'] as List)
+                .map((toElement) => Label.fromJson(toElement))
+                .toList()
+          : null,
       bestTracks = fromJson['bests'],
       disclaimers = fromJson['disclaimers'],
       trailerAvailable = fromJson['trailer']?['available'],
       customWave = fromJson['customWave'] != null
           ? CustomWave(fromJson['customWave'])
           : null,
-      tracks = (fromJson['volumes'][0] as List).map((toElement) => Track(toElement)).toList();
+      // tracks = (fromJson['volumes'][0] as List).map((toElement) => Track(toElement)).toList();
+      tracks = (fromJson['volumes'] as List).map((volume) {
+        final List<dynamic> volumeList = volume as List;
+        return volumeList.map((trackJson) => Track(trackJson)).toList();
+      }).toList();
 }
-

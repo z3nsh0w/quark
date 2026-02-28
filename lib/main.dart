@@ -7,9 +7,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:audio_service_mpris/audio_service_mpris.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:quark/services/database/database.dart';
 
 // Local files
 import '/objects/track.dart';
@@ -17,30 +16,22 @@ import '/services/files.dart';
 import '/widgets/settings.dart';
 import '/objects/playlist.dart';
 import '/playlist_page_router.dart';
-import 'services/database/listen_logger.dart';
 import '/services/player/player.dart';
 import 'services/database/database_engine.dart';
 import '/services/yandex_music_singleton.dart';
 import '/services/native_controls/native_control.dart';
 import '/widgets/yandex_music_integration/yandex_login.dart';
-import '/widgets/yandex_music_integration/yandex_widgets.dart';
 import '/widgets/yandex_music_integration/yandex_playlists_widget.dart';
 
 // TODO: fix bug while closing playtlist with iconbutton then if playlist was opened by mouseArea it wont close
 // TODO: Lister logger migration
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
-// TODO: Fix the player's work while database is unavailable. Now, if the database fails to initialize for any reason, the player turns into a brick. (also for local audio work)
-// TODO: Rework playlist_widget using services
 // import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // if (!Platform.isAndroid) {
-    // WindowManager.instance.ensureInitialized();
-  // }
-
-  final path = await getApplicationCacheDirectory();
-  Hive.init(path.path);
+  await ApplicationCacheDirectory.instance.init();
+  Hive.init(ApplicationCacheDirectory.instance.directory.path);
   Player(
     playlist: [],
     nowPlayingTrack: LocalTrack(
@@ -55,6 +46,7 @@ void main() async {
   // ListenLogger().init();
   AudioServiceMpris.registerWith();
   Database.init();
+  DatabaseStreamerService().init();
   runApp(const Quark());
 }
 
@@ -79,6 +71,7 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   bool inited = false;
+  bool hasLatestPlaylist = false;
   bool loginView = false;
   bool playlistView = false;
   bool settingsView = false;
@@ -91,14 +84,12 @@ class _MainPageState extends State<MainPage> {
   /// Reacting on pick folder button
   Future<void> pickFolder() async {
     try {
-      final bool? recursiveFilesAdding = await Database.get(
-        DatabaseKeys.recursiveFilesAdding.value,
-      );
+      final bool rfa = DatabaseStreamerService().recursiveFilesAdding.value;
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
       if (selectedDirectory != null) {
         List<PlayerTrack> result = await Files().getFilesFromDirectory(
           directoryPath: selectedDirectory,
-          recursiveEnable: recursiveFilesAdding,
+          recursiveEnable: rfa,
         );
         if (result.isNotEmpty) {
           playlistRoute(
@@ -142,8 +133,6 @@ class _MainPageState extends State<MainPage> {
 
   /// Routing to playlist page
   Future<void> playlistRoute(PlayerPlaylist playlist) async {
-    Map play = await serializePlaylist(playlist);
-    await Database.put(DatabaseKeys.lastPlaylist.value, play);
     lastPlaylist = playlist;
     Player.player.updatePlaylistInfo(PlaylistInfo.fromPlayerPlaylist(playlist));
     await Player.player.updatePlaylist(playlist.tracks);
@@ -177,47 +166,16 @@ class _MainPageState extends State<MainPage> {
 
   /// Reaction on playlist restore button
   Future<void> playlistRestore() async {
-    String? token = await Database.get(DatabaseKeys.yandexMusicToken.value);
-
-    final playlist = await restoreLast();
-
-    if (playlist == null) {
+    String token = DatabaseStreamerService().yandexMusicToken.value;
+    if (lastPlaylist == null) {
       return;
     }
-
     bool inited = await yandexMusic.checkInit();
     if (!inited) {
-      yandexMusic = YandexMusic(token: token ?? '');
+      yandexMusic = YandexMusic(token: token);
     }
 
-    playlistRoute(playlist);
-  }
-
-  /// Preloading the first tracks of all playlists from yandex music
-  Future<void> precacheTracks() async {
-    Future.delayed(Duration(milliseconds: 50), () async {
-      var cacheDirectory = await getApplicationCacheDirectory();
-      if (userPlaylists.isNotEmpty) {
-        for (PlaylistWShortTracks playlist in userPlaylists) {
-          if (playlist.tracks.isNotEmpty) {
-            try {
-              var track = await yandexMusic.tracks.download(
-                playlist.tracks[0].trackID,
-              );
-              var file = File(
-                '${cacheDirectory.path}/cisum_xednay_krauq${playlist.tracks[0].trackID}.flac',
-              );
-              bool exist = await file.exists();
-              if (!exist) {
-                file.writeAsBytes(track);
-              }
-            } on YandexMusicException catch (e) {
-              log.shout('precacheTracks() error', e);
-            }
-          }
-        }
-      }
-    });
+    playlistRoute(lastPlaylist!);
   }
 
   /// Update playlists from yandex music
@@ -228,11 +186,10 @@ class _MainPageState extends State<MainPage> {
       });
       return;
     }
-
     try {
       if (!inited) {
-        String? token = await Database.get(DatabaseKeys.yandexMusicToken.value);
-        if (token == null) {
+        String token = DatabaseStreamerService().yandexMusicToken.value;
+        if (token == '') {
           setState(() {
             loginView = true;
           });
@@ -248,11 +205,6 @@ class _MainPageState extends State<MainPage> {
 
       if (userPlaylists.isEmpty) {
         yandexMusic.usertracks.getPlaylistsWithLikes().then((playlists) async {
-          await Database.put(
-            DatabaseKeys.yandexMusicPlaylists.value,
-            playlists.map((toElement) => toElement.raw).toList(),
-          );
-
           setState(() {
             userPlaylists = playlists;
             playlistView = true;
@@ -263,7 +215,6 @@ class _MainPageState extends State<MainPage> {
           playlistView = true;
         });
       }
-      await precacheTracks();
     } on YandexMusicException catch (e) {
       switch (e.type) {
         case YandexMusicException.unauthorized:
@@ -280,28 +231,103 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  /// Execute last playlist from database
-  Future<PlayerPlaylist?> restoreLast() async {
-    String? resl = await Database.get(DatabaseKeys.lastTrack.value);
-    lastTrackPath = resl;
+  Future<void> restoreLast() async {
+    if (!mounted) return;
 
-    final executed = await Database.get(DatabaseKeys.lastPlaylist.value);
+    final playlist = DatabaseStreamerService().lastPlaylist.value;
+    if (playlist != null && !hasLatestPlaylist) {
+      setState(() => hasLatestPlaylist = true);
+    }
 
-    if (executed != null) {
-      final ls = await deserializePlaylist(
-        (executed as Map).cast<String, dynamic>(),
-      );
-      setState(() {
-        lastPlaylist = ls;
-      });
+    lastTrackPath = DatabaseStreamerService().lastTrack.value;
 
-      return ls;
-    } else {
-      return null;
+    if (playlist != null) {
+      final ls = await deserializePlaylist(playlist.cast<String, dynamic>());
+      if (!mounted) return;
+      setState(() => lastPlaylist = ls);
     }
   }
 
-  /// Logger
+  void _onDatabaseChanged() async {
+    await restoreLast();
+  }
+
+  void addDatabaseListeners() {
+    DatabaseStreamerService().yandexMusicToken.addListener(_ymListener);
+    DatabaseStreamerService().lastTrack.addListener(_onDatabaseChanged);
+    DatabaseStreamerService().lastPlaylist.addListener(_onDatabaseChanged);
+  }
+
+  void removeDatabaseListeners() {
+    DatabaseStreamerService().lastTrack.removeListener(_onDatabaseChanged);
+    DatabaseStreamerService().lastPlaylist.removeListener(_onDatabaseChanged);
+  }
+
+  void _ymListener() async {
+    final token = DatabaseStreamerService().yandexMusicToken.value;
+    if (token.isNotEmpty) {
+      await _initYM(token);
+    }
+  }
+
+  Future<void> _initYM(String token) async {
+    if (inited) return;
+    try {
+      log.info('Initializing Yandex Music...');
+      yandexMusic = YandexMusic(token: token);
+      await yandexMusic.init();
+      if (!mounted) return;
+      setState(() => inited = true);
+      YandexMusicSingleton.init(yandexMusic);
+      log.fine('Yandex Music initialized successfully.');
+      if (DatabaseStreamerService().yandexMusicPreload.value) {
+        unawaited(_playlistPreload());
+      }
+    } on YandexMusicException {
+      log.warning('Yandex Music initialization failed.');
+      inited = false;
+    }
+  }
+
+  Future<void> _playlistPreload() async {
+    try {
+      final playlists = await yandexMusic.usertracks.getPlaylistsWithLikes();
+      if (!mounted) return;
+      setState(() => userPlaylists = playlists);
+    } catch (e) {
+      log.shout('Preload playlists failed', e);
+    }
+  }
+
+  Future<void> _databaseBootStrap() async {
+    await DatabaseStreamerService().init();
+    addDatabaseListeners();
+    final token = DatabaseStreamerService().yandexMusicToken.value;
+    if (token.isNotEmpty) {
+      await _initYM(token);
+    }
+    await restoreLast();
+  }
+
+  @override
+  void activate() {
+    restoreLast();
+    addDatabaseListeners();
+    super.activate();
+  }
+
+  @override
+  void deactivate() {
+    removeDatabaseListeners();
+    super.deactivate();
+  }
+
+  @override
+  void dispose() {
+    removeDatabaseListeners();
+    super.dispose();
+  }
+
   Future<void> initLogger() async {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
@@ -316,38 +342,8 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-
     initLogger();
-    log.info('Trying to initialize database...');
-    log.fine('Database initialized successfully');
-    Future.delayed(Duration(milliseconds: 15), () async {
-      await restoreLast();
-    });
-    Future.delayed(Duration(milliseconds: 15), () async {
-      bool? yandexPreload = await Database.get(
-        DatabaseKeys.yandexMusicPreload.value,
-      );
-
-      if (yandexPreload != false) {
-        log.info('Yandex preloading is enabled. Trying to initialize...');
-        try {
-          String? token = await Database.get(
-            DatabaseKeys.yandexMusicToken.value,
-          );
-          if (token != null) {
-            yandexMusic = YandexMusic(token: token);
-
-            await yandexMusic.init();
-            inited = true;
-            YandexMusicSingleton.init(yandexMusic);
-            log.fine('Yandex Music successfully initialized.');
-          }
-        } on YandexMusicException {
-          log.warning('Yandex Music preloading initizalization failed...');
-          inited = false;
-        }
-      }
-    });
+    _databaseBootStrap();
   }
 
   @override
@@ -411,17 +407,6 @@ class _MainPageState extends State<MainPage> {
                   }, 'Add folder'),
                   const SizedBox(height: 12.5),
                   _mainPageButton(() async => await ymUpdate(), 'Yandex Music'),
-                  // _mainPageButton(
-                  //   () async => Navigator.push(
-                  //     context,
-                  //     CupertinoPageRoute(
-                  //       builder: (builder) => YandexPlaylistsInfo(
-                  //         playlists: YandexMusicSingleton.playlists,
-                  //       ),
-                  //     ),
-                  //   ),
-                  //   'Yandex Music S',
-                  // ),
                 ],
               ),
             ),
@@ -432,9 +417,9 @@ class _MainPageState extends State<MainPage> {
             child: loginView
                 ? GestureDetector(
                     onTap: () => setState(() {
-                      if (Platform.isLinux) {
-                        loginView = false;
-                      }
+                      // if (Platform.isLinux) {
+                      // loginView = false;
+                      // }
                     }),
                     child: Container(
                       key: ValueKey('login'),
