@@ -100,9 +100,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
   /// Main Player instance
   Player player = Player.player;
 
-  /// Network player instance (shell over the main player class)
-  late NetPlayer netPlayer;
-
   Color popupIconsColor = const Color.fromARGB(
     255,
     255,
@@ -454,8 +451,8 @@ class _PlaylistPage1State extends State<AndroidWidget>
       await player.updatePlaylist(currentPlaylist);
       updateLiked();
       if (trackss == nowPlayingTrack) {
-        NetConductor().cacheFiles([track]);
-        await netPlayer.playYandex(track);
+        await NetConductor().cacheFiles([track]);
+        await NetConductor().playYandex(track);
       }
     } catch (e) {
       print('Failed to load local track to Yandex music. Error: $e');
@@ -688,7 +685,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
     nowPlayingTrack = player.nowPlayingTrack;
     isPlaying = player.isPlaying;
     volume = player.volumeNotifier.value;
-    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
     NetConductor().init(Player.player, widget.yandexMusic);
 
     // Controllers

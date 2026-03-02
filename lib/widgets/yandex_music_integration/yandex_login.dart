@@ -21,8 +21,8 @@ class _YandexLoginState extends State<YandexLogin> {
   final log = Logger('YandexLogin');
 
   Timer? searchDebounceTimer;
-  TextEditingController controller = TextEditingController(text: '');
   final Duration _searchDebounceDuration = const Duration(milliseconds: 500);
+  TextEditingController controller = TextEditingController(text: '');
   Color borderColor = Colors.white.withAlpha(78);
 
   final Uri loginUrl = Uri.parse(

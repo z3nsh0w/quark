@@ -1,38 +1,10 @@
-import 'package:quark/services/database/database.dart';
-
 import 'player.dart';
 import 'package:async/async.dart';
 import 'package:logging/logging.dart';
 import '../database/database_engine.dart';
 import 'package:quark/objects/track.dart';
 import 'package:yandex_music/yandex_music.dart';
-
-/// A complementary class to the main player, created for network playback of tracks. (SPOTIFY may be added)
-class NetPlayer {
-  final Player player;
-
-  YandexMusic yandexMusic;
-
-  NetPlayer({required this.player, required this.yandexMusic});
-
-  Future<void> init(YandexMusic instance) async {
-    yandexMusic = instance;
-    Logger('NetPlayerService').fine('Inited');
-  }
-
-  Future<void> playYandex(PlayerTrack track) async {
-    try {
-      String link = await yandexMusic.tracks.getDownloadLink(
-        (track as YandexMusicTrack).track.id,
-      );
-      await player.playNetTrack(link, track);
-    } catch (e) {
-      Logger(
-        'NetPlayer',
-      ).severe('An error has occured while processing online track');
-    }
-  }
-}
+import 'package:quark/services/database/database.dart';
 
 /// Controls playback and caching of non-local and non-cached tracks
 
@@ -65,6 +37,19 @@ class NetConductor {
     _player.trackChangeNotifier.addListener(_onTrackChanged);
     _isInitialized = true;
     Logger('NetConductorSerivce').fine('Inited');
+  }
+
+  Future<void> playYandex(PlayerTrack track) async {
+    try {
+      String link = await _yandex.tracks.getDownloadLink(
+        (track as YandexMusicTrack).track.id,
+      );
+      await _player.playNetTrack(link, track);
+    } catch (e) {
+      Logger(
+        'NetPlayer',
+      ).severe('An error has occured while processing online track');
+    }
   }
 
   void _onTrackChanged() async {
@@ -111,6 +96,9 @@ class NetConductor {
   Future<void> cacheFiles([List<PlayerTrack>? tracks]) async {
     if (tracks == null) {
       tracks = [];
+      if (Player.player.playlist.length < 3) {
+        return;
+      }
       for (int i = -1; i < 2; i++) {
         tracks.add(
           Player.player.playlist[(Player.player.playlist.indexOf(

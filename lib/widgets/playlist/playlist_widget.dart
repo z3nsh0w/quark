@@ -809,20 +809,27 @@ class PlaylistTileWidget extends StatelessWidget {
               PopupMenuItem(
                 enabled: track.albums.isNotEmpty,
                 onTap: () async {
-                  if (!YandexMusicSingleton.inited) {
-                    final String tok =
-                        DatabaseStreamerService().yandexMusicToken.value;
-                    YandexMusicSingleton.init(YandexMusic(token: tok));
-                  }
-                  final artist = await YandexMusicSingleton.instance.artists
-                      .getInfo((track as YandexMusicTrack).track.artists[0]);
-                  if (context.mounted) {
-                    Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (_) => ArtistInfoWidget(artist: artist),
-                      ),
-                    );
+                  try {
+                    if (!YandexMusicSingleton.inited) {
+                      final String tok =
+                          DatabaseStreamerService().yandexMusicToken.value;
+                      YandexMusicSingleton.init(YandexMusic(token: tok));
+                    }
+                    final artist = await YandexMusicSingleton.instance.artists
+                        .getInfo((track as YandexMusicTrack).track.artists[0]);
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) => ArtistInfoWidget(artist: artist),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    Logger(
+                      "PlaylistWidget",
+                    ).warning("Failed to get album info.", e);
+                    showOperation(StateIndicatorOperation.error);
                   }
                 },
                 child: Row(
@@ -834,7 +841,58 @@ class PlaylistTileWidget extends StatelessWidget {
                     ),
                     SizedBox(width: popupSpaceBetween),
                     Text(
-                      'Artist info',
+                      'View artist',
+                      style: TextStyle(
+                        fontFamily: 'noto',
+                        color: popupTextColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (track is YandexMusicTrack &&
+                (track as YandexMusicTrack).track.albums.isNotEmpty &&
+                (track as YandexMusicTrack).track.trackSource !=
+                    TrackSource.UGC)
+              PopupMenuItem(
+                enabled: track.albums.isNotEmpty,
+                onTap: () async {
+                  try {
+                    if (!YandexMusicSingleton.inited) {
+                      final String tok =
+                          DatabaseStreamerService().yandexMusicToken.value;
+                      YandexMusicSingleton.init(YandexMusic(token: tok));
+                    }
+
+                    final album = await YandexMusicSingleton.instance.albums
+                        .getInfo(
+                          (track as YandexMusicTrack).track.albums[0].id,
+                        );
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) => AlbumInfoWidget(album: album),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    Logger(
+                      "PlaylistWidget",
+                    ).warning("Failed to get album info.", e);
+                    showOperation(StateIndicatorOperation.error);
+                  }
+                },
+                child: Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.music_albums,
+                      size: popupIconSize,
+                      color: popupIconsColor,
+                    ),
+                    SizedBox(width: popupSpaceBetween),
+                    Text(
+                      'View album',
                       style: TextStyle(
                         fontFamily: 'noto',
                         color: popupTextColor,

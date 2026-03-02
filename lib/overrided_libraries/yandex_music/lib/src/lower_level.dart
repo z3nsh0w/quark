@@ -29,6 +29,17 @@ class YandexMusicApiAsync {
     final response = await requests.basicGet('/account/status');
     return response;
   }
+  Future<dynamic> clearPlaylistCover(
+    int playlistKind,
+    int userId, {
+    CancelToken? cancelToken,
+  }) async {
+    return await dio.post(
+      '$baseUrl/users/$userId/playlists/$playlistKind/cover/clear',
+      options: Options(headers: {'Authorization': 'OAuth $token'}),
+      cancelToken: cancelToken,
+    );
+  }
 
   Future<Map<String, dynamic>> getAccountSettings({
     CancelToken? cancelToken,
@@ -128,6 +139,36 @@ class YandexMusicApiAsync {
     return responce;
   }
 
+  Future<dynamic> uploadPlaylistCover(
+    int playlistKind,
+    int userId,
+    String fileName,
+    Uint8List fileBytes, {
+    CancelToken? cancelToken,
+    void Function(int, int)? onSendProgress,
+    void Function(int, int)? onReceiveProgress,
+  }) async {
+    final formData = FormData.fromMap({
+      'image': MultipartFile.fromBytes(
+        fileBytes,
+        filename: fileName,
+        contentType: DioMediaType('image', 'png'),
+      ),
+    });
+    return await dio.post(
+      '$baseUrl/users/$userId/playlists/$playlistKind/cover/upload',
+      data: formData,
+      options: Options(
+        headers: {
+          'Authorization': 'OAuth $token',
+          'Content-Type': 'multipart/form-data',
+        },
+      ),
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
   Future<dynamic> getPlaylistRecommendations(
     int userId,
     int playlistKind, {

@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:ui';
+import 'dart:ui' as ui;
 import 'dart:math';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +14,7 @@ import 'package:quark/services/cached_images.dart';
 import 'package:quark/services/player/player.dart';
 import 'package:quark/widgets/players_widgets/macro_player.dart';
 import 'package:quark/widgets/players_widgets/main_player.dart';
+import 'package:quark/widgets/players_widgets/mini_player.dart';
 import '../../services/yandex_music_singleton.dart';
 
 class YandexPlaylistsInfo extends StatefulWidget {
@@ -330,7 +334,6 @@ class _YandexPlaylistsInfoState extends State<YandexPlaylistsInfo> {
 
 class PlaylistInfoWidget extends StatefulWidget {
   final Playlist playlist;
-
   const PlaylistInfoWidget({super.key, required this.playlist});
 
   @override
@@ -340,10 +343,71 @@ class PlaylistInfoWidget extends StatefulWidget {
 class _PlaylistInfo extends State<PlaylistInfoWidget> {
   bool visibility = false;
   bool isProcessing = false;
+  late Playlist playlist;
+  Color borderColor = Colors.white.withAlpha(78);
+  late TextEditingController controller = TextEditingController(
+    text: playlist.title,
+  );
+  Timer? debounceTimer;
+  final Duration _debounceDuration = const Duration(milliseconds: 500);
+  double _width = 400;
+
+  void _updateWidth(String text) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text.isEmpty ? 'hint' : text,
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 42,
+          letterSpacing: -1.2,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+
+      maxLines: 1,
+    )..layout();
+
+    setState(() {
+      _width = (painter.width + 12).clamp(5, 1200);
+    });
+  }
+
+  void changeTitle(String value) async {
+    debounceTimer?.cancel();
+    debounceTimer = Timer(_debounceDuration, () async {
+      if (value.isEmpty) {
+        return;
+      }
+      setState(() {
+        borderColor = Colors.orange;
+      });
+      try {
+        await YandexMusicSingleton.instance.playlists.renamePlaylist(
+          playlist.kind,
+          value,
+        );
+        setState(() {
+          borderColor = Colors.green;
+        });
+      } catch (e) {
+        setState(() {
+          borderColor = Colors.red;
+        });
+      }
+      Future.delayed(
+        Duration(seconds: 2),
+        () => setState(() {
+          borderColor = Colors.white.withAlpha(78);
+        }),
+      );
+    });
+  }
 
   @override
   void initState() {
     super.initState();
+    playlist = widget.playlist;
+    _updateWidth(playlist.title);
     setState(() {
       visibility = widget.playlist.visibility == 'public';
     });
@@ -379,6 +443,32 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                 child: MacroPlayer(
                   maxWidth: min(MediaQuery.of(context).size.width - 200, 600),
                   height: 45,
+                  onTap: () async {
+                    await showDialog(
+                      context: context,
+                      barrierDismissible: true,
+                      builder: (a) => Dialog(
+                        insetPadding: EdgeInsets.zero,
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        surfaceTintColor: Colors.transparent,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: SizedBox(
+                            height: min(
+                              MediaQuery.of(context).size.height - 200,
+                              700,
+                            ),
+                            width: min(
+                              MediaQuery.of(context).size.width - 100,
+                              850,
+                            ),
+                            child: MainPlayer(),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -390,11 +480,11 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _header(),
-            if (widget.playlist.tracks.isNotEmpty) ...[
+            _mainHeader(),
+            if (playlist.tracks.isNotEmpty) ...[
               VerticalSection<Track>(
                 title: 'Tracks',
-                items: widget.playlist.tracks,
+                items: playlist.tracks,
                 itemBuilder: (track) => Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
@@ -411,10 +501,295 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
     );
   }
 
-  Widget _header() {
+  List<Widget> _ownerHeader() {
+    return [
+      Padding(
+        padding: EdgeInsetsGeometry.only(top: 10),
+        child: CoverView(
+          smallCoverLink: playlist.cover != null
+              ? YandexMusicSingleton.instance.playlists.getPlaylistCoverArtUrl(
+                  playlist.cover!,
+                )
+              : 'none',
+          bigCoverLink: playlist.cover != null
+              ? YandexMusicSingleton.instance.playlists.getPlaylistCoverArtUrl(
+                  playlist.cover!,
+                  imageSize: '1000x1000',
+                )
+              : 'none',
+        ),
+      ),
+      const SizedBox(width: 32),
+
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(height: 8),
+
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                'PLAYLIST',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+            SizedBox(
+              width: _width,
+              height: 60,
+
+              child: TextField(
+                onChanged: (value) {
+                  _updateWidth(value);
+                  changeTitle(value);
+                },
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 42,
+                  letterSpacing: -1.2,
+                  height: 1.1,
+                ),
+                maxLines: 1,
+                controller: controller,
+                decoration: InputDecoration(
+                  hintStyle: TextStyle(
+                    color: Colors.white.withAlpha(178),
+                    overflow: TextOverflow.ellipsis,
+                    fontSize: 14,
+                  ),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: Colors.white.withAlpha(100),
+                      width: 1.0,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: BorderSide(color: borderColor, width: 1.5),
+                  ),
+                  filled: false,
+                  contentPadding: EdgeInsets.symmetric(
+                    // horizontal: 8,
+                    vertical: 6,
+                  ),
+                  disabledBorder: null,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              'by ${widget.playlist.owner.name ?? 'Unknown'}',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 12),
+
+            Wrap(
+              spacing: 24,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _itemInfo(
+                  icon: Icons.music_note,
+                  label: 'Tracks',
+                  value: '${playlist.tracks.length}',
+                ),
+
+                Tooltip(
+                  message: "Change visibility",
+                  child: InkWell(
+                    onTap: () async {
+                      if (isProcessing) return;
+                      setState(() {
+                        isProcessing = true;
+                      });
+
+                      try {
+                        await YandexMusicSingleton.instance.playlists
+                            .changeVisibility(
+                              playlist.kind,
+                              !visibility
+                                  ? YandexMusicSingleton
+                                        .instance
+                                        .playlists
+                                        .publicPlaylist
+                                  : YandexMusicSingleton
+                                        .instance
+                                        .playlists
+                                        .privatePlaylist,
+                            );
+
+                        setState(() {
+                          visibility = !visibility;
+                        });
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to change visibility: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      } finally {
+                        setState(() {
+                          isProcessing = false;
+                        });
+                      }
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _itemInfo(
+                          icon: visibility ? Icons.public : Icons.lock,
+                          label: 'Visibility',
+                          value: visibility ? 'Public' : 'Private',
+                        ),
+                        SizedBox(width: 10),
+                        Icon(Icons.edit, color: Colors.white, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _nowOwnerHeader() {
+    return [
+      Padding(
+        padding: EdgeInsetsGeometry.only(top: 10),
+        child: CoverView(
+          smallCoverLink: playlist.cover != null
+              ? YandexMusicSingleton.instance.playlists.getPlaylistCoverArtUrl(
+                  playlist.cover!,
+                )
+              : 'none',
+          bigCoverLink: playlist.cover != null
+              ? YandexMusicSingleton.instance.playlists.getPlaylistCoverArtUrl(
+                  playlist.cover!,
+                  imageSize: '1000x1000',
+                )
+              : 'none',
+        ),
+      ),
+      const SizedBox(width: 32),
+
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(height: 8),
+
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                'PLAYLIST',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            Text(
+              playlist.title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 42,
+                letterSpacing: -1.2,
+                height: 1.1,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              'by ${playlist.owner.name ?? 'Unknown'}',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 12),
+
+            Wrap(
+              spacing: 24,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _itemInfo(
+                  icon: Icons.music_note,
+                  label: 'Tracks',
+                  value: '${playlist.tracks.length}',
+                ),
+
+                _itemInfo(
+                  icon: visibility ? Icons.public : Icons.lock,
+                  label: 'Visibility',
+                  value: visibility ? 'Public' : 'Private',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _mainHeader() {
     final Color playlistColor = Colors.white;
     final bool isOwner =
-        widget.playlist.ownerUid == YandexMusicSingleton.instance.accountID;
+        playlist.ownerUid == YandexMusicSingleton.instance.accountID;
 
     return Container(
       width: double.infinity,
@@ -435,108 +810,9 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsetsGeometry.only(top: 10),
-                  child: CoverView(
-                    smallCoverLink: widget.playlist.cover != null
-                        ? YandexMusicSingleton.instance.playlists
-                              .getPlaylistCoverArtUrl(widget.playlist.cover!)
-                        : 'none',
-                    bigCoverLink: widget.playlist.cover != null
-                        ? YandexMusicSingleton.instance.playlists
-                              .getPlaylistCoverArtUrl(
-                                widget.playlist.cover!,
-                                imageSize: '1000x1000',
-                              )
-                        : 'none',
-                  ),
-                ),
-                const SizedBox(width: 32),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 8),
-
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          'PLAYLIST',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      Text(
-                        widget.playlist.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 42,
-                          letterSpacing: -1.2,
-                          height: 1.1,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Text(
-                        'by ${widget.playlist.owner.name ?? 'Unknown'}',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Wrap(
-                        spacing: 24,
-                        runSpacing: 12,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          _itemInfo(
-                            icon: Icons.music_note,
-                            label: 'Tracks',
-                            value: '${widget.playlist.tracks.length}',
-                          ),
-                          _itemInfo(
-                            icon: visibility ? Icons.public : Icons.lock,
-                            label: 'Visibility',
-                            value: visibility ? 'Public' : 'Private',
-                          ),
-                          if (isOwner) _visibilitySwitch(),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              children: isOwner && playlist.kind != 3
+                  ? _ownerHeader()
+                  : _nowOwnerHeader(),
             ),
             const SizedBox(height: 5),
             Row(
@@ -561,21 +837,40 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                 ),
                 const SizedBox(width: 30),
 
-                ClipOval(
-                  child: Material(
-                    color: playlistColor.withOpacity(0.2),
-                    child: InkWell(
-                      onTap: () async {
-                        try {
-                          await YandexMusicSingleton.instance.pin.playlist(
-                            widget.playlist.ownerUid,
-                            widget.playlist.kind,
-                            YandexMusicSingleton.instance.pin.pin,
-                          );
-                          if (context.mounted) {
+                Tooltip(
+                  message: "Pin",
+                  child: ClipOval(
+                    child: Material(
+                      color: playlistColor.withOpacity(0.2),
+                      child: InkWell(
+                        onTap: () async {
+                          try {
+                            await YandexMusicSingleton.instance.pin.playlist(
+                              playlist.ownerUid,
+                              playlist.kind,
+                              YandexMusicSingleton.instance.pin.pin,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Pinned into your library!'),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Color.alphaBlend(
+                                    Colors.black.withOpacity(0.6),
+                                    playlistColor,
+                                  ),
+
+                                  behavior: SnackBarBehavior.fixed,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Pinned into your library!'),
+                                content: Text('Fail! $e'),
                                 duration: Duration(seconds: 1),
                                 backgroundColor: Color.alphaBlend(
                                   Colors.black.withOpacity(0.6),
@@ -589,31 +884,15 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                               ),
                             );
                           }
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Fail! $e'),
-                              duration: Duration(seconds: 1),
-                              backgroundColor: Color.alphaBlend(
-                                Colors.black.withOpacity(0.6),
-                                playlistColor,
-                              ),
-
-                              behavior: SnackBarBehavior.fixed,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      child: SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: Icon(
-                          Icons.push_pin,
-                          color: Colors.white,
-                          size: 21,
+                        },
+                        child: SizedBox(
+                          height: 40,
+                          width: 40,
+                          child: Icon(
+                            Icons.push_pin,
+                            color: Colors.white,
+                            size: 21,
+                          ),
                         ),
                       ),
                     ),
@@ -651,7 +930,6 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                 //     ),
                 //   ),
                 // ),
-                const SizedBox(width: 5),
                 // ClipOval(
                 //   child: Material(
                 //     color: playlistColor.withOpacity(0.2),
@@ -669,46 +947,239 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                 //     ),
                 //   ),
                 // ),
-                ClipOval(
-                  child: Material(
-                    color: playlistColor.withOpacity(0.2),
-                    child: InkWell(
-                      onTap: () async {
-                        final link =
-                            'https://music.yandex.ru/playlists/${widget.playlist.playlistUuid}';
+                if (isOwner && playlist.kind != 3) ...[
+                  const SizedBox(width: 5),
+                  Tooltip(
+                    message: "Change cover",
+                    child: ClipOval(
+                      child: Material(
+                        color: playlistColor.withOpacity(0.2),
+                        child: InkWell(
+                          onTap: () async {
+                            final result = await FilePicker.platform.pickFiles(
+                              allowMultiple: false,
+                            );
+                            if (result == null ||
+                                result.files.isEmpty ||
+                                result.files[0].path == null) {
+                              return;
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Uploading your cover...'),
+                                duration: Duration(seconds: 1),
+                                backgroundColor: Color.alphaBlend(
+                                  Colors.black.withOpacity(0.6),
+                                  playlistColor,
+                                ),
 
-                        await Clipboard.setData(ClipboardData(text: link));
-
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Copied to clipboard!'),
-                              duration: Duration(seconds: 1),
-                              backgroundColor: Color.alphaBlend(
-                                Colors.black.withOpacity(0.6),
-                                playlistColor,
+                                behavior: SnackBarBehavior.fixed,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
+                            );
+                            try {
+                              await YandexMusicSingleton.instance.playlists
+                                  .changeCover(
+                                    playlist,
+                                    filename: result.files[0].name,
+                                    coverData: await File(
+                                      result.files[0].path!,
+                                    ).readAsBytes(),
+                                  );
+                              final newplaylist = await YandexMusicSingleton
+                                  .instance
+                                  .playlists
+                                  .getPlaylist(playlist.kind);
+                              setState(() {
+                                playlist = newplaylist;
+                              });
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Failed to upload a new cover. $e',
+                                  ),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Color.alphaBlend(
+                                    Colors.black.withOpacity(0.6),
+                                    playlistColor,
+                                  ),
 
-                              behavior: SnackBarBehavior.fixed,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                                  behavior: SnackBarBehavior.fixed,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          child: SizedBox(
+                            height: 40,
+                            width: 40,
+                            child: Icon(
+                              Icons.add_photo_alternate_outlined,
+                              color: Colors.white,
+                              size: 21,
                             ),
-                          );
-                        }
-                      },
-                      child: SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: Icon(
-                          Symbols.upload,
-                          color: Colors.white,
-                          size: 21,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(width: 5),
+                Tooltip(
+                  message: "Share",
+                  child: ClipOval(
+                    child: Material(
+                      color: playlistColor.withOpacity(0.2),
+                      child: InkWell(
+                        onTap: () async {
+                          final link =
+                              'https://music.yandex.ru/playlists/${playlist.playlistUuid}';
+
+                          await Clipboard.setData(ClipboardData(text: link));
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Copied to clipboard!'),
+                                duration: Duration(seconds: 1),
+                                backgroundColor: Color.alphaBlend(
+                                  Colors.black.withOpacity(0.6),
+                                  playlistColor,
+                                ),
+
+                                behavior: SnackBarBehavior.fixed,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: SizedBox(
+                          height: 40,
+                          width: 40,
+                          child: Icon(
+                            Symbols.upload,
+                            color: Colors.white,
+                            size: 21,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
+                if (isOwner && playlist.kind != 3) ...[
+                  const SizedBox(width: 5),
+                  Tooltip(
+                    message: "Remove cover",
+                    child: ClipOval(
+                      child: Material(
+                        color: playlistColor.withOpacity(0.2),
+                        child: InkWell(
+                          onTap: () async {
+                            try {
+                              await YandexMusicSingleton.instance.playlists
+                                  .clearCover(playlist);
+                              final newplaylist = await YandexMusicSingleton
+                                  .instance
+                                  .playlists
+                                  .getPlaylist(playlist.kind);
+                              setState(() {
+                                playlist = newplaylist;
+                              });
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Failed to upload a new cover. $e',
+                                  ),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Color.alphaBlend(
+                                    Colors.black.withOpacity(0.6),
+                                    playlistColor,
+                                  ),
+
+                                  behavior: SnackBarBehavior.fixed,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          child: SizedBox(
+                            height: 40,
+                            width: 40,
+                            child: Icon(
+                              Icons.hide_image_outlined,
+                              color: const Color.fromARGB(255, 242, 85, 74),
+                              size: 21,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+
+                if (isOwner && playlist.kind != 3) ...[
+                  const SizedBox(width: 5),
+                  Tooltip(
+                    message: "Delete",
+                    child: ClipOval(
+                      child: Material(
+                        color: playlistColor.withOpacity(0.2),
+                        child: InkWell(
+                          onTap: () async {
+                            try {
+                              await YandexMusicSingleton.instance.playlists
+                                  .deletePlaylist(playlist.kind);
+                              Navigator.pop(context);
+                              YandexMusicSingleton.playlists.remove(
+                                YandexMusicSingleton.playlists.firstWhere(
+                                  (e) => e.kind == playlist.kind,
+                                ),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Failed to delete playlist. $e',
+                                  ),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Color.alphaBlend(
+                                    Colors.black.withOpacity(0.6),
+                                    playlistColor,
+                                  ),
+
+                                  behavior: SnackBarBehavior.fixed,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          child: SizedBox(
+                            height: 40,
+                            width: 40,
+                            child: Icon(
+                              Icons.delete_forever,
+                              color: const Color.fromARGB(255, 242, 85, 74),
+                              size: 21,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
@@ -749,82 +1220,6 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
           ],
         ),
       ],
-    );
-  }
-
-  Widget _visibilitySwitch() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.settings, color: Colors.white60, size: 16),
-          const SizedBox(width: 8),
-          const Text(
-            'Toggle',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Transform.scale(
-            scale: 0.8,
-            child: Switch(
-              value: visibility,
-              activeColor: Colors.green,
-              activeTrackColor: Colors.green.withOpacity(0.3),
-              inactiveThumbColor: Colors.grey[400],
-              inactiveTrackColor: Colors.grey.withOpacity(0.3),
-              onChanged: (value) async {
-                if (isProcessing) return;
-                setState(() {
-                  isProcessing = true;
-                });
-
-                try {
-                  await YandexMusicSingleton.instance.playlists
-                      .changeVisibility(
-                        widget.playlist.kind,
-                        value
-                            ? YandexMusicSingleton
-                                  .instance
-                                  .playlists
-                                  .publicPlaylist
-                            : YandexMusicSingleton
-                                  .instance
-                                  .playlists
-                                  .privatePlaylist,
-                      );
-
-                  setState(() {
-                    visibility = value;
-                  });
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to change visibility: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                } finally {
-                  setState(() {
-                    isProcessing = false;
-                  });
-                }
-              },
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1682,12 +2077,84 @@ class AlbumInfoWidget extends StatelessWidget {
           children: [
             _header(context),
             if (album.tracks.isNotEmpty) ...[
-              for (List<Track> tracks in album.tracks) ...[
+              if (album.tracks.length > 1) ...[
+                for (List<Track> tracks in album.tracks) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Disc ${album.tracks.indexOf(tracks) + 1}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 24,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        ClipOval(
+                          child: Material(
+                            color: albumColor.withOpacity(0.2),
+                            child: InkWell(
+                              onTap: () async {
+                                final List<PlayerTrack> toQ = tracks
+                                    .map(
+                                      (e) =>
+                                          YandexMusicTrack.fromYMTtoLocalTrack(
+                                            e,
+                                          ),
+                                    )
+                                    .toList();
+
+                                await Player.player.playTemporaryQueue(
+                                  toQ,
+                                  startsNow: true,
+                                  first: true,
+                                );
+                              },
+                              child: SizedBox(
+                                height: 30,
+                                width: 30,
+                                child: Icon(
+                                  Icons.play_arrow,
+                                  color: Colors.white,
+                                  size: 21,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  VerticalSection<Track>(
+                    title: '',
+                    items: tracks,
+                    itemBuilder: (track) => Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 2,
+                      ),
+                      child: TrackCard(
+                        track: track,
+                        size: '100x100',
+                        bestTrack: album.bestTracks
+                            .map((toElement) => toElement.toString())
+                            .toList()
+                            .contains(track.id),
+                        accentColor: albumColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                ],
+              ],
+              if (album.tracks.length == 1) ...[
                 VerticalSection<Track>(
-                  title: album.tracks.length > 1
-                      ? 'Disc ${album.tracks.indexOf(tracks) + 1}'
-                      : "Tracks",
-                  items: tracks,
+                  title: "Tracks",
+                  items: album.tracks[0],
                   itemBuilder: (track) => Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
@@ -1789,6 +2256,7 @@ class AlbumInfoWidget extends StatelessWidget {
                       const SizedBox(height: 16),
 
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Flexible(
                             child: Text(
@@ -1952,63 +2420,50 @@ class AlbumInfoWidget extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 30),
-
-                ClipOval(
-                  child: Material(
-                    color: albumColor.withOpacity(0.2),
-                    child: InkWell(
-                      onTap: () async {
-                        try {
-                          await YandexMusicSingleton.instance.pin.album(
-                            album.id.toString(),
-                            YandexMusicSingleton.instance.pin.pin,
-                          );
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Pinned into your library!'),
-                                duration: Duration(seconds: 1),
-                                backgroundColor: Color.alphaBlend(
-                                  Colors.black.withOpacity(0.6),
-                                  albumColor,
-                                ),
-
-                                behavior: SnackBarBehavior.fixed,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Fail! $e'),
-                              duration: Duration(seconds: 1),
-                              backgroundColor: Color.alphaBlend(
-                                Colors.black.withOpacity(0.6),
-                                albumColor,
-                              ),
-
-                              behavior: SnackBarBehavior.fixed,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                IconButton2(
+                  accentColor: albumColor,
+                  icon: Symbols.push_pin,
+                  onTap: () async {
+                    try {
+                      await YandexMusicSingleton.instance.pin.album(
+                        album.id.toString(),
+                        YandexMusicSingleton.instance.pin.pin,
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Pinned into your library!'),
+                            duration: Duration(seconds: 1),
+                            backgroundColor: Color.alphaBlend(
+                              Colors.black.withOpacity(0.6),
+                              albumColor,
                             ),
-                          );
-                        }
-                      },
-                      child: SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: Icon(
-                          Icons.push_pin,
-                          color: Colors.white,
-                          size: 21,
+
+                            behavior: SnackBarBehavior.fixed,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Fail! $e'),
+                          duration: Duration(seconds: 1),
+                          backgroundColor: Color.alphaBlend(
+                            Colors.black.withOpacity(0.6),
+                            albumColor,
+                          ),
+
+                          behavior: SnackBarBehavior.fixed,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
+                      );
+                    }
+                  },
                 ),
                 // const SizedBox(width: 5),
                 // ClipOval(
@@ -2061,96 +2516,33 @@ class AlbumInfoWidget extends StatelessWidget {
                 //   ),
                 // ),
                 const SizedBox(width: 5),
-                ClipOval(
-                  child: Material(
-                    color: albumColor.withOpacity(0.2),
-                    child: InkWell(
-                      onTap: () async {
-                        final link =
-                            'https://music.yandex.ru/album/${album.id}';
+                IconButton2(
+                  accentColor: albumColor,
+                  icon: Symbols.upload,
+                  onTap: () async {
+                    final link = 'https://music.yandex.ru/album/${album.id}';
 
-                        await Clipboard.setData(ClipboardData(text: link));
+                    await Clipboard.setData(ClipboardData(text: link));
 
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Copied to clipboard!'),
-                              duration: Duration(seconds: 1),
-                              backgroundColor: Color.alphaBlend(
-                                Colors.black.withOpacity(0.6),
-                                albumColor,
-                              ),
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Copied to clipboard!'),
+                          duration: Duration(seconds: 1),
+                          backgroundColor: Color.alphaBlend(
+                            Colors.black.withOpacity(0.6),
+                            albumColor,
+                          ),
 
-                              behavior: SnackBarBehavior.fixed,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      child: SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: Icon(
-                          Symbols.upload,
-                          color: Colors.white,
-                          size: 21,
+                          behavior: SnackBarBehavior.fixed,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
+                      );
+                    }
+                  },
                 ),
-                // // SPOTIFY PROTOTYPE
-                // SizedBox(
-                //   height: 28,
-                //   width: 28,
-                //   child: AnimatedIconButton(
-                //     icon: Icons.push_pin_outlined,
-                //     color: Colors.white,
-                //     size: 26,
-                //     onTap: () => print('tapped'),
-                //   ),
-                // ),
-                // const SizedBox(width: 5),
-                // const SizedBox(width: 5),
-                // const SizedBox(width: 5),
-                // SizedBox(
-                //   height: 28,
-                //   width: 28,
-                //   child: AnimatedIconButton(
-                //     icon: Icons.favorite_outline,
-                //     color: Colors.white,
-                //     size: 26,
-                //     onTap: () => print('tapped'),
-                //   ),
-                // ),
-                // const SizedBox(width: 5),
-                // const SizedBox(width: 5),
-                // const SizedBox(width: 5),
-                // SizedBox(
-                //   height: 28,
-                //   width: 28,
-                //   child: AnimatedIconButton(
-                //     icon: Icons.queue_outlined,
-                //     color: Colors.white,
-                //     size: 26,
-                //     onTap: () => print('tapped'),
-                //   ),
-                // ),
-                // const SizedBox(width: 5),
-                // const SizedBox(width: 5),
-                // const SizedBox(width: 5),
-                // SizedBox(
-                //   height: 28,
-                //   width: 28,
-                //   child: AnimatedIconButton(
-                //     icon: Icons.remove_circle_outline,
-                //     color: Colors.white,
-                //     size: 26,
-                //     onTap: () => print('tapped'),
-                //   ),
-                // ),
               ],
             ),
           ],
@@ -2693,7 +3085,17 @@ class TrackCard extends StatelessWidget {
         icon: Icons.album,
         label: 'Go to Album',
         value: 'album',
-        onTap: () async {},
+        onTap: () async {
+          final album = await YandexMusicSingleton.instance.albums.getInfo(
+            track.albums[0].id,
+          );
+          if (context.mounted) {
+            Navigator.push(
+              context,
+              CupertinoPageRoute(builder: (_) => AlbumInfoWidget(album: album)),
+            );
+          }
+        },
       ),
     );
 
@@ -2973,6 +3375,44 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton> {
             duration: const Duration(milliseconds: 150),
             style: const TextStyle(),
             child: Icon(widget.icon, color: currentColor, size: currentSize),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class IconButton2 extends StatelessWidget {
+  final Color accentColor;
+  final VoidCallback onTap;
+  final IconData icon;
+  final double width;
+  final double height;
+  final Color iconColor;
+  final double iconSize;
+
+  const IconButton2({
+    super.key,
+    this.accentColor = Colors.white,
+    this.height = 40,
+    required this.icon,
+    this.iconColor = Colors.white,
+    this.iconSize = 21,
+    required this.onTap,
+    this.width = 40,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: Material(
+        color: accentColor.withOpacity(0.2),
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: height,
+            width: width,
+            child: Icon(icon, color: iconColor, size: iconSize),
           ),
         ),
       ),

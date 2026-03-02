@@ -35,13 +35,8 @@ import '../yandex_music_integration/lyrics_playlist_extension.dart';
 import '../yandex_music_integration/my_wave_playlist_extension.dart';
 
 class MainPlayer extends StatefulWidget {
-  final PlayerPlaylist playlist;
-  final YandexMusic yandexMusic;
-
   const MainPlayer({
     super.key,
-    required this.playlist,
-    required this.yandexMusic,
   });
 
   @override
@@ -94,9 +89,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
 
   /// Main Player instance
   Player player = Player.player;
-
-  /// Network player instance (shell over the main player class)
-  late NetPlayer netPlayer;
 
   Color popupIconsColor = const Color.fromARGB(
     255,
@@ -311,22 +303,22 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
       yandexUploadingTracks.add(trackss);
     });
     try {
-      if (widget.playlist.kind == 0 ||
-          widget.playlist.source != PlaylistSource.yandexMusic) {
+      if (Player.player.playlistInfo.kind == 0 ||
+          Player.player.playlistInfo.source != PlaylistSource.yandexMusic) {
         return;
       }
       final file = await File(trackss.filepath).readAsBytes();
-      String id = await widget.yandexMusic.usertracks.uploadUGCTrack(
-        widget.playlist.kind,
+      String id = await YandexMusicSingleton.instance.usertracks.uploadUGCTrack(
+        Player.player.playlistInfo.kind,
         file,
         path.basename(trackss.filepath),
       );
-      List<Track> info = await widget.yandexMusic.tracks.getTracks([id]);
+      List<Track> info = await YandexMusicSingleton.instance.tracks.getTracks([id]);
       YandexMusicTrack track = YandexMusicTrack.fromYMTtoLocalTrack(info[0]);
       await player.removeTrack(trackss);
       if (trackss == nowPlayingTrack) {
         await NetConductor().cacheFiles([track]);
-        await netPlayer.playYandex(track);
+        await NetConductor().playYandex(track);
       }
     } catch (e) {
       print('Failed to load local track to Yandex music. Error: $e');
@@ -500,8 +492,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
     nowPlayingTrack = player.nowPlayingTrack;
     isPlaying = player.isPlaying;
     volume = volumeController.value = player.volumeNotifier.value;
-    netPlayer = NetPlayer(player: player, yandexMusic: widget.yandexMusic);
-    NetConductor().init(Player.player, widget.yandexMusic);
+    NetConductor().init(Player.player, YandexMusicSingleton.instance);
 
     // Controllers
 
@@ -752,8 +743,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                             StateIndicatorOperation.loading,
                                           );
 
-                                          final album = await widget
-                                              .yandexMusic
+                                          final album = await YandexMusicSingleton.instance
                                               .albums
                                               .getInfo(
                                                 track.track.albums[0].id,
@@ -832,8 +822,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                           StateIndicatorOperation.loading,
                                         );
                                         try {
-                                          final artist = await widget
-                                              .yandexMusic
+                                          final artist = await YandexMusicSingleton.instance
                                               .artists
                                               .getInfo(
                                                 track.track.artists[val],
@@ -1171,7 +1160,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                       () => likeUnlike(),
                                     ),
                                   if (nowPlayingTrack is! YandexMusicTrack &&
-                                      widget.playlist.source ==
+                                      Player.player.playlistInfo.source ==
                                           PlaylistSource.yandexMusic &&
                                       !yandexUploadingTracks.contains(
                                         nowPlayingTrack,
@@ -1183,7 +1172,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                       () => uploadTrack(nowPlayingTrack),
                                     ),
                                   if ((nowPlayingTrack is! YandexMusicTrack &&
-                                          widget.playlist.source !=
+                                          Player.player.playlistInfo.source !=
                                               PlaylistSource.yandexMusic) ||
                                       (yandexUploadingTracks.contains(
                                         nowPlayingTrack,

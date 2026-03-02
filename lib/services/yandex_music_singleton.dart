@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
+import 'package:quark/services/player/net_player.dart';
+import 'package:quark/services/player/player.dart';
 import 'package:yandex_music/yandex_music.dart';
 export 'package:yandex_music/yandex_music.dart';
 
@@ -13,16 +15,16 @@ abstract class YandexMusicSingleton {
   static List<PlaylistWShortTracks> playlists = [];
 
   static ValueNotifier<List<String>> likedTracksNotifier = ValueNotifier<List<String>>([]);
+  static ValueNotifier<List<PlaylistWShortTracks>> userPlaylistsNotifier = ValueNotifier<List<PlaylistWShortTracks>>([]);
 
   static void init(YandexMusic _instance) {
     instance = _instance;
     inited = true;
     updateLiked();
     updateUserPlaylists();
+    NetConductor().init(Player.player, _instance);
     Logger('YandexMusicService').fine('Inited');
   }
-
-  
 
   static Future<void> updateLiked() async {
     try {

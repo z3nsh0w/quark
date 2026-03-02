@@ -19,9 +19,8 @@ import '../../services/player/player.dart';
 import '../../services/database/database_engine.dart';
 
 class MiniPlayerWidget extends StatefulWidget {
-  final PlayerPlaylist playlist;
 
-  const MiniPlayerWidget({super.key, required this.playlist});
+  const MiniPlayerWidget({super.key});
 
   @override
   State<MiniPlayerWidget> createState() => _PlaylistPage1State();

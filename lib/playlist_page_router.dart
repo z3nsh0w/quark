@@ -57,11 +57,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
             )
           : isCompactState
           ? size.height < 80 ? MacroPlayer() : MiniPlayerWidget(
-              playlist: widget.playlist,
             )
           : MainPlayer(
-              playlist: widget.playlist,
-              yandexMusic: widget.yandexMusic,
             ),
     );
   }

@@ -9,6 +9,7 @@ import 'package:logging/logging.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audio_service_mpris/audio_service_mpris.dart';
 import 'package:quark/services/database/database.dart';
+import 'package:quark/services/player/net_player.dart';
 
 // Local files
 import '/objects/track.dart';
@@ -458,7 +459,7 @@ class _MainPageState extends State<MainPage> {
                             child: YandexPlaylists(
                               closeView: closePlaylist,
                               yandexMusic: yandexMusic,
-                              playlists: userPlaylists,
+                              // playlists: userPlaylists,
                               playlistRouter: playlistRoute,
                             ),
                           ),

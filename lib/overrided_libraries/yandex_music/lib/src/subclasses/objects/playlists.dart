@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:yandex_music/src/lower_level.dart';
 import 'package:yandex_music/yandex_music.dart';
 
@@ -235,6 +237,23 @@ class YandexMusicPlaylists {
     );
     return result['result'];
   }
+  /// Allows you to change the cover of the playlist
+  Future<dynamic> changeCover(
+    dynamic playlist, {
+    required String filename,
+    required Uint8List coverData,
+    CancelToken? cancelToken,
+  }) async {
+    if (playlist is Playlist || playlist is PlaylistWShortTracks) {
+      playlist = playlist.kind;
+    }
+    return await api.uploadPlaylistCover(
+      playlist,
+      _parentClass.accountID,
+      filename,
+      coverData,
+    );
+  }
 
   /// Adds a track to a playlist
   ///
@@ -371,5 +390,16 @@ class YandexMusicPlaylists {
       cancelToken: cancelToken,
     );
     return responce['result'];
+  }
+
+/// Restores the original playlist cover (usually the last track added)
+  Future<dynamic> clearCover(
+    dynamic playlist, {
+    CancelToken? cancelToken,
+  }) async {
+    if (playlist is Playlist || playlist is PlaylistWShortTracks) {
+      playlist = playlist.kind;
+    }
+    return await api.clearPlaylistCover(playlist, _parentClass.accountID);
   }
 }

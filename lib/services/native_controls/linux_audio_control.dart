@@ -15,7 +15,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     this.onPrevious,
     this.onSeek,
   }) {
-    // Инициализируем начальное состояние
     _updatePlaybackState(playing: false);
   }
 

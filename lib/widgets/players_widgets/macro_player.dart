@@ -9,7 +9,8 @@ import 'package:quark/services/yandex_music_singleton.dart';
 class MacroPlayer extends StatefulWidget {
   final double? maxWidth;
   final double height;
-  const MacroPlayer({super.key, this.height = 55, this.maxWidth});
+  final VoidCallback? onTap;
+  const MacroPlayer({super.key, this.onTap, this.height = 55, this.maxWidth});
 
   @override
   State<StatefulWidget> createState() => _MacroPlayerState();
@@ -104,38 +105,41 @@ class _MacroPlayerState extends State<MacroPlayer> {
                   ),
             SizedBox(width: 5),
             Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    Player.player.nowPlayingTrack.title,
-                    style: TextStyle(
-                      fontFamily: 'noto',
-                      decoration: TextDecoration.none,
-                      fontSize: min(screehHeight * 0.28, 12),
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+              child: InkWell(
+                onTap: widget.onTap,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      Player.player.nowPlayingTrack.title,
+                      style: TextStyle(
+                        fontFamily: 'noto',
+                        decoration: TextDecoration.none,
+                        fontSize: min(screehHeight * 0.28, 12),
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.start,
                     ),
-                    textAlign: TextAlign.start,
-                  ),
 
-                  Text(
-                    Player.player.nowPlayingTrack.artists.join(', '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'noto',
-                      decoration: TextDecoration.none,
-                      color: Colors.white,
-                      fontSize: min(screehHeight * 0.28, 12),
-                      fontWeight: FontWeight.w300,
+                    Text(
+                      Player.player.nowPlayingTrack.artists.join(', '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'noto',
+                        decoration: TextDecoration.none,
+                        color: Colors.white,
+                        fontSize: min(screehHeight * 0.28, 12),
+                        fontWeight: FontWeight.w300,
+                      ),
+                      textAlign: TextAlign.start,
                     ),
-                    textAlign: TextAlign.start,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
@@ -144,7 +148,12 @@ class _MacroPlayerState extends State<MacroPlayer> {
               Button(
                 enabledIcon: Icons.favorite_outlined,
                 disabledIcon: Icons.favorite_outlined,
-                isEnable: YandexMusicSingleton.likedTracksNotifier.value.contains((Player.player.nowPlayingTrack as YandexMusicTrack).track.id),
+                isEnable: YandexMusicSingleton.likedTracksNotifier.value
+                    .contains(
+                      (Player.player.nowPlayingTrack as YandexMusicTrack)
+                          .track
+                          .id,
+                    ),
                 onTap: () => likeUnlike(),
               ),
             SizedBox(width: 2),
