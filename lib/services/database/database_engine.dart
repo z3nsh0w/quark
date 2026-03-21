@@ -20,9 +20,16 @@ enum DatabaseKeys {
   /// Is the indicator enabled
   stateIndicatorState('indicator_state'),
 
+  dynamicWindowColor('dynamic_window_color'),
+  backgroundBlurRadius('background_blur_radius'),
+  originalImageSizeCoverView('original_image_size_cover_view'),
+
   /// ```Boolean```
   /// recursiveFilesAdding
   recursiveFilesAdding('recursive_files_adding'),
+
+  /// ```Duration```
+  lastTrackPosition('last_track_position'),
 
   /// ```Boolean```
   /// Is the playlist opening area enabled?
@@ -44,6 +51,8 @@ enum DatabaseKeys {
   /// Yandex account access token
   yandexMusicToken('yandex_music_token'),
 
+  /// ```Boolean```
+  /// When loading a playlist, will we use the existing cache or will we parse the playlist again for example differences
   yandexMusicNewestPlaylistInfo('yandex_music_newest'),
 
   /// ```String```

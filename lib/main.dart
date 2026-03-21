@@ -7,9 +7,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:audio_service_mpris/audio_service_mpris.dart';
 import 'package:quark/services/database/database.dart';
-import 'package:quark/services/player/net_player.dart';
+import 'package:audio_service_mpris/audio_service_mpris.dart';
+import 'package:quark/services/dynamic_window_color_linux.dart';
 
 // Local files
 import '/objects/track.dart';
@@ -27,27 +27,17 @@ import '/widgets/yandex_music_integration/yandex_playlists_widget.dart';
 // TODO: fix bug while closing playtlist with iconbutton then if playlist was opened by mouseArea it wont close
 // TODO: Lister logger migration
 // TODO: REMOVE SETSTATE FROM BUILD METHODS
-// import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApplicationCacheDirectory.instance.init();
   Hive.init(ApplicationCacheDirectory.instance.directory.path);
-  Player(
-    playlist: [],
-    nowPlayingTrack: LocalTrack(
-      title: 'title',
-      artists: ['artists'],
-      albums: ['albums'],
-      filepath: 'filepath',
-    ),
-  );
+  Database.init();
   Player.player.init();
   NativeControl().init();
-  // ListenLogger().init();
   AudioServiceMpris.registerWith();
-  Database.init();
   DatabaseStreamerService().init();
+  DynamicWindowColor.init();
   runApp(const Quark());
 }
 
@@ -72,13 +62,13 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   bool inited = false;
-  bool hasLatestPlaylist = false;
+  String? lastTrackPath;
   bool loginView = false;
   bool playlistView = false;
   bool settingsView = false;
   PlayerPlaylist? lastPlaylist;
-  String? lastTrackPath;
   final log = Logger('MainPage');
+  bool hasLatestPlaylist = false;
   List<PlaylistWShortTracks> userPlaylists = [];
   YandexMusic yandexMusic = YandexMusic(token: '');
 
@@ -139,7 +129,6 @@ class _MainPageState extends State<MainPage> {
     await Player.player.updatePlaylist(playlist.tracks);
 
     PlayerTrack? foundTrack;
-
     if (lastTrackPath != null) {
       for (final track in playlist.tracks) {
         if (track.filepath == lastTrackPath) {
@@ -153,12 +142,20 @@ class _MainPageState extends State<MainPage> {
 
     await Player.player.stop();
     Player.player.isPlaying = false;
-    Player.player.nowPlayingTrack = trackToPlay;
     await Player.player.playCustom(trackToPlay);
+    if (foundTrack != null) {
+      if (Duration(seconds: DatabaseStreamerService().lastTrackPosition.value) <
+          Player.player.durationNotifier.value) {
+        await Player.player.seek(
+          Duration(seconds: DatabaseStreamerService().lastTrackPosition.value),
+        );
+      }
+    }
 
     Navigator.push(
       context,
       CupertinoPageRoute(
+        settings: RouteSettings(name: "/player"),
         builder: (context) =>
             PlaylistPage(playlist: playlist, yandexMusic: yandexMusic),
       ),

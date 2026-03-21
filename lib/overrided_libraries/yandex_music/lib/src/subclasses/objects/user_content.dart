@@ -159,12 +159,16 @@ class YandexMusicUserTracks {
   /// await ymInstance.usertracks.rename(result, 'Рыжая продавщица', 'Пророк СанБой')
   /// ```
   Future<dynamic> uploadUGCTrack(
-    int kind,
+    dynamic playlist,
     Uint8List file,
     String fileName, {
     CancelToken? cancelToken,
+    void Function(int, int)? onSendProgress
   }) async {
-    String playlistId = '${_parentClass.accountID}:$kind';
+    if (playlist is Playlist || playlist is PlaylistWShortTracks || playlist is ShortPlaylistInfo) {
+      playlist = playlist.kind;
+    }
+    String playlistId = '${_parentClass.accountID}:$playlist';
     var result = await api.getUploadLink(
       _parentClass.accountID,
       fileName,
@@ -172,7 +176,13 @@ class YandexMusicUserTracks {
       cancelToken: cancelToken,
     );
 
-    await api.uploadFile(result['post-target'], file, fileName, cancelToken: cancelToken);
+    await api.uploadFile(
+      result['post-target'],
+      file,
+      fileName,
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress
+    );
 
     return result['ugc-track-id'];
   }

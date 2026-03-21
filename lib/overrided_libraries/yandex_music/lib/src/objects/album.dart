@@ -23,7 +23,7 @@ class Album {
   /// To use, replace %% with square size multiple of 10
   ///
   /// For example 500x500
-  final String coverUri;
+  final String? coverUri;
 
   /// Number of tracks in the album
   final int trackCount;

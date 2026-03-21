@@ -51,9 +51,11 @@ class _VibePainter extends CustomPainter {
 
 class VibeWidget extends StatefulWidget {
   final double size;
+
   /// 0 - 360
   final double hue;
   final double speed;
+
   /// 0 - 1
   final double scale;
 
@@ -74,19 +76,24 @@ class _VibeWidgetState extends State<VibeWidget>
   late AnimationController _controller;
   ui.FragmentShader? _shader;
   bool _shaderError = false;
+  final _rand = Random.secure();
 
   late PaletteAnimator _palette;
-  double _time = 0;
+  late double _time = _rand.nextDouble() * 1000.0;
   DateTime _lastTick = DateTime.now();
-  final List<List<double>> _rotations = [
-    [-0.3, 0.3, 0.2],
-    [-0.3, -0.3, -0.2],
-    [-0.3, -0.3, 0.2],
-  ];
+  late final List<List<double>> _rotations;
 
   @override
   void initState() {
     super.initState();
+    _rotations = List.generate(
+      3,
+      (_) => [
+        _rand.nextDouble() * 2 - 1,
+        _rand.nextDouble() * 2 - 1,
+        _rand.nextDouble() * 2 - 1,
+      ],
+    );
     _palette = PaletteAnimator(baseHue: widget.hue);
     _loadShader();
 
@@ -228,7 +235,7 @@ class PaletteAnimator {
   late ColorLerp middleStart, middleEnd;
   late ColorLerp bottomStart, bottomEnd;
 
-  final _rand = Random();
+  final _rand = Random.secure();
 
   PaletteAnimator({double baseHue = 10}) {
     final parts = _createParts(baseHue);

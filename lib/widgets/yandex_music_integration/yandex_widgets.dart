@@ -1,21 +1,21 @@
 import 'dart:async';
 import 'dart:ui';
-import 'dart:ui' as ui;
 import 'dart:math';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'dart:ui' as ui;
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
-import 'package:material_symbols_icons/material_symbols_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:quark/objects/track.dart';
+import 'package:file_picker/file_picker.dart';
+import '../../services/yandex_music_singleton.dart';
 import 'package:quark/services/cached_images.dart';
 import 'package:quark/services/player/player.dart';
-import 'package:quark/widgets/players_widgets/macro_player.dart';
 import 'package:quark/widgets/players_widgets/main_player.dart';
-import 'package:quark/widgets/players_widgets/mini_player.dart';
-import '../../services/yandex_music_singleton.dart';
+import 'package:quark/services/dynamic_window_color_linux.dart';
+import 'package:quark/widgets/players_widgets/macro_player.dart';
+import 'package:material_symbols_icons/material_symbols_icons.dart';
 
 class YandexPlaylistsInfo extends StatefulWidget {
   final List<PlaylistWShortTracks> playlists;
@@ -305,6 +305,7 @@ class _YandexPlaylistsInfoState extends State<YandexPlaylistsInfo> {
                         Navigator.push(
                           context,
                           CupertinoPageRoute(
+                            maintainState: false,
                             builder: (builder) =>
                                 PlaylistInfoWidget(playlist: fullPlaylist),
                           ),
@@ -351,6 +352,7 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
   Timer? debounceTimer;
   final Duration _debounceDuration = const Duration(milliseconds: 500);
   double _width = 400;
+  final Color playlistColor = Colors.white;
 
   void _updateWidth(String text) {
     final painter = TextPainter(
@@ -403,6 +405,17 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
     });
   }
 
+  void setHeader() async {
+    DynamicWindowColor.pause();
+    await DynamicWindowColor.setHeaderColor([playlistColor]);
+  }
+
+  @override
+  void dispose() {
+    DynamicWindowColor.resume();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -411,92 +424,52 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
     setState(() {
       visibility = widget.playlist.visibility == 'public';
     });
+    setHeader();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 10, 10, 10),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        surfaceTintColor: Colors.white.withOpacity(0.3),
-        shadowColor: Colors.white.withOpacity(0.3),
-        titleTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
+      bottomNavigationBar: Container(
+        height: 55,
+        color: playlistColor.withAlpha(50),
+        child: Center(
+          child: MacroPlayer(
+            maxWidth: MediaQuery.of(context).size.width - 30,
+            height: 45,
+          ),
         ),
-        title: Row(
-          children: [
-            Text(
-              'Playlist',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Expanded(
-              child: Center(
-                child: MacroPlayer(
-                  maxWidth: min(MediaQuery.of(context).size.width - 200, 600),
-                  height: 45,
-                  onTap: () async {
-                    await showDialog(
-                      context: context,
-                      barrierDismissible: true,
-                      builder: (a) => Dialog(
-                        insetPadding: EdgeInsets.zero,
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        surfaceTintColor: Colors.transparent,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(15),
-                          child: SizedBox(
-                            height: min(
-                              MediaQuery.of(context).size.height - 200,
-                              700,
-                            ),
-                            width: min(
-                              MediaQuery.of(context).size.width - 100,
-                              850,
-                            ),
-                            child: MainPlayer(),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-        actionsIconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _mainHeader(),
-            if (playlist.tracks.isNotEmpty) ...[
-              VerticalSection<Track>(
-                title: 'Tracks',
-                items: playlist.tracks,
-                itemBuilder: (track) => Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 2,
-                  ),
-                  child: TrackCard(track: track, size: '100x100'),
-                ),
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          UserLibraryBar(accentColor: playlistColor),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _mainHeader(),
+                  if (playlist.tracks.isNotEmpty) ...[
+                    VerticalSection<Track>(
+                      title: 'Tracks',
+                      items: playlist.tracks,
+                      itemBuilder: (track) => Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 2,
+                        ),
+                        child: TrackCard(track: track, size: '100x100'),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 40),
+                ],
               ),
-            ],
-            const SizedBox(height: 40),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -787,7 +760,6 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
   }
 
   Widget _mainHeader() {
-    final Color playlistColor = Colors.white;
     final bool isOwner =
         playlist.ownerUid == YandexMusicSingleton.instance.accountID;
 
@@ -889,7 +861,7 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                           height: 40,
                           width: 40,
                           child: Icon(
-                            Icons.push_pin,
+                            Symbols.push_pin_sharp,
                             color: Colors.white,
                             size: 21,
                           ),
@@ -1019,9 +991,82 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                             height: 40,
                             width: 40,
                             child: Icon(
-                              Icons.add_photo_alternate_outlined,
+                              Symbols.add_photo_alternate_sharp,
                               color: Colors.white,
                               size: 21,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                if (isOwner && playlist.kind != 3) ...[
+                  const SizedBox(width: 5),
+                  Tooltip(
+                    message: "Upload tracks",
+                    child: ClipOval(
+                      child: Material(
+                        color: playlistColor.withOpacity(0.2),
+                        child: InkWell(
+                          onTap: () async {
+                            final result = await FilePicker.platform.pickFiles(
+                              allowMultiple: true,
+                            );
+                            if (result == null ||
+                                result.files.isEmpty ||
+                                result.files[0].path == null) {
+                              return;
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Uploading tracks... Now you can leave page.',
+                                ),
+                                duration: Duration(seconds: 1),
+                                backgroundColor: Color.alphaBlend(
+                                  Colors.black.withOpacity(0.6),
+                                  playlistColor,
+                                ),
+
+                                behavior: SnackBarBehavior.fixed,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            );
+                            try {
+                              await YandexMusicSingleton.uploadTracks(
+                                result.files.map((e) => e.path!).toList(),
+                                playlist.kind,
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Failed to upload a new cover. $e',
+                                  ),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Color.alphaBlend(
+                                    Colors.black.withOpacity(0.6),
+                                    playlistColor,
+                                  ),
+
+                                  behavior: SnackBarBehavior.fixed,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          child: SizedBox(
+                            height: 40,
+                            width: 40,
+                            child: Icon(
+                              Symbols.upload,
+                              size: 21,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -1065,7 +1110,7 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                           height: 40,
                           width: 40,
                           child: Icon(
-                            Symbols.upload,
+                            Symbols.share,
                             color: Colors.white,
                             size: 21,
                           ),
@@ -1242,8 +1287,10 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
   List<Track>? tracks;
 
   void initAll() async {
+    DynamicWindowColor.setHeaderColor([buildColor(Colors.white)]);
+
     try {
-      final concertsS = await YandexMusicSingleton.instance.artists.getConcerts(
+      final concertsS = await YandexMusicSingleton.getConcerts(
         widget.artist.artist.id,
       );
 
@@ -1257,8 +1304,9 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
       );
     }
     try {
-      final newReleaseInfo = await YandexMusicSingleton.instance.artists
-          .getNewRelease(widget.artist.artist.id);
+      final newReleaseInfo = await YandexMusicSingleton.getNewRelease(
+        widget.artist.artist.id,
+      );
 
       setState(() {
         newRelease = newReleaseInfo;
@@ -1270,8 +1318,9 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
       );
     }
     try {
-      final studioAlbumsInfo = await YandexMusicSingleton.instance.artists
-          .getStudioAlbums(widget.artist.artist.id);
+      final studioAlbumsInfo = await YandexMusicSingleton.getStudioAlbums(
+        widget.artist.artist.id,
+      );
 
       setState(() {
         studioAlbums = studioAlbumsInfo;
@@ -1283,7 +1332,7 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
       );
     }
     try {
-      final albums2 = await YandexMusicSingleton.instance.artists.getAlbums(
+      final albums2 = await YandexMusicSingleton.getAlbums(
         widget.artist.artist.id,
       );
 
@@ -1298,8 +1347,9 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
     }
 
     try {
-      final playlistss = await YandexMusicSingleton.instance.artists
-          .getPlaylists(widget.artist.artist.id);
+      final playlistss = await YandexMusicSingleton.getPlaylistsByArtist(
+        widget.artist.artist.id,
+      );
 
       setState(() {
         playlists = playlistss;
@@ -1311,7 +1361,7 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
       );
     }
     try {
-      final trackss = await YandexMusicSingleton.instance.artists.getTracks(
+      final trackss = await YandexMusicSingleton.getTracksByArtist(
         widget.artist.artist.id,
       );
 
@@ -1326,179 +1376,175 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
     }
   }
 
+  Color buildColor(Color default2) {
+    return widget.artist.covers.isNotEmpty
+        ? Color(
+            int.parse(widget.artist.covers[0].color.substring(1), radix: 16) +
+                0xFF000000,
+          )
+        : default2;
+  }
+
   @override
   void initState() {
     super.initState();
     initAll();
+    DynamicWindowColor.pause();
+  }
+
+  @override
+  void dispose() {
+    DynamicWindowColor.resume();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    Color buildColor(Color default2) {
-      return widget.artist.covers.isNotEmpty
-          ? Color(
-              int.parse(widget.artist.covers[0].color.substring(1), radix: 16) +
-                  0xFF000000,
-            )
-          : default2;
-    }
-
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 10, 10, 10),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        surfaceTintColor: buildColor(Colors.black),
-        shadowColor: buildColor(Colors.black),
-        titleTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
+      bottomNavigationBar: Container(
+        height: 55,
+        color: buildColor(Colors.white).withAlpha(50),
+        child: Center(
+          child: MacroPlayer(
+            maxWidth: MediaQuery.of(context).size.width - 30,
+            height: 45,
+          ),
         ),
-        title: Row(
-          children: [
-            const Text(
-              'Artist',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Expanded(
-              child: Center(
-                child: MacroPlayer(
-                  maxWidth: min(MediaQuery.of(context).size.width - 200, 600),
-                  height: 45,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actionsIconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _header(buildColor(Colors.white)),
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          UserLibraryBar(accentColor: buildColor(Colors.white)),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _header(buildColor(Colors.white)),
 
-            const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-            if (newRelease != null) ...[
-              _newRelease(),
-              const SizedBox(height: 20),
-            ],
+                  if (newRelease != null) ...[
+                    _newRelease(),
+                    const SizedBox(height: 20),
+                  ],
 
-            if (concerts != null && concerts!.isNotEmpty) ...[
-              HorizontalSection<Concert>(
-                title: 'Concerts',
-                height: 230,
-                items: concerts!,
-                itemBuilder: (concert) => ConcertCard(concert: concert),
-              ),
-            ],
+                  if (concerts != null && concerts!.isNotEmpty) ...[
+                    HorizontalSection<Concert>(
+                      title: 'Concerts',
+                      height: 230,
+                      items: concerts!,
+                      itemBuilder: (concert) => ConcertCard(concert: concert),
+                    ),
+                  ],
 
-            if (studioAlbums != null && studioAlbums!.isNotEmpty) ...[
-              HorizontalSection<AlbumInfo>(
-                title: 'Studio Albums',
-                height: 230,
-                items: studioAlbums!,
-                itemBuilder: (album) =>
-                    AlbumCard(album: album, size: '300x300'),
-              ),
-            ],
+                  if (studioAlbums != null && studioAlbums!.isNotEmpty) ...[
+                    HorizontalSection<AlbumInfo>(
+                      title: 'Studio Albums',
+                      height: 230,
+                      items: studioAlbums!,
+                      itemBuilder: (album) =>
+                          AlbumCard(album: album, size: '300x300'),
+                    ),
+                  ],
 
-            if (albums != null && albums!.isNotEmpty) ...[
-              HorizontalSection<AlbumInfo>(
-                title: 'All Albums',
-                items: albums!,
-                height: 230,
-                itemBuilder: (album) =>
-                    AlbumCard(album: album, size: '300x300'),
-              ),
-            ],
+                  if (albums != null && albums!.isNotEmpty) ...[
+                    HorizontalSection<AlbumInfo>(
+                      title: 'All Albums',
+                      items: albums!,
+                      height: 230,
+                      itemBuilder: (album) =>
+                          AlbumCard(album: album, size: '300x300'),
+                    ),
+                  ],
 
-            if (playlists != null && playlists!.isNotEmpty) ...[
-              HorizontalSection<ShortPlaylistInfo>(
-                title: 'Playlists',
-                height: 200,
-                items: playlists!,
-                itemBuilder: (playlist) =>
-                    PlaylistCard(playlist: playlist, size: '300x300'),
-              ),
-            ],
+                  if (playlists != null && playlists!.isNotEmpty) ...[
+                    HorizontalSection<ShortPlaylistInfo>(
+                      title: 'Playlists',
+                      height: 200,
+                      items: playlists!,
+                      itemBuilder: (playlist) =>
+                          PlaylistCard(playlist: playlist, size: '300x300'),
+                    ),
+                  ],
 
-            if (tracks != null && tracks!.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  'Popular tracks',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 24,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: EdgeInsetsGeometry.symmetric(
-                  horizontal: 36,
-                  vertical: 2,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadiusGeometry.all(Radius.circular(10)),
-                  child: Material(
-                    color: buildColor(Colors.black).withOpacity(0.2),
-                    child: InkWell(
-                      onTap: () async {
-                        final List<PlayerTrack> queue = [];
-                        for (Track albumTrack in tracks!) {
-                          queue.add(
-                            YandexMusicTrack.fromYMTtoLocalTrack(albumTrack),
-                          );
-                        }
-                        await Player.player.playTemporaryQueue(
-                          queue,
-                          startsNow: true,
-                          first: true,
-                        );
-                      },
-                      child: SizedBox(
-                        height: 40,
-                        width: double.infinity,
-                        child: Icon(
-                          Icons.play_arrow,
+                  if (tracks != null && tracks!.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'Popular tracks',
+                        style: const TextStyle(
                           color: Colors.white,
-                          size: 28,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 24,
                         ),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: EdgeInsetsGeometry.symmetric(
+                        horizontal: 36,
+                        vertical: 2,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadiusGeometry.all(
+                          Radius.circular(10),
+                        ),
+                        child: Material(
+                          color: buildColor(Colors.black).withOpacity(0.2),
+                          child: InkWell(
+                            onTap: () async {
+                              final List<PlayerTrack> queue = [];
+                              for (Track albumTrack in tracks!) {
+                                queue.add(
+                                  YandexMusicTrack.fromYMToPlayerTrack(
+                                    albumTrack,
+                                  ),
+                                );
+                              }
+                              await Player.player.playTemporaryQueue(
+                                queue,
+                                startsNow: true,
+                                first: true,
+                              );
+                            },
+                            child: SizedBox(
+                              height: 40,
+                              width: double.infinity,
+                              child: Icon(
+                                Icons.play_arrow,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
 
-              VerticalSection<Track>(
-                title: '',
-                items: tracks!,
-                itemBuilder: (track) => Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 2,
-                  ),
-                  child: TrackCard(
-                    track: track,
-                    size: '100x100',
-                    accentColor: buildColor(Colors.black),
-                  ),
-                ),
+                    VerticalSection<Track>(
+                      title: '',
+                      items: tracks!,
+                      itemBuilder: (track) => Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 2,
+                        ),
+                        child: TrackCard(
+                          track: track,
+                          size: '100x100',
+                          accentColor: buildColor(Colors.black),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1711,7 +1757,7 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
                                   ? tracks!
                                         .map<PlayerTrack>(
                                           (e) =>
-                                              YandexMusicTrack.fromYMTtoLocalTrack(
+                                              YandexMusicTrack.fromYMToPlayerTrack(
                                                 e,
                                               ),
                                         )
@@ -1736,62 +1782,6 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
                           ),
                         ),
                       ),
-                      // const SizedBox(width: 5),
-
-                      // ClipOval(
-                      //   child: Material(
-                      //     color: artistColor.withOpacity(0.2),
-                      //     child: InkWell(
-                      //       onTap: () async {},
-                      //       child: SizedBox(
-                      //         height: 40,
-                      //         width: 40,
-                      //         child: Icon(
-                      //           Icons.favorite_sharp,
-                      //           color: Colors.white,
-                      //           size: 21,
-                      //         ),
-                      //       ),
-                      //     ),
-                      //   ),
-                      // ),
-                      // const SizedBox(width: 5),
-
-                      // ClipOval(
-                      //   child: Material(
-                      //     color: artistColor.withOpacity(0.2),
-                      //     child: InkWell(
-                      //       onTap: () async {},
-                      //       child: SizedBox(
-                      //         height: 40,
-                      //         width: 40,
-                      //         child: Icon(
-                      //           Icons.push_pin,
-                      //           color: Colors.white,
-                      //           size: 21,
-                      //         ),
-                      //       ),
-                      //     ),
-                      //   ),
-                      // ),
-                      // const SizedBox(width: 5),
-                      // ClipOval(
-                      //   child: Material(
-                      //     color: artistColor.withOpacity(0.2),
-                      //     child: InkWell(
-                      //       onTap: () async {await YandexMusicSingleton.instance.myVibe.},
-                      //       child: SizedBox(
-                      //         height: 40,
-                      //         width: 40,
-                      //         child: Icon(
-                      //           Icons.waves,
-                      //           color: Colors.white,
-                      //           size: 21,
-                      //         ),
-                      //       ),
-                      //     ),
-                      //   ),
-                      // ),
                       const SizedBox(width: 5),
                       ClipOval(
                         child: Material(
@@ -1940,11 +1930,14 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
             color: Colors.transparent,
             child: InkWell(
               onTap: () async {
-                final albums = await YandexMusicSingleton.instance.albums
-                    .getInfo(newRelease!.id);
+                final albums = await YandexMusicSingleton.getAlbumInfo(
+                  newRelease!.id,
+                );
                 Navigator.push(
                   context,
                   CupertinoPageRoute(
+                    maintainState: false,
+
                     builder: (builder) => AlbumInfoWidget(album: albums),
                   ),
                 );
@@ -1964,11 +1957,13 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        'https://${newRelease!.coverUri.replaceAll('%%', '300x300')}',
+                      child: CachedImage(
+                        coverUri: newRelease!.coverUri != null
+                            ? 'https://${newRelease!.coverUri!.replaceAll('%%', '300x300')}'
+                            : "https://none",
                         width: 120,
                         height: 120,
-                        fit: BoxFit.cover,
+                        // fit: BoxFit.cover,
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -2023,170 +2018,181 @@ class _ArtistInfo extends State<ArtistInfoWidget> {
   }
 }
 
-class AlbumInfoWidget extends StatelessWidget {
+class AlbumInfoWidget extends StatefulWidget {
   final Album2 album;
-
   const AlbumInfoWidget({super.key, required this.album});
 
   @override
-  Widget build(BuildContext context) {
-    final Color albumColor = album.colors != null
-        ? Color(
-            int.parse(album.colors!.accent.substring(1), radix: 16) +
-                0xFF000000,
-          )
-        : Colors.white;
-    return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 10, 10, 10),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        surfaceTintColor: albumColor,
-        shadowColor: albumColor,
-        titleTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
-        title: Row(
-          children: [
-            Text(
-              'Album',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Expanded(
-              child: Center(
-                child: MacroPlayer(
-                  maxWidth: min(MediaQuery.of(context).size.width - 200, 600),
-                  height: 45,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actionsIconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _header(context),
-            if (album.tracks.isNotEmpty) ...[
-              if (album.tracks.length > 1) ...[
-                for (List<Track> tracks in album.tracks) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Disc ${album.tracks.indexOf(tracks) + 1}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 24,
-                          ),
-                        ),
-                        SizedBox(width: 10),
-                        ClipOval(
-                          child: Material(
-                            color: albumColor.withOpacity(0.2),
-                            child: InkWell(
-                              onTap: () async {
-                                final List<PlayerTrack> toQ = tracks
-                                    .map(
-                                      (e) =>
-                                          YandexMusicTrack.fromYMTtoLocalTrack(
-                                            e,
-                                          ),
-                                    )
-                                    .toList();
+  State<StatefulWidget> createState() => _AlbumInfoWidget();
+}
 
-                                await Player.player.playTemporaryQueue(
-                                  toQ,
-                                  startsNow: true,
-                                  first: true,
-                                );
-                              },
-                              child: SizedBox(
-                                height: 30,
-                                width: 30,
-                                child: Icon(
-                                  Icons.play_arrow,
+class _AlbumInfoWidget extends State<AlbumInfoWidget> {
+  Album2 get album => widget.album;
+  late final Color albumColor = album.colors != null
+      ? Color(
+          int.parse(album.colors!.accent.substring(1), radix: 16) + 0xFF000000,
+        )
+      : Colors.white;
+
+  void setHeader() async {
+    DynamicWindowColor.pause();
+    Color solidColor = Color.lerp(
+      Color.fromARGB(255, 10, 10, 10),
+      albumColor,
+      0.67,
+    )!;
+
+    await DynamicWindowColor.setHeaderColor([
+      DynamicWindowColor.darken(solidColor),
+    ]);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    setHeader();
+  }
+
+  @override
+  void dispose() {
+    DynamicWindowColor.resume();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      bottomNavigationBar: Container(
+        height: 55,
+        color: albumColor.withAlpha(50),
+        child: Center(
+          child: MacroPlayer(
+            maxWidth: MediaQuery.of(context).size.width - 30,
+            height: 45,
+          ),
+        ),
+      ),
+      backgroundColor: const Color.fromARGB(255, 10, 10, 10),
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          UserLibraryBar(accentColor: albumColor),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _header(context),
+                  if (album.tracks.isNotEmpty) ...[
+                    if (album.tracks.length > 1) ...[
+                      for (List<Track> tracks in album.tracks) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Disc ${album.tracks.indexOf(tracks) + 1}',
+                                style: const TextStyle(
                                   color: Colors.white,
-                                  size: 21,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 24,
                                 ),
                               ),
+                              SizedBox(width: 10),
+                              ClipOval(
+                                child: Material(
+                                  color: albumColor.withOpacity(0.2),
+                                  child: InkWell(
+                                    onTap: () async {
+                                      final List<PlayerTrack> toQ = tracks
+                                          .map(
+                                            (e) =>
+                                                YandexMusicTrack.fromYMToPlayerTrack(
+                                                  e,
+                                                ),
+                                          )
+                                          .toList();
+                                          
+
+
+                                      // await Player.player.playTemporaryQueue(
+                                      //   toQ,
+                                      //   startsNow: true,
+                                      //   first: true,
+                                      // );
+                                    },
+                                    child: SizedBox(
+                                      height: 30,
+                                      width: 30,
+                                      child: Icon(
+                                        Icons.play_arrow,
+                                        color: Colors.white,
+                                        size: 21,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        VerticalSection<Track>(
+                          title: '',
+                          items: tracks,
+                          itemBuilder: (track) => Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 2,
+                            ),
+                            child: TrackCard(
+                              track: track,
+                              size: '100x100',
+                              bestTrack: album.bestTracks
+                                  .map((toElement) => toElement.toString())
+                                  .toList()
+                                  .contains(track.id),
+                              accentColor: albumColor,
                             ),
                           ),
                         ),
+                        const SizedBox(height: 5),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  VerticalSection<Track>(
-                    title: '',
-                    items: tracks,
-                    itemBuilder: (track) => Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 2,
+                    ],
+                    if (album.tracks.length == 1) ...[
+                      VerticalSection<Track>(
+                        title: "Tracks",
+                        items: album.tracks[0],
+                        itemBuilder: (track) => Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 2,
+                          ),
+                          child: TrackCard(
+                            track: track,
+                            size: '100x100',
+                            bestTrack: album.bestTracks
+                                .map((toElement) => toElement.toString())
+                                .toList()
+                                .contains(track.id),
+                            accentColor: albumColor,
+                          ),
+                        ),
                       ),
-                      child: TrackCard(
-                        track: track,
-                        size: '100x100',
-                        bestTrack: album.bestTracks
-                            .map((toElement) => toElement.toString())
-                            .toList()
-                            .contains(track.id),
-                        accentColor: albumColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 5),
+                    ],
+                  ],
+                  const SizedBox(height: 40),
                 ],
-              ],
-              if (album.tracks.length == 1) ...[
-                VerticalSection<Track>(
-                  title: "Tracks",
-                  items: album.tracks[0],
-                  itemBuilder: (track) => Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 2,
-                    ),
-                    child: TrackCard(
-                      track: track,
-                      size: '100x100',
-                      bestTrack: album.bestTracks
-                          .map((toElement) => toElement.toString())
-                          .toList()
-                          .contains(track.id),
-                      accentColor: albumColor,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-            const SizedBox(height: 40),
-          ],
-        ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _header(BuildContext context) {
-    final Color albumColor = album.colors != null
-        ? Color(
-            int.parse(album.colors!.accent.substring(1), radix: 16) +
-                0xFF000000,
-          )
-        : Colors.white;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
@@ -2324,15 +2330,16 @@ class AlbumInfoWidget extends StatelessWidget {
                             val = value;
                           }
 
-                          final artist = await YandexMusicSingleton
-                              .instance
-                              .artists
-                              .getInfo(album.artists[val]);
+                          final artist =
+                              await YandexMusicSingleton.getArtistInfo(
+                                album.artists[val].id,
+                              );
                           Navigator.push(
                             context,
                             CupertinoPageRoute(
+                              maintainState: false,
                               builder: (builder) =>
-                                  ArtistInfoWidget(artist: artist),
+                                  ArtistInfoWidget(artist: artist!),
                             ),
                           );
                         },
@@ -2398,7 +2405,7 @@ class AlbumInfoWidget extends StatelessWidget {
                             .expand((trackList) => trackList)
                             .toList();
                         final List<PlayerTrack> toQ = allTracks
-                            .map((e) => YandexMusicTrack.fromYMTtoLocalTrack(e))
+                            .map((e) => YandexMusicTrack.fromYMToPlayerTrack(e))
                             .toList();
 
                         await Player.player.playTemporaryQueue(
@@ -2799,12 +2806,12 @@ class AlbumCard extends StatelessWidget {
         width: 150,
         child: InkWell(
           onTap: () async {
-            final albums = await YandexMusicSingleton.instance.albums.getInfo(
-              album.id,
-            );
+            final albums = await YandexMusicSingleton.getAlbumInfo(album.id);
             Navigator.push(
               context,
               CupertinoPageRoute(
+                maintainState: false,
+
                 builder: (builder) => AlbumInfoWidget(album: albums),
               ),
             );
@@ -2873,6 +2880,7 @@ class PlaylistCard extends StatelessWidget {
             Navigator.push(
               context,
               CupertinoPageRoute(
+                maintainState: false,
                 builder: (builder) =>
                     PlaylistInfoWidget(playlist: playlistInfo),
               ),
@@ -2965,7 +2973,7 @@ class TrackCard extends StatelessWidget {
         value: 'queue',
         onTap: () async {
           Player.player.insertInQueue(
-            YandexMusicTrack.fromYMTtoLocalTrack(track),
+            YandexMusicTrack.fromYMToPlayerTrack(track),
           );
         },
       ),
@@ -3016,7 +3024,7 @@ class TrackCard extends StatelessWidget {
             await YandexMusicSingleton.instance.playlists.insertTrack(
               YandexMusicSingleton.playlists[selected].kind,
               track.id,
-              track.albums[0].id.toString(),
+              albumId: track.albums[0].id.toString(),
             );
           } catch (e) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -3073,6 +3081,7 @@ class TrackCard extends StatelessWidget {
           Navigator.push(
             context,
             CupertinoPageRoute(
+              maintainState: false,
               builder: (builder) => ArtistInfoWidget(artist: artist),
             ),
           );
@@ -3092,7 +3101,11 @@ class TrackCard extends StatelessWidget {
           if (context.mounted) {
             Navigator.push(
               context,
-              CupertinoPageRoute(builder: (_) => AlbumInfoWidget(album: album)),
+              CupertinoPageRoute(
+                maintainState: false,
+
+                builder: (_) => AlbumInfoWidget(album: album),
+              ),
             );
           }
         },
@@ -3120,7 +3133,7 @@ class TrackCard extends StatelessWidget {
         child: InkWell(
           onTap: () async {
             Player.player.insertInQueue(
-              YandexMusicTrack.fromYMTtoLocalTrack(track),
+              YandexMusicTrack.fromYMToPlayerTrack(track),
             );
             await Player.player.playNext(forceNext: true, completed: false);
           },
@@ -3218,7 +3231,7 @@ class CoverView extends StatelessWidget {
         child: Stack(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(10),
               child: CachedImage(
                 coverUri: smallCoverLink,
                 height: 180,
@@ -3390,6 +3403,7 @@ class IconButton2 extends StatelessWidget {
   final double height;
   final Color iconColor;
   final double iconSize;
+  final BorderRadiusGeometry? borderRadius;
 
   const IconButton2({
     super.key,
@@ -3400,10 +3414,28 @@ class IconButton2 extends StatelessWidget {
     this.iconSize = 21,
     required this.onTap,
     this.width = 40,
+    this.borderRadius,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (borderRadius != null) {
+      return ClipRRect(
+        borderRadius: borderRadius!,
+        child: Material(
+          color: accentColor.withOpacity(0.2),
+          child: InkWell(
+            onTap: onTap,
+            child: SizedBox(
+              height: height,
+              width: width,
+              child: Icon(icon, color: iconColor, size: iconSize),
+            ),
+          ),
+        ),
+      );
+    }
+
     return ClipOval(
       child: Material(
         color: accentColor.withOpacity(0.2),
@@ -3414,6 +3446,96 @@ class IconButton2 extends StatelessWidget {
             width: width,
             child: Icon(icon, color: iconColor, size: iconSize),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class UserLibraryBar extends StatelessWidget {
+  final Color accentColor;
+
+  const UserLibraryBar({super.key, required this.accentColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 55,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              accentColor.withOpacity(0.4),
+              accentColor.withOpacity(0.0),
+            ],
+            stops: const [0.0, 0.38],
+          ),
+        ),
+        child: Column(
+          children: [
+            SizedBox(height: 10),
+            IconButton2(
+              // borderRadius: BorderRadius.all(Radius.circular(10)),
+              icon: Icons.arrow_back,
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            SizedBox(height: 10),
+            IconButton2(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+              icon: Icons.home,
+              onTap: () {
+                Navigator.popUntil(context, ModalRoute.withName('/player'));
+              },
+            ),
+            for (PlaylistWShortTracks playlist
+                in YandexMusicSingleton.playlists) ...[
+              SizedBox(height: 10),
+              Container(
+                width: 40,
+                // width: 260,
+                // height: 260,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.all(Radius.circular(5)),
+                  image: DecorationImage(
+                    image: CachedImageProvider(
+                      '${YandexMusicSingleton.instance.playlists.getPlaylistCoverArtUrl(playlist.cover ?? {"type": "pic", "uri": "raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png", "custom": true})}',
+                    ),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                child: Material(
+                  clipBehavior: Clip.antiAlias,
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(5),
+
+                  child: InkWell(
+                    onTap: () async {
+                      final playlist2 = await YandexMusicSingleton
+                          .instance
+                          .playlists
+                          .getPlaylist(
+                            playlist.kind,
+                            accountId: playlist.ownerUid,
+                          );
+                      Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          maintainState: false,
+                          builder: (builder) =>
+                              PlaylistInfoWidget(playlist: playlist2),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

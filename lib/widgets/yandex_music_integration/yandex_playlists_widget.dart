@@ -65,139 +65,157 @@ class _YandexPlaylistsState extends State<YandexPlaylists> {
                     alignment: WrapAlignment.center,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     direction: Axis.horizontal,
-                    children: List.generate(YandexMusicSingleton.playlists.length, (index) {
-                      return Container(
-                        width: 310,
-                        // width: 260,
-                        // height: 260,
-                        height: 310,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(15)),
-                          image: DecorationImage(
-                            image: CachedImageProvider(
-                              '${widget.yandexMusic.playlists.getPlaylistCoverArtUrl(YandexMusicSingleton.playlists[index].cover ?? {"type": "pic", "uri": "raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png", "custom": true})}',
+                    children: List.generate(
+                      YandexMusicSingleton.playlists.length,
+                      (index) {
+                        return Container(
+                          width: 310,
+                          // width: 260,
+                          // height: 260,
+                          height: 310,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.all(Radius.circular(15)),
+                            image: DecorationImage(
+                              image: CachedImageProvider(
+                                '${widget.yandexMusic.playlists.getPlaylistCoverArtUrl(YandexMusicSingleton.playlists[index].cover ?? {"type": "pic", "uri": "raw.githubusercontent.com/z3nsh0w/z3nsh0w.github.io/refs/heads/master/nocover.png", "custom": true})}',
+                              ),
+                              fit: BoxFit.cover,
                             ),
-                            fit: BoxFit.cover,
                           ),
-                        ),
-                        child: Material(
-                          clipBehavior: Clip.antiAlias,
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(15),
+                          child: Material(
+                            clipBehavior: Clip.antiAlias,
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(15),
 
-                          child: InkWell(
-                            onTap: () async {
-                              if (!enabled) {
-                                return;
-                              }
+                            child: InkWell(
+                              onTap: () async {
+                                if (!enabled) {
+                                  return;
+                                }
 
-                              final trackIds = YandexMusicSingleton.playlists[index].tracks
-                                  .map((track) => track.trackID)
-                                  .toList();
-                              if (trackIds.isEmpty) {
-                                return;
-                              }
-                              enabled = false;
-                              final playlistTracks = await widget
-                                  .yandexMusic
-                                  .tracks
-                                  .getTracks(trackIds);
+                                final trackIds = YandexMusicSingleton
+                                    .playlists[index]
+                                    .tracks
+                                    .map((track) => track.trackID)
+                                    .toList();
+                                if (trackIds.isEmpty) {
+                                  return;
+                                }
+                                enabled = false;
+                                final playlistTracks =
+                                    await YandexMusicSingleton.getTracks(
+                                      trackIds,
+                                    );
 
-                              List<YandexMusicTrack> output = [];
+                                List<YandexMusicTrack> output = [];
 
-                              for (Track track in playlistTracks) {
-                                output.add(
-                                  YandexMusicTrack.fromYMTtoLocalTrack(track),
+                                for (Track track in playlistTracks) {
+                                  output.add(
+                                    YandexMusicTrack.fromYMToPlayerTrack(track),
+                                  );
+                                }
+                                output.removeWhere(
+                                  (track) => track.track.available != true,
                                 );
-                              }
-                              output.removeWhere(
-                                (track) => track.track.available != true,
-                              );
 
-                              await widget.closeView();
+                                await widget.closeView();
 
-                              widget.playlistRouter(
-                                PlayerPlaylist(
-                                  ownerUid: YandexMusicSingleton.playlists[index].ownerUid,
-                                  kind: YandexMusicSingleton.playlists[index].kind,
-                                  name: YandexMusicSingleton.playlists[index].title,
-                                  tracks: output,
-                                  source: PlaylistSource.yandexMusic,
-                                ),
-                              );
-                            },
-
-                            child: Stack(
-                              children: [
-                                Positioned(
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: Container(
-                                    padding: EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.bottomCenter,
-                                        end: Alignment.topCenter,
-                                        colors: [
-                                          Colors.black.withOpacity(0.8),
-                                          Colors.black.withOpacity(0.4),
-                                          Colors.transparent,
-                                        ],
-                                      ),
-                                      borderRadius: BorderRadius.only(
-                                        bottomLeft: Radius.circular(15),
-                                        bottomRight: Radius.circular(15),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      YandexMusicSingleton.playlists[index].title,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                widget.playlistRouter(
+                                  PlayerPlaylist(
+                                    ownerUid: YandexMusicSingleton
+                                        .playlists[index]
+                                        .ownerUid,
+                                    kind: YandexMusicSingleton
+                                        .playlists[index]
+                                        .kind,
+                                    name: YandexMusicSingleton
+                                        .playlists[index]
+                                        .title,
+                                    tracks: output,
+                                    source: PlaylistSource.yandexMusic,
                                   ),
-                                ),
-                                Positioned(
-                                  right: 5,
-                                  top: 5,
-                                  child: IconButton2(
-                                    icon: Icons.remove_red_eye_outlined,
-                                    onTap: () async {
-                                      final playlist =
-                                          await YandexMusicSingleton
-                                              .instance
-                                              .playlists
-                                              .getPlaylist(
-                                                YandexMusicSingleton.playlists[index].kind,
-                                                accountId: YandexMusicSingleton.playlists[index]
-                                                    .ownerUid,
-                                              );
-                                      Navigator.push(
-                                        context,
-                                        CupertinoPageRoute(
-                                          builder: (builder) =>
-                                              PlaylistInfoWidget(
-                                                playlist: playlist,
-                                              ),
+                                );
+                              },
+
+                              child: Stack(
+                                children: [
+                                  Positioned(
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    child: Container(
+                                      padding: EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.bottomCenter,
+                                          end: Alignment.topCenter,
+                                          colors: [
+                                            Colors.black.withOpacity(0.8),
+                                            Colors.black.withOpacity(0.4),
+                                            Colors.transparent,
+                                          ],
                                         ),
-                                      );
-                                    },
-                                    height: 35,
-                                    width: 35,
-                                    iconColor: Colors.white70,
+                                        borderRadius: BorderRadius.only(
+                                          bottomLeft: Radius.circular(15),
+                                          bottomRight: Radius.circular(15),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        YandexMusicSingleton
+                                            .playlists[index]
+                                            .title,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  Positioned(
+                                    right: 5,
+                                    top: 5,
+                                    child: IconButton2(
+                                      icon: Icons.remove_red_eye_outlined,
+                                      onTap: () async {
+                                        final playlist =
+                                            await YandexMusicSingleton
+                                                .instance
+                                                .playlists
+                                                .getPlaylist(
+                                                  YandexMusicSingleton
+                                                      .playlists[index]
+                                                      .kind,
+                                                  accountId:
+                                                      YandexMusicSingleton
+                                                          .playlists[index]
+                                                          .ownerUid,
+                                                );
+                                        Navigator.push(
+                                          context,
+                                          CupertinoPageRoute(
+                                            maintainState: false,
+                                            builder: (builder) =>
+                                                PlaylistInfoWidget(
+                                                  playlist: playlist,
+                                                ),
+                                          ),
+                                        );
+                                      },
+                                      height: 35,
+                                      width: 35,
+                                      iconColor: Colors.white70,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }),
+                        );
+                      },
+                    ),
                   ),
                 ),
                 Positioned(
@@ -209,7 +227,10 @@ class _YandexPlaylistsState extends State<YandexPlaylists> {
                           .instance
                           .playlists
                           .createPlaylist("New playlist", "private");
-                      YandexMusicSingleton.playlists.insert(1, PlaylistWShortTracks(playlist.raw));
+                      YandexMusicSingleton.playlists.insert(
+                        1,
+                        PlaylistWShortTracks(playlist.raw),
+                      );
                       setState(() {});
                       Navigator.push(
                         context,

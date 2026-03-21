@@ -1,6 +1,9 @@
 import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:quark/services/yandex_music_my_vibe.dart';
+import 'package:quark/services/yandex_music_singleton.dart';
+import 'package:quark/widgets/players_widgets/main_player.dart';
 import '/widgets/state_indicator.dart';
 import 'package:quark/services/player/player.dart';
 import 'package:quark/widgets/yandex_music_integration/vibe_animation.dart';
@@ -20,11 +23,27 @@ class MyWaveView extends StatefulWidget {
 }
 
 class _MyWaveView extends State<MyWaveView> {
+  List<VibeSetting> vibes = [];
+  VibeSettings? possibleVibes;
+  final Random random = Random();
+
   void getDefaults() {}
 
-  void playVibe() {}
-  void newHue() {
-    nowHue = random.nextDouble() * 360;
+  void playVibe() async {
+    // await YandexMusicMyVibe.startVibe(vibes)
+  }
+
+  void updateHue() async {
+    setState(() {
+      nowHue = YandexMusicMyVibe.currentHue.value;
+    });
+    print(nowHue);
+
+  }
+  void randomHue() async {
+    setState(() {
+      nowHue = random.nextDouble() * 360.round();
+    });
   }
 
   void changeSpeed() {
@@ -33,24 +52,31 @@ class _MyWaveView extends State<MyWaveView> {
     });
   }
 
-  final Random random = Random.secure();
+  void getVibes() async {
+    possibleVibes = await YandexMusicSingleton.instance.myVibe
+        .getVibeSettings();
+  }
+
   double nowHue = 100;
   double speed = 1;
 
   @override
   void initState() {
     super.initState();
-    newHue();
     changeSpeed();
-    Player.player.trackChangeNotifier.addListener(newHue);
+    updateHue();
+    getVibes();
+    // YandexMusicMyVibe.currentHue.addListener(updateHue);
     Player.player.playingNotifier.addListener(changeSpeed);
+    Player.player.trackChangeNotifier.addListener(randomHue);
   }
 
   @override
   void dispose() {
     super.dispose();
-    Player.player.trackChangeNotifier.removeListener(newHue);
+    // YandexMusicMyVibe.currentHue.removeListener(updateHue);
     Player.player.playingNotifier.removeListener(changeSpeed);
+    Player.player.trackChangeNotifier.removeListener(randomHue);
   }
 
   @override
@@ -127,9 +153,66 @@ class _MyWaveView extends State<MyWaveView> {
                                       ),
                                       const SizedBox(height: 10),
                                       InkWell(
-                                        onTap: () {},
+                                        onTap: () async {
+                                          if (possibleVibes == null) {
+                                            return;
+                                          }
+                                          if (YandexMusicMyVibe.working.value) {
+                                            await YandexMusicMyVibe.endWave();
+                                            return;
+                                          }
+
+                                          final List<VibeSetting> allVibes = [
+                                            ...possibleVibes!.activities,
+                                            ...possibleVibes!.character,
+                                            ...possibleVibes!.language,
+                                            ...possibleVibes!.mood,
+                                          ];
+
+                                          final Map<String, VibeSetting>
+                                          vibesMap = {
+                                            for (var vibe in allVibes)
+                                              vibe.name: vibe,
+                                          };
+
+                                          final resultNames =
+                                              await showDialog<List<String>?>(
+                                                context: context,
+                                                builder: (_) {
+                                                  return Dialog(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    elevation: 0,
+                                                    child: Chooser(
+                                                      elements: vibesMap.keys
+                                                          .toList(),
+                                                    ),
+                                                  );
+                                                },
+                                              );
+
+                                          if (resultNames == null ||
+                                              resultNames.isEmpty) {
+                                            return;
+                                          }
+                                          final List<VibeSetting>
+                                          selectedVibes = resultNames
+                                              .map((name) => vibesMap[name]!)
+                                              .toList();
+
+                                          await YandexMusicMyVibe.startWave(
+                                            selectedVibes,
+                                          );
+                                        },
                                         child: Text(
-                                          'Waking Up / Favourite / Energetic / Russian',
+                                          possibleVibes != null
+                                              ? vibes.isNotEmpty
+                                                    ? vibes
+                                                          .map((e) => e.name)
+                                                          .toList()
+                                                          .join(', ')
+                                                    : "Choose your moods"
+                                              : "An error has occured",
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             color: Colors.white,
@@ -154,15 +237,31 @@ class _MyWaveView extends State<MyWaveView> {
                                                 77,
                                               ),
                                               child: InkWell(
-                                                onTap: () async {},
-                                                child: SizedBox(
-                                                  height: 40,
-                                                  width: 200,
-                                                  child: Icon(
-                                                    Icons.play_arrow,
-                                                    color: Colors.white,
-                                                    size: 28,
-                                                  ),
+                                                onTap: () async {
+                                                  await YandexMusicMyVibe.startWave(
+                                                    vibes,
+                                                  );
+                                                },
+                                                child: ValueListenableBuilder<bool>(
+                                                  valueListenable:
+                                                      YandexMusicMyVibe.working,
+                                                  builder:
+                                                      (
+                                                        BuildContext context,
+                                                        bool value,
+                                                        Widget? child,
+                                                      ) => SizedBox(
+                                                        height: 40,
+                                                        width: 200,
+                                                        child: Icon(
+                                                          value
+                                                              ? Icons.pause
+                                                              : Icons
+                                                                    .play_arrow,
+                                                          color: Colors.white,
+                                                          size: 28,
+                                                        ),
+                                                      ),
                                                 ),
                                               ),
                                             ),
@@ -212,4 +311,140 @@ BoxDecoration overlayBoxDecoration() {
       colors: [Colors.white.withOpacity(0.15), Colors.white.withOpacity(0.05)],
     ),
   );
+}
+
+class Chooser extends StatefulWidget {
+  final List<String> elements;
+  const Chooser({super.key, required this.elements});
+
+  @override
+  State<StatefulWidget> createState() => _Chooser();
+}
+
+class _Chooser extends State<Chooser> {
+  late List<String> allElements = widget.elements;
+  List<String> choosed = [];
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 400, minWidth: 300),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            width: 300,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1,
+              ),
+              color: Colors.white.withAlpha(15),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 10),
+                    Text(
+                      "Choose waves",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 21,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.of(context).pop(choosed);
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Ink(
+                          width: 250,
+                          height: 45,
+                          decoration: BoxDecoration(
+                            color: const Color.fromARGB(50, 74, 74, 77),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                "Start wave",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    for (String element in allElements)
+                      Column(
+                        children: [
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                if (choosed.contains(element)) {
+                                  choosed.remove(element);
+                                } else {
+                                  choosed.add(element);
+                                }
+                                setState(() {});
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Ink(
+                                width: 250,
+                                height: 45,
+                                decoration: BoxDecoration(
+                                  color: const Color.fromARGB(50, 74, 74, 77),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    if (choosed.contains(element))
+                                      Icon(Icons.check, color: Colors.white),
+
+                                    Text(
+                                      element,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

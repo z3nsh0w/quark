@@ -20,6 +20,7 @@ class NetConductor {
 
   bool _isInitialized = false;
   bool _isLoading = false;
+  bool disabledCaching = false;
 
   NetConductor._internal();
 
@@ -53,6 +54,7 @@ class NetConductor {
   }
 
   void _onTrackChanged() async {
+
     final track = _player.trackNotifier.value;
 
     if (track == _lastTrack || _isLoading) return;
@@ -94,6 +96,9 @@ class NetConductor {
 
   /// Top function for caching tracks in storage
   Future<void> cacheFiles([List<PlayerTrack>? tracks]) async {
+        if (disabledCaching) {
+      return;
+    }
     if (tracks == null) {
       tracks = [];
       if (Player.player.playlist.length < 3) {

@@ -2,15 +2,95 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
+import 'package:logging/logging.dart';
 import 'package:path/path.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:image/image.dart' as img;
+import 'package:quark/services/database/database.dart';
+import 'package:quark/services/files.dart';
+
+class ImageBlurService {
+  static final ImageBlurService _instance = ImageBlurService._internal();
+  factory ImageBlurService() => _instance;
+  ImageBlurService._internal();
+  final ImageCacheService mainService = ImageCacheService();
+
+  Future<Uint8List?> getBlurredNetworkImage(String url) async {
+    final keyOrg = mainService.getMd5(url);
+    final keyBlurred = "${keyOrg}_b95";
+
+    final blurredFile = await mainService._getImageFile(
+      url,
+      safeKey: keyBlurred,
+    );
+    if (await blurredFile.exists()) {
+      return await blurredFile.readAsBytes();
+    }
+
+    final originalBytes = await ImageCacheService().getImage(url);
+
+    final originalFile = await mainService._getImageFile(url, safeKey: keyOrg);
+    if (!await originalFile.exists()) {
+      await originalFile.writeAsBytes(originalBytes);
+    }
+
+    final blurredBytes = await Isolate.run(() {
+      final image = img.decodeImage(originalBytes);
+      if (image == null) {
+        Logger(
+          "ImageBlurService",
+        ).warning("Failed to decode network image bytes. Url: $url");
+        return null;
+      }
+      // Resize the image to increase speed
+      final newResizedImage = img.copyResize(image, width: 150);
+      final blurred = img.gaussianBlur(newResizedImage, radius: 25);
+      return Uint8List.fromList(img.encodeJpg(blurred, quality: 70));
+    });
+    if (blurredBytes != null) {
+      await blurredFile.writeAsBytes(blurredBytes);
+    }
+    return blurredBytes;
+  }
+
+  Future<Uint8List?> getBlurFromBytes(Uint8List url) async {
+    final keyOrg = mainService.getMd5(url);
+    final keyBlurred = "${keyOrg}_b95";
+
+    final blurredFile = await mainService._getImageFile(
+      'url',
+      safeKey: keyBlurred,
+    );
+    if (await blurredFile.exists()) {
+      return await blurredFile.readAsBytes();
+    }
+
+    final blurredBytes = await Isolate.run(() {
+      final image = img.decodeImage(url);
+      if (image == null) {
+        Logger(
+          "ImageBlurService",
+        ).warning("Failed to decode network image bytes. Url: $url");
+        return null;
+      }
+      // Resize the image to increase speed
+      final newResizedImage = img.copyResize(image, width: 150);
+      final blurred = img.gaussianBlur(newResizedImage, radius: 25);
+      return Uint8List.fromList(img.encodeJpg(blurred, quality: 70));
+    });
+    if (blurredBytes != null) {
+      await blurredFile.writeAsBytes(blurredBytes);
+    }
+    return blurredBytes;
+  }
+}
 
 class ImageCacheService {
   static final ImageCacheService _instance = ImageCacheService._internal();
@@ -73,10 +153,11 @@ class ImageCacheService {
     return file.path;
   }
 
-  Future<File> _getImageFile(String key) async {
-    final dir = await getApplicationCacheDirectory();
-    final safeKey = getMd5(key);
-    final cacheDir = Directory(join(dir.path, 'cached_images'));
+  Future<File> _getImageFile(String uri, {String? safeKey}) async {
+    safeKey ??= getMd5(uri);
+    final cacheDir = Directory(
+      join(ApplicationCacheDirectory.instance.directory.path, 'cached_images'),
+    );
     await cacheDir.create(recursive: true);
     return File(join(cacheDir.path, safeKey));
   }
@@ -86,8 +167,8 @@ class ImageCacheService {
     return file.path;
   }
 
-  Future<Uint8List?> _readFromDisk(String uri) async {
-    final file = await _getImageFile(uri);
+  Future<Uint8List?> _readFromDisk(String uri, {String? safeKey}) async {
+    final file = await _getImageFile(uri, safeKey: safeKey);
     if (await file.exists()) {
       return await file.readAsBytes();
     }
@@ -101,6 +182,173 @@ class ImageCacheService {
 
   String getMd5(dynamic info) {
     return md5.convert(info is String ? utf8.encode(info) : info).toString();
+  }
+}
+
+class CachedBlurredNetworkImage extends StatefulWidget {
+  final String coverUri;
+  final double height;
+  final double width;
+  final BoxFit fit;
+  final int alphaChannel;
+  final Color backgroundColor;
+  final int alphaChannelIcon;
+  final Color iconColor;
+  final double borderRadius;
+
+  const CachedBlurredNetworkImage({
+    super.key,
+    required this.coverUri,
+    this.height = 50,
+    this.width = 50,
+    this.fit = BoxFit.cover,
+    this.backgroundColor = Colors.grey,
+    this.iconColor = Colors.white,
+    this.alphaChannelIcon = 100,
+    this.alphaChannel = 100,
+    this.borderRadius = 0,
+  });
+  @override
+  State<CachedBlurredNetworkImage> createState() =>
+      _CachedBlurredNetworkImageState();
+}
+
+class _CachedBlurredNetworkImageState extends State<CachedBlurredNetworkImage> {
+  late Future<Uint8List?> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ImageBlurService().getBlurredNetworkImage(widget.coverUri);
+  }
+
+  @override
+  void didUpdateWidget(CachedBlurredNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coverUri != widget.coverUri) {
+      _future = ImageBlurService().getBlurredNetworkImage(widget.coverUri);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.data != null) {
+          return SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: Image.memory(snapshot.data!, fit: widget.fit),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Container(
+            decoration: BoxDecoration(
+              color: widget.backgroundColor.withAlpha(widget.alphaChannel),
+              borderRadius: BorderRadius.circular(widget.borderRadius),
+            ),
+            width: 300,
+            height: 300,
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SizedBox(
+            width: 300,
+            height: 300,
+            child: CircularProgressIndicator(
+              color: const Color.fromARGB(100, 255, 255, 255),
+            ),
+          );
+        }
+        return SizedBox(width: widget.width, height: widget.height);
+      },
+    );
+  }
+}
+
+class CachedBlurredImageFromBytes extends StatefulWidget {
+  final Uint8List bytes;
+  final double height;
+  final double width;
+  final BoxFit fit;
+  final int alphaChannel;
+  final Color backgroundColor;
+  final int alphaChannelIcon;
+  final Color iconColor;
+  final double borderRadius;
+
+  const CachedBlurredImageFromBytes({
+    super.key,
+    required this.bytes,
+    this.height = 50,
+    this.width = 50,
+    this.fit = BoxFit.cover,
+    this.backgroundColor = Colors.grey,
+    this.iconColor = Colors.white,
+    this.alphaChannelIcon = 100,
+    this.alphaChannel = 100,
+    this.borderRadius = 0,
+  });
+
+  @override
+  State<CachedBlurredImageFromBytes> createState() =>
+      _CachedBlurredImageFromBytesState();
+}
+
+class _CachedBlurredImageFromBytesState
+    extends State<CachedBlurredImageFromBytes> {
+  late Future<Uint8List?> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ImageBlurService().getBlurFromBytes(widget.bytes);
+  }
+
+  @override
+  void didUpdateWidget(CachedBlurredImageFromBytes oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.bytes, widget.bytes)) {
+      _future = ImageBlurService().getBlurFromBytes(widget.bytes);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.data != null) {
+          return SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: Image.memory(snapshot.data!, fit: widget.fit),
+          );
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return Container(
+            decoration: BoxDecoration(
+              color: widget.backgroundColor.withAlpha(widget.alphaChannel),
+              borderRadius: BorderRadius.circular(widget.borderRadius),
+            ),
+            width: 300,
+            height: 300,
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SizedBox(
+            width: 300,
+            height: 300,
+            child: CircularProgressIndicator(
+              color: const Color.fromARGB(100, 255, 255, 255),
+            ),
+          );
+        }
+        return SizedBox(width: widget.width, height: widget.height);
+      },
+    );
   }
 }
 
@@ -128,7 +376,7 @@ class CachedImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (coverUri == 'none') {
+    if (coverUri == 'none' || coverUri == 'https://none') {
       return Container(
         decoration: BoxDecoration(
           color: backgroundColor.withAlpha(alphaChannel),
@@ -235,6 +483,70 @@ class CachedImageProvider extends ImageProvider<CachedImageProvider> {
       return false;
     }
     return other is CachedImageProvider &&
+        other.url == url &&
+        other.scale == scale;
+  }
+
+  @override
+  int get hashCode => Object.hash(url, scale);
+
+  @override
+  String toString() =>
+      '${objectRuntimeType(this, 'CachedImageProvider')}("$url", scale: $scale)';
+}
+
+class CachedBlurredImageProvider
+    extends ImageProvider<CachedBlurredImageProvider> {
+  const CachedBlurredImageProvider(this.url, {this.scale = 1.0});
+
+  final String url;
+  final double scale;
+
+  @override
+  Future<CachedBlurredImageProvider> obtainKey(
+    ImageConfiguration configuration,
+  ) {
+    return SynchronousFuture<CachedBlurredImageProvider>(this);
+  }
+
+  @override
+  ImageStreamCompleter loadImage(
+    CachedBlurredImageProvider key,
+    ImageDecoderCallback decode,
+  ) {
+    return MultiFrameImageStreamCompleter(
+      codec: _loadAsync(key, decode),
+      scale: key.scale,
+      debugLabel: key.url,
+      informationCollector: () => <DiagnosticsNode>[
+        DiagnosticsProperty<ImageProvider>('Image provider', this),
+        DiagnosticsProperty<CachedBlurredImageProvider>('Image key', key),
+      ],
+    );
+  }
+
+  Future<ui.Codec> _loadAsync(
+    CachedBlurredImageProvider key,
+    ImageDecoderCallback decode,
+  ) async {
+    assert(key == this);
+    final Uint8List? bytes = await ImageBlurService().getBlurredNetworkImage(
+      key.url,
+    );
+
+    final ui.ImmutableBuffer buffer = await ui.ImmutableBuffer.fromUint8List(
+      bytes!,
+    );
+
+    return decode(buffer);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (other.runtimeType != runtimeType) {
+      return false;
+    }
+    return other is CachedBlurredImageProvider &&
         other.url == url &&
         other.scale == scale;
   }

@@ -17,6 +17,7 @@ import 'package:path_provider/path_provider.dart';
 
 /// TODO: make GestureDetector on ScrollUp/Down to create smooth playlist scrolling as in the SilkyScroll package
 
+
 Widget playlistSearch(
   TextEditingController searchController,
   Function(String newView) search,
@@ -72,6 +73,8 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
   CancelToken? searchCancel = CancelToken();
 
   List<PlayerTrack> playlistView = [];
+  SearchArtist? bestArtistResult;
+  SearchAlbum? bestAlbumResult;
 
   late final TextEditingController _searchController;
 
@@ -114,6 +117,10 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     _searchDebounceTimer?.cancel();
     searchCancel?.cancel();
     searchCancel = null;
+    setState(() {
+      bestAlbumResult = null;
+      bestArtistResult = null;
+    });
 
     if (query == '') {
       setState(() {
@@ -124,20 +131,19 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     }
 
     var filtered = Player.player.playlist.where((track) {
-      final searchLower = query.toLowerCase();
+      final searchLower = query.toLowerCase().replaceAll(" ", "").trim();
       if (track.title
           .toLowerCase()
-          .replaceAll(RegExp(r'\s+'), '')
+          .replaceAll(RegExp(r'\s+'), '').replaceAll(" ", "")
           .contains(searchLower)) {
         return true;
       }
 
       for (final artist in track.artists) {
         final artistTitle = artist;
-
         if (artistTitle
             .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), '')
+            .replaceAll(RegExp(r'\s+'), '').replaceAll(" ", "")
             .contains(searchLower)) {
           return true;
         }
@@ -145,10 +151,9 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
 
       for (final album in track.albums) {
         final albumtitle = album;
-
         if (albumtitle
             .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), '')
+            .replaceAll(RegExp(r'\s+'), '').replaceAll(" ", "")
             .contains(searchLower)) {
           return true;
         }
@@ -162,6 +167,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     });
 
     if (nonuser == null) {
+      // return;
       final currentQuery = query;
 
       _searchDebounceTimer = Timer(_searchDebounceDuration, () async {
@@ -174,14 +180,21 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
 
         try {
           var directory = await getApplicationCacheDirectory();
-          var result = await YandexMusicSingleton.instance.search.search(
-            query,
-            withBestResults: true,
-            withLikesCount: true,
-            pageSize: 10,
-            cancelToken: searchCancel,
-          );
+          final SearchResult result = await YandexMusicSingleton.instance.search
+              .search(
+                query,
+                withBestResults: true,
+                withLikesCount: true,
+                pageSize: 10,
+                cancelToken: searchCancel,
+              );
+
           List<Track> results = result.tracks;
+          setState(() {
+            bestAlbumResult = result.bestAlbum;
+            bestArtistResult = result.bestArtist;
+          });
+
           if (result.bestTrack != null) {
             results.insert(0, result.bestTrack!);
           }
@@ -229,76 +242,6 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
           ).warning('SEARCH: YandexMusic instance has not been initalized', e);
         }
       });
-    }
-  }
-
-  // WIDGET FUNCTIONS
-
-  void likeUnlike(int index) async {
-    final List<String> likedTrack =
-        YandexMusicSingleton.likedTracksNotifier.value;
-    final track = (playlistView[index] as YandexMusicTrack).track;
-    if (likedTrack.contains(track.id)) {
-      await YandexMusicSingleton.unlikeTrack(track.id);
-    } else {
-      await YandexMusicSingleton.likeTrack(track.id);
-    }
-  }
-
-  void removeTrackFromPlaylist(int index) async {
-    await Player.player.removeTrack(playlistView[index]);
-  }
-
-  void addNextQueue(int index) async {
-    PlayerTrack track = playlistView[index];
-    if (track is LocalTrack) {
-      LocalTrack tr = LocalTrack(
-        filepath: track.filepath,
-        title: track.title,
-        albums: track.albums,
-        artists: track.artists,
-        cover: track.cover,
-        coverByted: track.coverByted,
-      );
-      tr.cover = track.cover;
-      await Player.player.addTracks([tr]);
-    } else if (track is YandexMusicTrack) {
-      YandexMusicTrack tr = YandexMusicTrack(
-        filepath: track.filepath,
-        title: track.title,
-        albums: track.albums,
-        artists: track.artists,
-        track: track.track,
-      );
-      tr.cover = track.cover;
-
-      await Player.player.addTracks([tr]);
-    }
-  }
-
-  void addBottomQueue(int index) async {
-    PlayerTrack track = playlistView[index];
-    if (track is LocalTrack) {
-      LocalTrack tr = LocalTrack(
-        filepath: track.filepath,
-        title: track.title,
-        albums: track.albums,
-        artists: track.artists,
-        cover: track.cover,
-        coverByted: track.coverByted,
-      );
-      tr.cover = track.cover;
-      await Player.player.addTracks([tr], after: playlistView.last);
-    } else if (track is YandexMusicTrack) {
-      YandexMusicTrack tr = YandexMusicTrack(
-        filepath: track.filepath,
-        title: track.title,
-        albums: track.albums,
-        artists: track.artists,
-        track: track.track,
-      );
-      tr.cover = track.cover;
-      await Player.player.addTracks([tr], after: playlistView.last);
     }
   }
 
@@ -381,210 +324,258 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
             topRight: Radius.circular(20),
             bottomRight: Radius.circular(20),
           ),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
-            child: Container(
-              width: 400,
-              height: MediaQuery.of(context).size.height,
-              decoration: overlayBoxDecoration(),
-              child: Stack(
-                children: [
-                  Column(
+          child: Stack(
+            children: [
+              AnimatedSwitcher(
+                duration: Duration(
+                  milliseconds:
+                      (750 * DatabaseStreamerService().transitionSpeed.value)
+                          .round(),
+                ),
+                transitionBuilder: (child, animation) =>
+                    FadeTransition(opacity: animation, child: child),
+                layoutBuilder: (currentChild, previousChildren) => SizedBox(
+                  width: 400,
+                  height: MediaQuery.of(context).size.height,
+                  child: Stack(
+                    fit: StackFit.loose,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: 50,
-                          left: 15,
-                          right: 15,
-                          bottom: 10,
-                        ),
-                        child: playlistSearch(_searchController, search),
+                      ...previousChildren,
+                      if (currentChild != null) currentChild,
+                    ],
+                  ),
+                ),
+                child: SizedBox(
+                  key: ValueKey(Player.player.nowPlayingTrack.filepath),
+                  width: 400,
+                  height: MediaQuery.of(context).size.height,
+                  child: OverflowBox(
+                    maxWidth: MediaQuery.of(context).size.width,
+                    maxHeight: MediaQuery.of(context).size.height,
+                    alignment: Alignment.centerLeft,
+                    child: ColorFiltered(
+                      colorFilter: ColorFilter.mode(
+                        Colors.black.withOpacity(0.5),
+                        BlendMode.darken,
                       ),
-                      Expanded(
-                        child: ReorderableListView.builder(
-                          scrollController: _scrollController,
-                          itemCount: playlistView.length,
-                          onReorder: (int oldIndex, int newIndex) async {
-                            moveTrack(oldIndex, newIndex);
-                          },
+                      child:
+                          (Player.player.nowPlayingTrack is LocalTrack &&
+                              !listEquals(
+                                Player.player.nowPlayingTrack.coverByted,
+                                Uint8List(0),
+                              ))
+                          ? CachedBlurredImageFromBytes(
+                              key: ValueKey(
+                                Player.player.nowPlayingTrack.filepath,
+                              ),
+                              bytes: Player.player.nowPlayingTrack.coverByted,
+                              width: MediaQuery.of(context).size.width,
+                              height: MediaQuery.of(context).size.height,
+                              fit: BoxFit.cover,
+                            )
+                          : CachedBlurredNetworkImage(
+                              key: ValueKey(
+                                Player.player.nowPlayingTrack.cover,
+                              ),
+                              coverUri:
+                                  'https://${Player.player.nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                              width: MediaQuery.of(context).size.width,
+                              height: MediaQuery.of(context).size.height,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
 
-                          buildDefaultDragHandles: false,
-                          proxyDecorator:
-                              (
-                                Widget child,
-                                int index,
-                                Animation<double> animation,
-                              ) {
-                                return Material(
-                                  color: Colors.transparent,
-                                  child: child,
-                                );
-                              },
+              Container(
+                width: 400,
+                height: MediaQuery.of(context).size.height,
+                decoration: overlayBoxDecoration(),
+                child: Stack(
+                  children: [
+                    Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: 50,
+                            left: 15,
+                            right: 15,
+                            bottom: 10,
+                          ),
+                          child: playlistSearch(_searchController, search),
+                        ),
+                        Expanded(
+                          child: ReorderableListView.builder(
+                            scrollController: _scrollController,
+                            itemCount: playlistView.length,
+                            onReorder: (int oldIndex, int newIndex) async {
+                              moveTrack(oldIndex, newIndex);
+                            },
 
-                          itemBuilder: (context, index) {
-                            final track = playlistView[index];
-                            final mainKey = ValueKey(
-                              'main_${track.title}_$index',
-                            );
-                            if (playlistView[index] ==
-                                    Player.player.unQueuedLastTrack &&
-                                Player.player.queue.isNotEmpty) {
-                              List<Widget> widgets = [
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  enabled: _searchController.text.isEmpty,
-                                  child: PlaylistTileWidget(
-                                    index: index,
-                                    queued: false,
-                                    track: playlistView[index],
-                                    menuOpened: menuOpened,
-                                    onMenuOpen: () =>
-                                        setState(() => menuOpened = true),
-                                    onMenuClose: () =>
-                                        setState(() => menuOpened = false),
-                                    likeUnlike: likeUnlike,
-                                    removeTrackFromPlaylist:
-                                        removeTrackFromPlaylist,
-                                    addNextQueue: addNextQueue,
-                                    showOperation: widget.showOperation,
-                                    addBottomQueue: addBottomQueue,
-                                    findSimilar: findSimilar,
-                                  ),
-                                ),
-                                Padding(
-                                  padding: EdgeInsetsGeometry.symmetric(
-                                    horizontal: 20,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        'From queue',
-                                        style: TextStyle(
-                                          color: const Color.fromARGB(
-                                            175,
-                                            255,
-                                            255,
-                                            255,
-                                          ),
-                                        ),
-                                      ),
-                                      SizedBox(width: 5),
-                                      Expanded(
-                                        child: Divider(
-                                          height: 1,
-                                          color: const Color.fromARGB(
-                                            175,
-                                            255,
-                                            255,
-                                            255,
-                                          ),
-                                        ),
-                                      ),
-                                      SizedBox(width: 5),
-                                      IconButton(
-                                        highlightColor: const Color.fromARGB(
-                                          50,
-                                          255,
-                                          255,
-                                          255,
-                                        ),
-                                        onPressed: () async =>
-                                            Player.player.clearQueue(),
-                                        icon: Icon(
-                                          Icons.delete,
-                                          color: const Color.fromARGB(
-                                            175,
-                                            255,
-                                            255,
-                                            255,
-                                          ),
-                                          size: 21,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ];
-                              for (PlayerTrack track in Player.player.queue) {
-                                widgets.add(
+                            buildDefaultDragHandles: false,
+                            proxyDecorator:
+                                (
+                                  Widget child,
+                                  int index,
+                                  Animation<double> animation,
+                                ) {
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: child,
+                                  );
+                                },
+
+                            itemBuilder: (context, index) {
+                              final track = playlistView[index];
+                              final mainKey = ValueKey(
+                                'main_${track.title}_$index',
+                              );
+                              if (playlistView[index] ==
+                                      Player.player.unQueuedLastTrack &&
+                                  Player.player.queue.isNotEmpty) {
+                                List<Widget> widgets = [
                                   ReorderableDragStartListener(
                                     index: index,
-                                    enabled: false,
+                                    enabled: _searchController.text.isEmpty,
                                     child: PlaylistTileWidget(
-                                      queued: true,
                                       index: index,
-                                      track: track,
+                                      queued: false,
+                                      track: playlistView[index],
                                       menuOpened: menuOpened,
                                       onMenuOpen: () =>
                                           setState(() => menuOpened = true),
                                       onMenuClose: () =>
                                           setState(() => menuOpened = false),
-                                      likeUnlike: likeUnlike,
-                                      removeTrackFromPlaylist:
-                                          removeTrackFromPlaylist,
-                                      addNextQueue: addNextQueue,
-                                      addBottomQueue: addBottomQueue,
                                       showOperation: widget.showOperation,
                                       findSimilar: findSimilar,
                                     ),
                                   ),
-                                );
-                              }
-                              widgets.add(
-                                Container(
-                                  color: const Color.fromARGB(
-                                    50,
-                                    255,
-                                    255,
-                                    255,
+                                  Padding(
+                                    padding: EdgeInsetsGeometry.symmetric(
+                                      horizontal: 20,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          'From queue',
+                                          style: TextStyle(
+                                            color: const Color.fromARGB(
+                                              175,
+                                              255,
+                                              255,
+                                              255,
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 5),
+                                        Expanded(
+                                          child: Divider(
+                                            height: 1,
+                                            color: const Color.fromARGB(
+                                              175,
+                                              255,
+                                              255,
+                                              255,
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 5),
+                                        IconButton(
+                                          highlightColor: const Color.fromARGB(
+                                            50,
+                                            255,
+                                            255,
+                                            255,
+                                          ),
+                                          onPressed: () async =>
+                                              Player.player.clearQueue(),
+                                          icon: Icon(
+                                            Icons.delete,
+                                            color: const Color.fromARGB(
+                                              175,
+                                              255,
+                                              255,
+                                              255,
+                                            ),
+                                            size: 21,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  width: 320,
-                                  height: 2,
+                                ];
+                                for (PlayerTrack track in Player.player.queue) {
+                                  widgets.add(
+                                    ReorderableDragStartListener(
+                                      index: index,
+                                      enabled: false,
+                                      child: PlaylistTileWidget(
+                                        queued: true,
+                                        index: index,
+                                        track: track,
+                                        menuOpened: menuOpened,
+                                        onMenuOpen: () =>
+                                            setState(() => menuOpened = true),
+                                        onMenuClose: () =>
+                                            setState(() => menuOpened = false),
+                                        showOperation: widget.showOperation,
+                                        findSimilar: findSimilar,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                widgets.add(
+                                  Container(
+                                    color: const Color.fromARGB(
+                                      50,
+                                      255,
+                                      255,
+                                      255,
+                                    ),
+                                    width: 320,
+                                    height: 2,
+                                  ),
+                                );
+                                return Column(key: mainKey, children: widgets);
+                              }
+                              return ReorderableDragStartListener(
+                                key: mainKey,
+                                index: index,
+                                enabled: _searchController.text.isEmpty,
+                                child: PlaylistTileWidget(
+                                  queued: false,
+                                  index: index,
+                                  track: playlistView[index],
+                                  menuOpened: menuOpened,
+                                  onMenuOpen: () =>
+                                      setState(() => menuOpened = true),
+                                  onMenuClose: () =>
+                                      setState(() => menuOpened = false),
+                                  findSimilar: findSimilar,
+                                  showOperation: widget.showOperation,
                                 ),
                               );
-                              return Column(key: mainKey, children: widgets);
-                            }
-                            return ReorderableDragStartListener(
-                              key: mainKey,
-                              index: index,
-                              enabled: _searchController.text.isEmpty,
-                              child: PlaylistTileWidget(
-                                queued: false,
-                                index: index,
-                                track: playlistView[index],
-                                menuOpened: menuOpened,
-                                onMenuOpen: () =>
-                                    setState(() => menuOpened = true),
-                                onMenuClose: () =>
-                                    setState(() => menuOpened = false),
-                                likeUnlike: likeUnlike,
-                                removeTrackFromPlaylist:
-                                    removeTrackFromPlaylist,
-                                addNextQueue: addNextQueue,
-                                addBottomQueue: addBottomQueue,
-                                findSimilar: findSimilar,
-                                showOperation: widget.showOperation,
-                              ),
-                            );
-                          },
+                            },
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    right: 10,
-                    child: appBar(
-                      widget.closePlaylist,
-                      () {},
-                      () {},
-                      scrollToCurrentTrack,
+                      ],
                     ),
-                  ),
-                ],
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      right: 10,
+                      child: appBar(
+                        widget.closePlaylist,
+                        () {},
+                        () {},
+                        scrollToCurrentTrack,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -599,10 +590,6 @@ class PlaylistTileWidget extends StatelessWidget {
   final bool queued;
   final VoidCallback onMenuOpen;
   final VoidCallback onMenuClose;
-  final void Function(int) likeUnlike;
-  final void Function(int) removeTrackFromPlaylist;
-  final void Function(int) addNextQueue;
-  final void Function(int) addBottomQueue;
   final void Function(int) findSimilar;
   final void Function(StateIndicatorOperation) showOperation;
 
@@ -618,14 +605,35 @@ class PlaylistTileWidget extends StatelessWidget {
     required this.menuOpened,
     required this.onMenuOpen,
     required this.onMenuClose,
-    required this.likeUnlike,
-    required this.removeTrackFromPlaylist,
-    required this.addNextQueue,
-    required this.addBottomQueue,
     required this.findSimilar,
     required this.queued,
     required this.showOperation,
   });
+
+  void likeUnlike(int index) async {
+    final List<String> likedTrack =
+        YandexMusicSingleton.likedTracksNotifier.value;
+    final track2 = (track as YandexMusicTrack).track;
+    if (likedTrack.contains(track2.id)) {
+      await YandexMusicSingleton.unlikeTrack(track2.id);
+    } else {
+      await YandexMusicSingleton.likeTrack(track2.id);
+    }
+  }
+
+  void removeTrackFromPlaylist(int index) async {
+    await Player.player.removeTrack(track);
+  }
+
+  void addNextQueue(int index) async {
+    if (track is LocalTrack) {
+      await Player.player.addTracks([LocalTrack.getNew((track as LocalTrack))]);
+    } else if (track is YandexMusicTrack) {
+      await Player.player.addTracks([
+        YandexMusicTrack.getNew((track as YandexMusicTrack)),
+      ]);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -753,7 +761,12 @@ class PlaylistTileWidget extends StatelessWidget {
                     await YandexMusicSingleton.instance.playlists.insertTrack(
                       YandexMusicSingleton.playlists[selected].kind,
                       (track as YandexMusicTrack).track.id,
-                      (track as YandexMusicTrack).track.albums[0].id.toString(),
+                      albumId:
+                          (track as YandexMusicTrack).track.trackSource ==
+                              TrackSource.UGC
+                          ? null
+                          : (track as YandexMusicTrack).track.albums[0].id
+                                .toString(),
                     );
                     showOperation(StateIndicatorOperation.success);
                   } catch (e) {
@@ -815,13 +828,16 @@ class PlaylistTileWidget extends StatelessWidget {
                           DatabaseStreamerService().yandexMusicToken.value;
                       YandexMusicSingleton.init(YandexMusic(token: tok));
                     }
-                    final artist = await YandexMusicSingleton.instance.artists
-                        .getInfo((track as YandexMusicTrack).track.artists[0]);
+                    final artist = await YandexMusicSingleton.getArtistInfo(
+                      ((track as YandexMusicTrack).track.artists[0]
+                              as OfficialArtist)
+                          .id,
+                    );
                     if (context.mounted) {
                       Navigator.push(
                         context,
                         CupertinoPageRoute(
-                          builder: (_) => ArtistInfoWidget(artist: artist),
+                          builder: (_) => ArtistInfoWidget(artist: artist!),
                         ),
                       );
                     }
@@ -864,10 +880,9 @@ class PlaylistTileWidget extends StatelessWidget {
                       YandexMusicSingleton.init(YandexMusic(token: tok));
                     }
 
-                    final album = await YandexMusicSingleton.instance.albums
-                        .getInfo(
-                          (track as YandexMusicTrack).track.albums[0].id,
-                        );
+                    final album = await YandexMusicSingleton.getAlbumInfo(
+                      (track as YandexMusicTrack).track.albums[0].id,
+                    );
                     if (context.mounted) {
                       Navigator.push(
                         context,
@@ -958,6 +973,64 @@ Widget songElement(PlayerTrack track) {
             ),
             Text(
               track.artists.join(', '),
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: const Color.fromARGB(255, 185, 185, 185),
+                fontFamily: 'noto',
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+Widget yandexMusicArtist(SearchArtist track) {
+  return Row(
+    children: [
+      Container(
+        height: 55,
+        width: 55,
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: const Color.fromARGB(255, 21, 21, 21),
+              blurRadius: 10,
+              offset: Offset(-2, -2),
+            ),
+          ],
+        ),
+        child: CachedImage(
+          borderRadius: 3,
+          coverUri: 'https://${track.cover.uri.replaceAll('%%', '300x300')}',
+          height: 55,
+          width: 55,
+          alphaChannel: 255,
+          backgroundColor: const Color.fromARGB(255, 77, 77, 77),
+          iconColor: Colors.grey,
+          alphaChannelIcon: 255,
+        ),
+      ),
+      const SizedBox(width: 10),
+
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              track.name,
+              overflow: TextOverflow.ellipsis,
+
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'noto',
+                fontSize: 16,
+              ),
+            ),
+            Text(
+              track.likesCount.toString(),
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: const Color.fromARGB(255, 185, 185, 185),

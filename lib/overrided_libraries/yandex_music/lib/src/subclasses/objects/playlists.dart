@@ -269,7 +269,8 @@ class YandexMusicPlaylists {
   Future<Map<String, dynamic>> insertTrack(
     int kind,
     String trackId,
-    String albumId, {
+     {
+      String? albumId,
     int at = 0,
     int? revision,
     CancelToken? cancelToken,
@@ -280,9 +281,9 @@ class YandexMusicPlaylists {
       _parentClass.accountID,
       kind,
       trackId,
-      albumId,
       revision,
       at: at,
+      albumId: albumId,
       cancelToken: cancelToken,
     );
     return result['result'];

@@ -1,26 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:quark/objects/playlist.dart';
 import 'package:quark/objects/track.dart';
+import 'package:quark/overrided_libraries/yandex_music/lib/src/subclasses/objects/lazy_wave.dart';
+import 'package:quark/overrided_libraries/yandex_music/lib/src/subclasses/subclasses.dart'
+    as subclasses;
+import 'package:quark/services/player/net_player.dart';
 import 'package:quark/services/player/player.dart';
-
 import 'yandex_music_singleton.dart';
 
 abstract class YandexMusicMyVibe {
   static late YandexMusicMyVibe instance;
 
-  static bool working = false;
+  static ValueNotifier<bool> working = ValueNotifier(false);
+  static subclasses.LazyWave? currentWave;
+  static PlaylistInfo? backupInfo;
+  static List<PlayerTrack> backupTracks = [];
+  static ValueNotifier<double> currentHue = ValueNotifier(0.0);
+  static int ingnoreListener = 0;
 
-  static void init() {
-    ListenLogger().init();
-    ListenLogger().notifier.addListener(listener);
+  static bool inited = false;
+
+  static Future<void> init() async {
+    await Vitalya2().init();
+    Vitalya2().notifier.addListener(listener);
   }
 
-  static void startVibe(List<VibeSetting> vibes) async {
+  static Future<void> updatePlaylist() async {
 
   }
 
-  static void listener() async {
-    
+  static Future<void> startWave(List<VibeSetting> vibeSettings) async {
+
+  }
+
+  static Future<void> listener() async {
+
+  }
+
+  static Future<void> endWave() async {
+    await Player.player.pause();
+    Player.player.updatePlaylistInfo(backupInfo!);
+    Player.player.updatePlaylist(backupTracks);
+    await Player.player.playCustom(backupTracks[0]);
+    Vitalya2().notifier.removeListener(listener);
+    working.value = false;
+    NetConductor().disabledCaching = false;
+  }
+
+  static void sync() async {
+    if (currentWave!.currentTrack!.track.id !=
+        (Player.player.nowPlayingTrack as YandexMusicTrack).track.id) {}
   }
 }
 
@@ -31,15 +60,14 @@ class Changed {
   const Changed(this.totalPlayedSeconds, this.track, this.reason);
 }
 
-class ListenLogger {
-  static final ListenLogger _instance = ListenLogger._internal();
+class Vitalya2 {
+  static final Vitalya2 _instance = Vitalya2._internal();
 
-  factory ListenLogger() => _instance;
+  factory Vitalya2() => _instance;
 
-  ListenLogger._internal();
+  Vitalya2._internal();
 
   static bool inited = false;
-
   Future<void> init() async {
     if (inited) {
       return;
@@ -62,7 +90,7 @@ class ListenLogger {
   Duration lastPosition = Duration.zero;
   Duration totalDuration = Duration.zero;
 
-  ValueNotifier notifier = ValueNotifier<Changed>(
+  ValueNotifier<Changed> notifier = ValueNotifier<Changed>(
     Changed(2, PlayerTrack.getDummy(), ChangeReason.completed),
   );
 
@@ -77,8 +105,11 @@ class ListenLogger {
     lastPosition = Duration.zero;
     lastCountedSecond = 0;
     lastTrack = Player.player.trackNotifier.value;
-
-    notifier.value = Changed(tps, lt, Player.player.trackChangeNotifier.value.reason);
+    notifier.value = Changed(
+      tps,
+      lt,
+      Player.player.trackChangeNotifier.value.reason,
+    );
   }
 
   void totalDurationListener() async {

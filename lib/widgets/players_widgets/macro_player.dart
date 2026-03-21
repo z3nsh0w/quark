@@ -1,7 +1,10 @@
 import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:quark/objects/track.dart';
+import 'package:quark/services/dynamic_window_color_linux.dart';
+import 'package:quark/widgets/players_widgets/slider_widget.dart';
 import '../../services/cached_images.dart';
 import 'package:quark/services/player/player.dart';
 import 'package:quark/services/yandex_music_singleton.dart';
@@ -18,15 +21,20 @@ class MacroPlayer extends StatefulWidget {
 
 class _MacroPlayerState extends State<MacroPlayer> {
   late VoidCallback updateListener;
+  bool isSliderActive = true;
 
   ValueKey key = ValueKey(0);
+  double songProgress = 0.0;
+
 
   @override
   void initState() {
     super.initState();
+    DynamicWindowColor.notifySize(WindowSize.small);
     updateListener = () async {
       setState(() {});
     };
+
     Player.player.playingNotifier.addListener(updateListener);
     Player.player.shuffleModeNotifier.addListener(updateListener);
     Player.player.repeatModeNotifier.addListener(updateListener);
@@ -81,6 +89,8 @@ class _MacroPlayerState extends State<MacroPlayer> {
       child: Padding(
         padding: EdgeInsetsGeometry.all(5),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
+
           children: [
             SizedBox(width: 5),
             (Player.player.nowPlayingTrack is LocalTrack &&
@@ -104,109 +114,143 @@ class _MacroPlayerState extends State<MacroPlayer> {
                     width: widget.height - 10,
                   ),
             SizedBox(width: 5),
-            Expanded(
-              child: InkWell(
-                onTap: widget.onTap,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      Player.player.nowPlayingTrack.title,
-                      style: TextStyle(
-                        fontFamily: 'noto',
-                        decoration: TextDecoration.none,
-                        fontSize: min(screehHeight * 0.28, 12),
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+            Flexible(
+              flex: 0,
+              fit: FlexFit.loose,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: widget.onTap,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        Player.player.nowPlayingTrack.title,
+                        style: TextStyle(
+                          fontFamily: 'noto',
+                          decoration: TextDecoration.none,
+                          fontSize: min(screehHeight * 0.28, 12),
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.start,
                       ),
-                      textAlign: TextAlign.start,
-                    ),
 
-                    Text(
-                      Player.player.nowPlayingTrack.artists.join(', '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'noto',
-                        decoration: TextDecoration.none,
-                        color: Colors.white,
-                        fontSize: min(screehHeight * 0.28, 12),
-                        fontWeight: FontWeight.w300,
+                      Text(
+                        Player.player.nowPlayingTrack.artists.join(', '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'noto',
+                          decoration: TextDecoration.none,
+                          color: Colors.white,
+                          fontSize: min(screehHeight * 0.28, 12),
+                          fontWeight: FontWeight.w300,
+                        ),
+                        textAlign: TextAlign.start,
                       ),
-                      textAlign: TextAlign.start,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-
-            SizedBox(width: 2),
-            if (Player.player.nowPlayingTrack is YandexMusicTrack)
-              Button(
-                enabledIcon: Icons.favorite_outlined,
-                disabledIcon: Icons.favorite_outlined,
-                isEnable: YandexMusicSingleton.likedTracksNotifier.value
-                    .contains(
-                      (Player.player.nowPlayingTrack as YandexMusicTrack)
-                          .track
-                          .id,
-                    ),
-                onTap: () => likeUnlike(),
+            Expanded(
+              child: Listener(
+                onPointerSignal: (pointerSignal) async {
+                  if (pointerSignal is PointerScrollEvent) {
+                    if (pointerSignal.scrollDelta.dy < 0) {
+                      await Player.player.seek(
+                        Player.player.playedNotifier.value +
+                            Duration(seconds: 10),
+                      );
+                    }
+                    if (pointerSignal.scrollDelta.dy > 0) {
+                      Duration dur =
+                          Player.player.playedNotifier.value -
+                          Duration(seconds: 10);
+                      await Player.player.seek(
+                        dur < Duration.zero ? Duration.zero : dur,
+                      );
+                    }
+                  }
+                },
+                child: ProgressWidget(
+                  timings: false,
+                ),
               ),
-            SizedBox(width: 2),
-            if (screenWidth > 600) ...[
-              Button(
-                enabledIcon: Icons.shuffle,
-                disabledIcon: Icons.shuffle_outlined,
-                isEnable: Player.player.isShuffle,
-                onTap: () async => Player.player.isShuffle
-                    ? await Player.player.unShuffle()
-                    : await Player.player.shuffle(null),
-              ),
-              SizedBox(width: 2),
-            ],
-            if (screenWidth > 500) ...[
-              Button(
-                enabledIcon: Icons.skip_previous,
-                disabledIcon: Icons.play_arrow,
-                isEnable: true,
-                onTap: () async => await Player.player.playPrevious(),
-              ),
-              SizedBox(width: 2),
-            ],
-            SizedBox(width: 2),
-            Button(
-              size: 40,
-              enabledIcon: !Player.player.isPlaying
-                  ? Icons.play_arrow
-                  : Icons.pause,
-              disabledIcon: Icons.play_arrow,
-              isEnable: true,
-              onTap: () async =>
-                  await Player.player.playPause(!Player.player.isPlaying),
             ),
-            SizedBox(width: 2),
-            Button(
-              enabledIcon: Icons.skip_next,
-              disabledIcon: Icons.play_arrow,
-              isEnable: true,
-              onTap: () async => await Player.player.playNext(),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(width: 2),
+                if (Player.player.nowPlayingTrack is YandexMusicTrack)
+                  Button(
+                    enabledIcon: Icons.favorite_outlined,
+                    disabledIcon: Icons.favorite_outlined,
+                    isEnable: YandexMusicSingleton.likedTracksNotifier.value
+                        .contains(
+                          (Player.player.nowPlayingTrack as YandexMusicTrack)
+                              .track
+                              .id,
+                        ),
+                    onTap: () => likeUnlike(),
+                  ),
+                SizedBox(width: 2),
+                if (screenWidth > 600) ...[
+                  Button(
+                    enabledIcon: Icons.shuffle,
+                    disabledIcon: Icons.shuffle_outlined,
+                    isEnable: Player.player.isShuffle,
+                    onTap: () async => Player.player.isShuffle
+                        ? await Player.player.unShuffle()
+                        : await Player.player.shuffle(null),
+                  ),
+                  SizedBox(width: 2),
+                ],
+                if (screenWidth > 500) ...[
+                  Button(
+                    enabledIcon: Icons.skip_previous,
+                    disabledIcon: Icons.play_arrow,
+                    isEnable: true,
+                    onTap: () async => await Player.player.playPrevious(),
+                  ),
+                  SizedBox(width: 2),
+                ],
+                SizedBox(width: 2),
+                Button(
+                  size: 40,
+                  enabledIcon: !Player.player.isPlaying
+                      ? Icons.play_arrow
+                      : Icons.pause,
+                  disabledIcon: Icons.play_arrow,
+                  isEnable: true,
+                  onTap: () async =>
+                      await Player.player.playPause(!Player.player.isPlaying),
+                ),
+                SizedBox(width: 2),
+                Button(
+                  enabledIcon: Icons.skip_next,
+                  disabledIcon: Icons.play_arrow,
+                  isEnable: true,
+                  onTap: () async => await Player.player.playNext(),
+                ),
+                SizedBox(width: 2),
+                if (screenWidth > 600) ...[
+                  Button(
+                    enabledIcon: Icons.repeat_one_outlined,
+                    disabledIcon: Icons.repeat_one_outlined,
+                    isEnable: Player.player.isRepeat,
+                    onTap: () async => Player.player.isRepeat
+                        ? await Player.player.disableRepeat()
+                        : await Player.player.enableRepeat(),
+                  ),
+                  SizedBox(width: 2),
+                ],
+              ],
             ),
-            SizedBox(width: 2),
-            if (screenWidth > 600) ...[
-              Button(
-                enabledIcon: Icons.repeat_one_outlined,
-                disabledIcon: Icons.repeat_one_outlined,
-                isEnable: Player.player.isRepeat,
-                onTap: () async => Player.player.isRepeat
-                    ? await Player.player.disableRepeat()
-                    : await Player.player.enableRepeat(),
-              ),
-              SizedBox(width: 2),
-            ],
           ],
         ),
       ),

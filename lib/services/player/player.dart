@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/objects/playlist.dart';
 import 'package:quark/objects/track.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:quark/services/dynamic_window_color_linux.dart';
 
 // TODO: LOW LATENCY TRACK CHANGE
 
@@ -150,11 +151,11 @@ class Player {
       await playNext(completed: true);
     });
 
-    _onDurationChanged = playerInstance.onDurationChanged.listen((event) async {
+    _onDurationChanged = playerInstance.onDurationChanged.listen((event) {
       durationNotifier.value = event;
     });
 
-    _onPlayedChanged = playerInstance.onPositionChanged.listen((event) async {
+    _onPlayedChanged = playerInstance.onPositionChanged.listen((event) {
       playedNotifier.value = event;
     });
   }

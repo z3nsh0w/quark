@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 import 'dart:async';
@@ -143,6 +144,7 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
   bool stateIndicatorState = true;
   bool playlistOpeningArea = true;
   bool recursiveFilesAdding = true;
+  bool dynamicWindowColor = true;
   int clicks = 0;
   String restoreText = 'Restore';
   bool? databaseError;
@@ -156,12 +158,15 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
       bool playlistArea = DatabaseStreamerService().playlistOpeningArea.value;
       bool recursiveFilesAdding2 =
           DatabaseStreamerService().recursiveFilesAdding.value;
+      bool dynamicWindowColor2 =
+          DatabaseStreamerService().dynamicWindowColor.value;
       if (!mounted) return;
       setState(() {
         stateIndicatorState = indicator;
         playlistOpeningArea = playlistArea;
         recursiveFilesAdding = recursiveFilesAdding2;
         transitionSpeedController.value = transitionSpeed;
+        dynamicWindowColor = dynamicWindowColor2;
       });
     } catch (e) {
       if (!mounted) return;
@@ -309,6 +314,30 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
             ButtonPosition.center,
           ),
           SizedBox(height: 1),
+          if (Platform.isLinux) ...[
+            button(
+              'Dynamic window color',
+              'The window color will change dynamically depending on the content on the screen.',
+              Switch(
+                value: dynamicWindowColor,
+                activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+                inactiveThumbColor: Colors.grey[300],
+                inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+                onChanged: (a) {
+                  setState(() {
+                    dynamicWindowColor = a;
+                  });
+                  DatabaseStreamerService().dynamicWindowColor.value = a;
+                },
+              ),
+
+              maxWidth,
+              rightPadding,
+              ButtonPosition.center,
+            ),
+            SizedBox(height: 1),
+          ],
+
           button(
             'Restore defaults',
             'Reset player settings to factory defaults. After resetting, it is recommended to restart the player.',
@@ -514,7 +543,9 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
             "Quality of downloaded tracks.",
             DropdownButton<String>(
               dropdownColor: const Color.fromRGBO(44, 44, 44, 0.2),
-              value: qualityList.contains(quality) ? quality : 'Normal (256kbps)',
+              value: qualityList.contains(quality)
+                  ? quality
+                  : 'Normal (256kbps)',
               borderRadius: BorderRadius.all(Radius.circular(5)),
               elevation: 16,
               focusColor: const Color.fromARGB(113, 255, 255, 255),

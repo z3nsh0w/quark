@@ -6,7 +6,6 @@ import 'package:xml/xml.dart' as xml;
 import 'package:yandex_music/yandex_music.dart';
 import 'package:yandex_music/src/signs/signs.dart';
 
-
 // Yup, That's Me.
 // You're probably wondering how I ended up in this situation
 
@@ -29,6 +28,7 @@ class YandexMusicApiAsync {
     final response = await requests.basicGet('/account/status');
     return response;
   }
+
   Future<dynamic> clearPlaylistCover(
     int playlistKind,
     int userId, {
@@ -169,6 +169,7 @@ class YandexMusicApiAsync {
       onReceiveProgress: onReceiveProgress,
     );
   }
+
   Future<dynamic> getPlaylistRecommendations(
     int userId,
     int playlistKind, {
@@ -352,8 +353,7 @@ class YandexMusicApiAsync {
     final responce = await requests.post(
       '/tracks',
       data: FormData.fromMap({
-        'trackIds':
-            trackIds,
+        'trackIds': trackIds,
         'removeDuplicates': false,
         'withProgress': true,
         'withMixData': false,
@@ -424,83 +424,105 @@ class YandexMusicApiAsync {
   }
   // Сюда было потрачено > 5-6 часов реального времени. питон рулит
 
-Future<dynamic> addTracksToPlaylist(
-  int userId,
-  int kind,
-  List<Map<String, dynamic>> tracks,
-  int revision, {
-  int at = 0,
-  CancelToken? cancelToken,
-}) async {
-  final diff = jsonEncode([
-    {'op': 'insert', 'at': at, 'tracks': tracks},
-  ]);
-  return await requests.post(
-    '/users/$userId/playlists/$kind/change-relative',
-    queryParameters: {'diff': diff, 'revision': revision},
-    data: {'diff': diff, 'revision': revision},
-    cancelToken: cancelToken,
-  );
-}
+  Future<dynamic> addTracksToPlaylist(
+    int userId,
+    int kind,
+    List<Map<String, dynamic>> tracks,
+    int revision, {
+    int at = 0,
+    CancelToken? cancelToken,
+  }) async {
+    final diff = jsonEncode([
+      {'op': 'insert', 'at': at, 'tracks': tracks},
+    ]);
+    return await requests.post(
+      '/users/$userId/playlists/$kind/change-relative',
+      queryParameters: {'diff': diff, 'revision': revision},
+      data: {'diff': diff, 'revision': revision},
+      cancelToken: cancelToken,
+    );
+  }
 
-Future<dynamic> insertTrackIntoPlaylist(
-  int userId,
-  int kind,
-  String trackId,
-  String albumId,
-  int revision, {
-  int at = 0,
-  CancelToken? cancelToken,
-}) async {
-  final diff = jsonEncode([
-    {'op': 'insert', 'at': at, 'tracks': [{'id': trackId, 'albumId': int.parse(albumId)}]},
-  ]);
-  return await requests.post(
-    '/users/$userId/playlists/$kind/change-relative',
-    queryParameters: {'diff': diff, 'revision': revision},
-    data: {'diff': diff, 'revision': revision},
-    cancelToken: cancelToken,
-  );
-}
+  Future<dynamic> insertTrackIntoPlaylist(
+    int userId,
+    int kind,
+    String trackId,
+    int revision, {
+    String? albumId,
 
-Future<dynamic> deleteTracksFromPlaylist(
-  int userId,
-  int kind,
-  int from,
-  int to,
-  int revision, {
-  CancelToken? cancelToken,
-}) async {
-  final diff = jsonEncode([
-    {'op': 'delete', 'from': from, 'to': to},
-  ]);
-  return await requests.post(
-    '/users/$userId/playlists/$kind/change-relative',
-    queryParameters: {'diff': diff, 'revision': revision},
-    data: {'diff': diff, 'revision': revision},
-    cancelToken: cancelToken,
-  );
-}
+    int at = 0,
+    CancelToken? cancelToken,
+  }) async {
+    final diff;
+    if (albumId != null) {
+      diff = jsonEncode([
+        {
+          'op': 'insert',
+          'at': at,
+          'tracks': [
+            {'id': trackId, 'albumId': int.parse(albumId)},
+          ],
+        },
+      ]);
+    } else {
+      diff = jsonEncode([
+        {
+          'op': 'insert',
+          'at': at,
+          'tracks': [
+            {'id': trackId},
+          ],
+        },
+      ]);
+    }
 
-Future<dynamic> moveTrack(
-  int userId,
-  int kind,
-  int from,
-  int to,
-  List<Map<String, dynamic>> tracks,
-  int revision, {
-  CancelToken? cancelToken,
-}) async {
-  final diff = jsonEncode([
-    {'op': 'move', 'from': from, 'to': to, 'tracks': tracks},
-  ]);
-  return await requests.post(
-    '/users/$userId/playlists/$kind/change-relative',
-    queryParameters: {'diff': diff, 'revision': revision},
-    data: {'diff': diff, 'revision': revision},
-    cancelToken: cancelToken,
-  );
-}
+    return await requests.post(
+      '/users/$userId/playlists/$kind/change-relative',
+      queryParameters: {'diff': diff, 'revision': revision},
+      data: {'diff': diff, 'revision': revision},
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<dynamic> deleteTracksFromPlaylist(
+    int userId,
+    int kind,
+    int from,
+    int to,
+    int revision, {
+    CancelToken? cancelToken,
+  }) async {
+    final diff = jsonEncode([
+      {'op': 'delete', 'from': from, 'to': to},
+    ]);
+    return await requests.post(
+      '/users/$userId/playlists/$kind/change-relative',
+      queryParameters: {'diff': diff, 'revision': revision},
+      data: {'diff': diff, 'revision': revision},
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<dynamic> moveTrack(
+    int userId,
+    int kind,
+    int from,
+    int to,
+    List<Map<String, dynamic>> tracks,
+    int revision, {
+    CancelToken? cancelToken,
+  }) async {
+    final diff = jsonEncode([
+      {'op': 'move', 'from': from, 'to': to, 'tracks': tracks},
+    ]);
+    return await requests.post(
+      '/users/$userId/playlists/$kind/change-relative',
+      queryParameters: {'diff': diff, 'revision': revision},
+      data: {'diff': diff, 'revision': revision},
+      cancelToken: cancelToken,
+    );
+  }
+
   Future<dynamic> changeVisibility(
     int userId,
     int kind,
@@ -659,28 +681,28 @@ Future<dynamic> moveTrack(
     String playlistId, {
     CancelToken? cancelToken,
   }) async {
-    final response = await requests.post(
+    return await requests.post(
       '/loader/upload-url',
       queryParameters: {
         'uid': '$userId',
         'playlist-id': playlistId,
         'path': fileName,
       },
-      data: '/loader/upload-url',
       cancelToken: cancelToken,
     );
-
-    return response;
   }
+
 
   Future<Response> uploadFile(
     String url,
     Uint8List fileBytes,
     String fileName, {
     CancelToken? cancelToken,
+    void Function(int, int)? onSendProgress,
+    void Function(int, int)? onReceiveProgress,
   }) async {
     final formData = FormData.fromMap({
-      'file': await MultipartFile.fromBytes(fileBytes, filename: fileName),
+      'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
     });
 
     return await dio.post(
@@ -688,64 +710,12 @@ Future<dynamic> moveTrack(
       data: formData,
       options: Options(headers: {'Content-Type': 'multipart/form-data'}),
       cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
     );
   }
-
   Future<dynamic> getAvailableWaveSettings() async {
     return await requests.basicGet('/rotor/wave/settings');
-  }
-
-  Future<dynamic> createWave(
-    List seeds, {
-    bool? includeTracksInResponce,
-    bool? includeWaveModel,
-    bool? interactive,
-    List? queue,
-  }) async {
-    return await requests.post(
-      '/rotor/session/new',
-      data: {
-        'includeTracksInResponse': includeTracksInResponce ??= true,
-        'includeWaveModel': includeWaveModel ??= true,
-        'interactive': interactive ??= true,
-        'queue': queue ??= [],
-        'seeds': seeds,
-      },
-    );
-  }
-
-  Future<dynamic> trackFinishedFeedback(
-    Wave wave,
-    List<Track> queue,
-    double totalPlayedSeconds,
-    Track track,
-  ) async {
-    await _feedbacker(wave, queue, totalPlayedSeconds, track, 'trackFinished');
-  }
-
-  Future<dynamic> skipFeedback(
-    Wave wave,
-    List<Track> queue,
-    double totalPlayedSeconds,
-    Track track,
-  ) async {
-    await _feedbacker(wave, queue, totalPlayedSeconds, track, 'skip');
-  }
-
-  Future<dynamic> trackStartedFeedBack(Wave wave, Track track) async {
-    final timestamp = DateTime.now().toUtc().toIso8601String();
-    return await requests.post(
-      '/rotor/session/${wave.sessionId}/feedback',
-      data: {
-        'batchId': wave.batchId,
-        'from': 'web-home-rup_main-radio-default',
-        'event': {
-          'timestamp': timestamp,
-          'trackId': '${track.id}:${track.albums[0].id}',
-          'type': 'trackStarted',
-        },
-      },
-    );
   }
 
   Future<dynamic> searchV2(
@@ -784,34 +754,163 @@ Future<dynamic> moveTrack(
       cancelToken: cancelToken,
     );
   }
-
-  Future<dynamic> _feedbacker(
-    Wave wave,
-    List<Track> queue,
-    double totalPlayedSeconds,
-    Track track,
-    String feedbackType,
-  ) async {
-    List<String> b = queue.map((e) => '${e.id}:${e.albums[0].id}').toList();
-    final timestamp = DateTime.now().toUtc().toIso8601String();
-
-    return await requests.post(
-      '/rotor/session/${wave.sessionId}/tracks',
-      data: {
-        'queue': b,
-        'feedbacks': [
-          {
-            'batchId': wave.batchId,
-            'from': 'web-home-rup_main-radio-default',
-            'event': {
-              'timestamp': timestamp,
-              'type': feedbackType,
-              'totalPlayedSeconds': totalPlayedSeconds,
-              'trackId': '${track.id}:${track.albums[0].id}',
-            },
-          },
-        ],
-      },
+  static const _from = 'web-home-rup_main-radio-default';
+  static const _jsonContentType = 'application/json';
+  Future<Map<String, dynamic>> getWaveSettings({
+    CancelToken? cancelToken,
+  }) async {
+    return await requests.basicGet(
+      '/rotor/wave/settings',
+      cancelToken: cancelToken,
     );
   }
+
+  Future<Map<String, dynamic>> createWaveSession(
+    List<String> seeds, {
+    bool interactive = true,
+    CancelToken? cancelToken,
+  }) async {
+    return await requests.post(
+      '/rotor/session/new',
+      data: jsonEncode({
+        'seeds': seeds,
+        'includeTracksInResponse': true,
+        'includeWaveModel': true,
+        'interactive': interactive,
+      }),
+      contentType: _jsonContentType,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> getWaveTracks(
+    String sessionId, {
+    required List<String> queue,
+    required List<Map<String, dynamic>> feedbacks,
+    CancelToken? cancelToken,
+  }) async {
+    return await requests.post(
+      '/rotor/session/$sessionId/tracks',
+      data: jsonEncode({'queue': queue, 'feedbacks': feedbacks}),
+      contentType: _jsonContentType,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> cloneWaveSession(
+    String sessionId, {
+    required List<String> seeds,
+    required List<String> queue,
+    bool interactive = false,
+    CancelToken? cancelToken,
+  }) async {
+    return await requests.post(
+      '/rotor/session/$sessionId/clone',
+      data: jsonEncode({
+        'seeds': seeds,
+        'queue': queue,
+        'includeTracksInResponse': true,
+        'includeWaveModel': true,
+        'interactive': interactive,
+      }),
+      contentType: _jsonContentType,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<dynamic> waveRadioStartedFeedback(
+    String sessionId,
+    String batchId, {
+    CancelToken? cancelToken,
+  }) async {
+    return await requests.post(
+      '/rotor/session/$sessionId/feedback/',
+      data: jsonEncode({
+        'event': {
+          'type': 'radioStarted',
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'from': _from,
+        },
+        'from': _from,
+      }),
+      contentType: _jsonContentType,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<dynamic> waveTrackStartedFeedback(
+    String sessionId,
+    String batchId,
+    String trackId,
+    String albumId, {
+    CancelToken? cancelToken,
+  }) async {
+    return await requests.post(
+      '/rotor/session/$sessionId/feedback/',
+      data: jsonEncode({
+        'event': {
+          'type': 'trackStarted',
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'trackId': '$trackId:$albumId',
+        },
+        'batchId': batchId,
+        'from': _from,
+      }),
+      contentType: _jsonContentType,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<dynamic> waveTrackFinishedFeedback(
+    String sessionId,
+    String batchId,
+    String trackId,
+    String albumId, {
+    required double totalPlayedSeconds,
+    required double trackLengthSeconds,
+    CancelToken? cancelToken,
+  }) async {
+    return await requests.post(
+      '/rotor/session/$sessionId/feedback/',
+      data: jsonEncode({
+        'event': {
+          'type': 'trackFinished',
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'trackId': '$trackId:$albumId',
+          'totalPlayedSeconds': totalPlayedSeconds,
+          'trackLengthSeconds': trackLengthSeconds,
+        },
+        'batchId': batchId,
+        'from': _from,
+      }),
+      contentType: _jsonContentType,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<dynamic> waveSkipFeedback(
+    String sessionId,
+    String batchId,
+    String trackId,
+    String albumId, {
+    required double totalPlayedSeconds,
+    CancelToken? cancelToken,
+  }) async {
+    return await requests.post(
+      '/rotor/session/$sessionId/feedback/',
+      data: jsonEncode({
+        'event': {
+          'type': 'skip',
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'trackId': '$trackId:$albumId',
+          'totalPlayedSeconds': totalPlayedSeconds,
+        },
+        'batchId': batchId,
+        'from': _from,
+      }),
+      contentType: _jsonContentType,
+      cancelToken: cancelToken,
+    );
+  }
+
 }

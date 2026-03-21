@@ -1,4 +1,5 @@
 export 'package:yandex_music/src/subclasses/objects/vibe.dart';
+export 'package:yandex_music/src/subclasses/objects/lazy_wave.dart';
 export 'package:yandex_music/src/subclasses/objects/pins.dart';
 export 'package:yandex_music/src/subclasses/objects/albums.dart';
 export 'package:yandex_music/src/subclasses/objects/search.dart';

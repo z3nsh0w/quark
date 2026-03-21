@@ -8,7 +8,6 @@ import 'src/subclasses/subclasses.dart' as sub_classes;
 // ladder everywhere lol
 export 'dart:io' show File;
 export 'src/objects/wave.dart';
-export 'src/objects/vibe.dart';
 export 'src/objects/album.dart';
 export 'src/objects/track.dart';
 export 'src/objects/cover.dart';

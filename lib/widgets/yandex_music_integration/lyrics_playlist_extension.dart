@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter/material.dart';
+import 'package:quark/services/database/database.dart';
 import '/widgets/state_indicator.dart';
 import 'package:quark/objects/track.dart';
 import 'package:quark/services/player/player.dart';
@@ -36,7 +37,7 @@ class _TrackInfoView extends State<LyricsView> {
 
   int nowIndex = 0;
 
-  void getLyrics() async {
+  Future<void> getLyrics() async {
     if (widget.track.lyricsInfo == null ||
         (!widget.track.lyricsInfo!.hasAvailableSyncLyrics &&
             !widget.track.lyricsInfo!.hasAvailableTextLyrics)) {
@@ -44,80 +45,28 @@ class _TrackInfoView extends State<LyricsView> {
         hasLyrics = false;
         loading = false;
       });
-
       return;
     }
-    Logger('LyricsView').info('Requesting lyrics');
-    if (widget.track.lyricsInfo!.hasAvailableSyncLyrics) {
-      final lyrics = await YandexMusicSingleton.instance.tracks.getLyrics(
-        widget.track.id,
-        format: LyricsFormat.withTimeStamp,
-      );
-      extractLyricsWTS(lyrics.downloadUrl);
-    }
-    if (widget.track.lyricsInfo!.hasAvailableTextLyrics &&
-        !widget.track.lyricsInfo!.hasAvailableSyncLyrics) {
-      final lyrics = await YandexMusicSingleton.instance.tracks.getLyrics(
-        widget.track.id,
-        format: LyricsFormat.onlyText,
-      );
-      extractLyricsOT(lyrics.downloadUrl);
-    }
-    setState(() {
-      loading = false;
-    });
-  }
 
-  void extractLyricsWTS(String link) async {
-    final res = await Dio().get(link);
+    final format = widget.track.lyricsInfo!.hasAvailableSyncLyrics
+        ? LyricsFormat.withTimeStamp
+        : LyricsFormat.onlyText;
 
-    final List<String> words = res.data.toString().split('\n');
-    final List<Map<Duration, String>> nowStatedMapWithTimestampWithText = [];
-    for (String word in words) {
-      final word2 = word.split(' ');
-      final timestamp = word2.first;
-      word2.remove(timestamp);
-      final words = word2.join(' ');
-
-      final clean = timestamp.replaceAll(RegExp(r'[\[\]]'), '').split(':');
-      if (clean.length > 1) {
-        final mins = clean[0];
-        final secs = clean[1].split('.').first;
-        final millis = clean[1].split('.').last;
-
-        final Duration duraton = Duration(
-          minutes: int.parse(mins),
-          seconds: int.parse(secs),
-          milliseconds: int.parse(millis),
-        );
-
-        nowStatedMapWithTimestampWithText.add({duraton: words});
-      }
-    }
-    if (nowStatedMapWithTimestampWithText.first.entries.first.key !=
-        Duration(seconds: 0)) {
-      nowStatedMapWithTimestampWithText.insert(0, {
-        Duration(milliseconds: 0): '',
-      });
-    }
+    final lyrics = await YandexMusicSingleton.getLyrics(
+      widget.track.id,
+      format,
+    );
 
     if (!mounted) return;
     setState(() {
-      wts = true;
-      mapWithTimestampAndText = nowStatedMapWithTimestampWithText;
-    });
-  }
-
-  void extractLyricsOT(String link) async {
-    final res = await Dio().get(link);
-    final List<String> words = res.data.toString().split('\n');
-    final List<Map<Duration, String>> result = [];
-    for (String word in words) {
-      result.add({Duration.zero: word});
-    }
-    result.insert(0, {Duration(milliseconds: 0): ''});
-    setState(() {
-      mapWithTimestampAndText = result;
+      if (lyrics.isNotEmpty) {
+        mapWithTimestampAndText = lyrics;
+        hasLyrics = true;
+        wts = format == LyricsFormat.withTimeStamp;
+      } else {
+        hasLyrics = false;
+      }
+      loading = false;
     });
   }
 
@@ -148,315 +97,109 @@ class _TrackInfoView extends State<LyricsView> {
             topRight: Radius.circular(20),
             bottomRight: Radius.circular(20),
           ),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
-            child: Container(
-              width: 400,
-              height: MediaQuery.of(context).size.height,
-              decoration: overlayBoxDecoration(),
-              child: Padding(
-                padding: EdgeInsetsGeometry.symmetric(horizontal: 0),
-                child: Stack(
-                  children: [
-                    if (loading) ...[
-                      Center(
-                        child: Text(
-                          'Processing your request...',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
+          child: Stack(
+            children: [
+              AnimatedSwitcher(
+                duration: Duration(
+                  milliseconds:
+                      (650 * DatabaseStreamerService().transitionSpeed.value)
+                          .round(),
+                ),
+                transitionBuilder: (child, animation) =>
+                    FadeTransition(opacity: animation, child: child),
+                layoutBuilder: (currentChild, previousChildren) => SizedBox(
+                  width: 400,
+                  height: MediaQuery.of(context).size.height,
+                  child: Stack(
+                    fit: StackFit.loose,
+                    children: [
+                      ...previousChildren,
+                      if (currentChild != null) currentChild,
                     ],
-                    if (!hasLyrics) ...[
-                      Center(
-                        child: Text(
-                          'It looks like this track has no lyrics',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                  ),
+                ),
+                child: SizedBox(
+                  key: ValueKey(Player.player.nowPlayingTrack.cover),
+                  width: 400,
+                  height: MediaQuery.of(context).size.height,
+                  child: OverflowBox(
+                    maxWidth: MediaQuery.of(context).size.width,
+                    maxHeight: MediaQuery.of(context).size.height,
+                    alignment: Alignment.centerLeft,
+                    child: ColorFiltered(
+                      colorFilter: ColorFilter.mode(
+                        Colors.black.withOpacity(0.5),
+                        BlendMode.darken,
                       ),
-                    ],
-                    // TrackInfo(track: Player.player.nowPlayingTrack),
-                    if (!loading && hasLyrics)
-                      SizedBox.expand(
-                        child: LyricsList(
-                          lyrics: mapWithTimestampAndText,
-                          sync: widget.track.lyricsInfo!.hasAvailableSyncLyrics,
-                        ),
+                      child: CachedBlurredNetworkImage(
+                        coverUri:
+                            'https://${Player.player.nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                        width: MediaQuery.of(context).size.width,
+                        height: MediaQuery.of(context).size.height,
+                        fit: BoxFit.cover,
                       ),
-
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      right: 10,
-                      child: appBar(widget.closePlaylist, () {}, () {}),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+
+              Container(
+                width: 400,
+                height: MediaQuery.of(context).size.height,
+                decoration: overlayBoxDecoration(),
+                child: Padding(
+                  padding: EdgeInsetsGeometry.symmetric(horizontal: 0),
+                  child: Stack(
+                    children: [
+                      if (loading) ...[
+                        Center(
+                          child: Text(
+                            'Processing your request...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (!hasLyrics) ...[
+                        Center(
+                          child: Text(
+                            'It looks like this track has no lyrics',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                      // TrackInfo(track: Player.player.nowPlayingTrack),
+                      if (!loading && hasLyrics)
+                        SizedBox.expand(
+                          child: LyricsList(
+                            lyrics: mapWithTimestampAndText,
+                            sync:
+                                widget.track.lyricsInfo!.hasAvailableSyncLyrics,
+                          ),
+                        ),
+
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        right: 10,
+                        child: appBar(widget.closePlaylist, () {}, () {}),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 }
-
-// class TrackInfo extends StatefulWidget {
-//   final PlayerTrack track;
-//   const TrackInfo({super.key, required this.track});
-//   @override
-//   State<StatefulWidget> createState() => _TrackInfo();
-// }
-
-// class _TrackInfo extends State<TrackInfo> {
-//   PlayerTrack get track => widget.track;
-
-//   AudioMetadata? data;
-
-//   @override
-//   void initState() {
-//     if (track is LocalTrack) {
-
-//     }
-
-//     super.initState();
-//   }
-
-//   Widget _buildLocalTrackInfo() {
-
-
-//     return Column(children: [
-
-//       ],
-//     );
-//   }
-
-//   Widget _recognizedTrack() {
-//     final matched = (track as YandexMusicTrack).track.matchedTrack!;
-
-//     return Container(
-//       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-//       decoration: BoxDecoration(
-//         color: Colors.white.withOpacity(0.07),
-//         borderRadius: BorderRadius.circular(16),
-//         border: Border.all(color: Colors.white.withOpacity(0.12)),
-//       ),
-//       child: Column(
-//         crossAxisAlignment: CrossAxisAlignment.start,
-//         children: [
-//           Padding(
-//             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-//             child: Row(
-//               children: [
-//                 const SizedBox(width: 6),
-//                 Text(
-//                   'Matched track',
-//                   style: TextStyle(
-//                     color: Colors.white70,
-//                     fontSize: 13,
-//                     fontWeight: FontWeight.w600,
-//                     letterSpacing: 0.3,
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//           const SizedBox(height: 12),
-//           Padding(
-//             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-//             child: Row(
-//               children: [
-//                 if (matched.coverUri != null)
-//                   ClipRRect(
-//                     borderRadius: BorderRadius.circular(10),
-//                     child: CachedImage(
-//                       coverUri: matched.coverUri!,
-//                       height: 64,
-//                       width: 64,
-//                     ),
-//                   ),
-//                 const SizedBox(width: 14),
-//                 Expanded(
-//                   child: Column(
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       Text(
-//                         matched.title,
-//                         style: const TextStyle(
-//                           color: Colors.white,
-//                           fontSize: 15,
-//                           fontWeight: FontWeight.w600,
-//                         ),
-//                         maxLines: 1,
-//                         overflow: TextOverflow.ellipsis,
-//                       ),
-//                       const SizedBox(height: 4),
-//                       Text(
-//                         matched.artists.map((e) => e.title).join(', '),
-//                         style: TextStyle(color: Colors.white54, fontSize: 13),
-//                         maxLines: 1,
-//                         overflow: TextOverflow.ellipsis,
-//                       ),
-//                       if (matched.albums.isNotEmpty) ...[
-//                         const SizedBox(height: 2),
-//                         Text(
-//                           matched.albums.first.title,
-//                           style: TextStyle(color: Colors.white38, fontSize: 12),
-//                           maxLines: 1,
-//                           overflow: TextOverflow.ellipsis,
-//                         ),
-//                       ],
-//                     ],
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   Widget _yandexHeader() {
-//     return Center(
-//       child: Material(
-//         color: Colors.transparent,
-//         child: Column(
-//           children: [
-//             if ((track as YandexMusicTrack).track.trackSource !=
-//                 TrackSource.UGC) ...[
-//               if ((track as YandexMusicTrack).track.albums.isNotEmpty) ...[
-//                 SizedBox(height: 10),
-//                 Text(
-//                   'Album',
-//                   style: TextStyle(
-//                     color: Colors.white.withAlpha(100),
-//                     fontFamily: 'noto',
-//                     fontSize: 14,
-//                   ),
-//                 ),
-//                 SizedBox(height: 10),
-//                 CachedImage(
-//                   coverUri:
-//                       'https://${(track as YandexMusicTrack).track.albums[0].coverUri.replaceAll('%%', "300x300")}',
-//                   height: 180,
-//                   width: 180,
-//                   borderRadius: 12,
-//                 ),
-
-//                 SizedBox(height: 5),
-//                 Text(
-//                   '${(track as YandexMusicTrack).track.albums[0].title} (${(track as YandexMusicTrack).track.albums[0].year})',
-//                   style: TextStyle(
-//                     color: Colors.white,
-//                     fontFamily: 'noto',
-//                     decoration: TextDecoration.none,
-//                     fontWeight: FontWeight.bold,
-//                     fontSize: 18,
-//                   ),
-//                 ),
-//                 Text(
-//                   '${(track as YandexMusicTrack).track.albums[0].trackCount} tracks. ${(track as YandexMusicTrack).track.albums[0].likesCount} likes',
-//                   style: TextStyle(
-//                     color: Colors.white.withAlpha(200),
-//                     fontFamily: 'noto',
-//                     fontWeight: FontWeight.w100,
-//                     fontSize: 14,
-//                   ),
-//                 ),
-//                 Text(
-//                   (track as YandexMusicTrack).track.albums[0].artists
-//                       .map((e) => e.title)
-//                       .join(', '),
-//                   style: TextStyle(
-//                     color: Colors.white.withAlpha(200),
-//                     fontFamily: 'noto',
-//                     fontWeight: FontWeight.w100,
-//                     fontSize: 14,
-//                   ),
-//                 ),
-//               ],
-//             ],
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-
-//   Widget _buildYMTrackInfo() {
-//     return Column(
-//       children: [
-//         _yandexHeader(),
-//         if ((track as YandexMusicTrack).track.trackSource ==
-//             TrackSource.UGC) ...[
-//           SizedBox(height: 10),
-//           Text(
-//             'Track uploaded by user',
-//             style: TextStyle(
-//               color: Colors.white.withAlpha(100),
-//               fontFamily: 'noto',
-//               fontSize: 14,
-//             ),
-//           ),
-//           SizedBox(height: 10),
-//           CachedImage(
-//             coverUri: track.cover,
-//             height: 180,
-//             width: 180,
-//             borderRadius: 12,
-//           ),
-//           SizedBox(height: 10),
-//           Text(
-//             (track as YandexMusicTrack).track.title,
-//             style: TextStyle(
-//               color: Colors.white,
-//               fontFamily: 'noto',
-//               decoration: TextDecoration.none,
-//               fontWeight: FontWeight.bold,
-//               fontSize: 18,
-//             ),
-//           ),
-//           Text(
-//             track.artists.join(', '),
-//             style: TextStyle(
-//               color: const Color.fromARGB(200, 255, 255, 255),
-//               fontSize: 15,
-//               fontFamily: 'noto',
-//               decoration: TextDecoration.none,
-//               fontWeight: FontWeight.w100,
-//             ),
-//           ),
-
-//           SizedBox(height: 15),
-//           if ((track as YandexMusicTrack).track.matchedTrack != null) ...[
-//             Text(
-//               'Matched Track',
-//               style: TextStyle(
-//                 color: Colors.white,
-//                 fontFamily: 'noto',
-//                 fontWeight: FontWeight.bold,
-//                 fontSize: 18,
-//               ),
-//             ),
-//             _recognizedTrack(),
-//           ],
-//         ],
-//       ],
-//     );
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return (track is YandexMusicTrack)
-//         ? _buildYMTrackInfo()
-//         : _buildLocalTrackInfo();
-//   }
-// }
 
 class LyricsList extends StatefulWidget {
   final bool sync;
@@ -473,21 +216,25 @@ class _LyricsList extends State<LyricsList> {
   List<Map<Duration, String>> get lyrics => widget.lyrics;
   bool get sync => widget.sync;
   int nowIndex = 0;
+  late List<Duration> _timestamps;
 
-  @override
-  void didChangeDependencies() {
-    setState(() {});
-    super.didChangeDependencies();
-  }
+  // @override
+  // void didChangeDependencies() {
+  //   setState(() {});
+  //   super.didChangeDependencies();
+  // }
 
   @override
   void initState() {
+    _timestamps = lyrics.map((e) => e.entries.first.key).toList();
+
     listener = () {
       if (!mounted) return;
       final int index = getNearby(
-        lyrics.map((e) => e.entries.first.key).toList(),
+        _timestamps,
         Player.player.playedNotifier.value,
       );
+
       if (index != nowIndex) {
         scrollToNow(index);
       }
@@ -495,7 +242,6 @@ class _LyricsList extends State<LyricsList> {
       setState(() {
         nowIndex = index;
       });
-      setState(() {});
     };
     if (sync) {
       Player.player.playedNotifier.addListener(listener);

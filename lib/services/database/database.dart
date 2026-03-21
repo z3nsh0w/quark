@@ -42,8 +42,11 @@ class DatabaseStreamerService {
   final gradientMode = ValueNotifier<bool>(false);
   final lastPlaylistState = ValueNotifier<bool>(false);
   final yandexMusicPlaylists = ValueNotifier<List?>(null);
+  final lastTrackPosition = ValueNotifier<int>(0);
   final windowManager = ValueNotifier<bool>(false);
   final logListenedTracks = ValueNotifier<bool>(false);
+  final dynamicWindowColor = ValueNotifier<bool>(true);
+  final originalImageSizeForCoverView = ValueNotifier<bool>(false);
   late final Listenable all = Listenable.merge([
     volume,
     stateIndicator,
@@ -64,6 +67,8 @@ class DatabaseStreamerService {
     yandexMusicDisplayName,
     yandexMusicUid,
     yandexMusicEmail,
+    dynamicWindowColor,
+    originalImageSizeForCoverView
   ]);
 
   Future<void> reload() async {
@@ -90,6 +95,9 @@ class DatabaseStreamerService {
     final ymp2 = await Database.get(DatabaseKeys.yandexMusicPlaylists.value);
     final wm = await Database.get(DatabaseKeys.windowManager.value);
     final llt = await Database.get(DatabaseKeys.logListenedTracks.value);
+    final ltp = await Database.get(DatabaseKeys.lastTrackPosition.value);
+    final dwc = await Database.get(DatabaseKeys.dynamicWindowColor.value);
+    final oisfc = await Database.get(DatabaseKeys.originalImageSizeCoverView.value);
 
     gradientMode.value = gm ?? false;
     lastPlaylistState.value = lps ?? false;
@@ -112,6 +120,9 @@ class DatabaseStreamerService {
     yandexMusicQuality.value = ymq ?? 'nq';
     lastTrack.value = lt;
     yandexMusicTokenExpires.value = tE ?? 0;
+    lastTrackPosition.value = ltp ?? 0;
+    dynamicWindowColor.value = dwc ?? true;
+    originalImageSizeForCoverView.value = oisfc ?? false;
     await Player.player.setVolume(volume.value);
   }
 
@@ -150,6 +161,9 @@ class DatabaseStreamerService {
     bind(yandexMusicDisplayName, DatabaseKeys.yandexMusicDisplayName);
     bind(yandexMusicUid, DatabaseKeys.yandexMusicUid);
     bind(yandexMusicEmail, DatabaseKeys.yandexMusicEmail);
+    bind(lastTrackPosition, DatabaseKeys.lastTrackPosition);
+    bind(dynamicWindowColor, DatabaseKeys.dynamicWindowColor);
+    bind(originalImageSizeForCoverView, DatabaseKeys.originalImageSizeCoverView);
   }
 
   void _attachListeners() {
@@ -182,7 +196,13 @@ class DatabaseSaver {
 
     Player.player.playlistNotifier.addListener(_playlistListener);
     Player.player.trackChangeNotifier.addListener(_trackListener);
+    _LastTrackPositionSaver().init();
     Logger('DatabaseSaverService').fine('Inited');
+  }
+
+  void dispose() {
+    Player.player.playlistNotifier.removeListener(_playlistListener);
+    Player.player.trackChangeNotifier.removeListener(_trackListener);
   }
 
   Future<void> saveLastTrack() async {
@@ -200,5 +220,56 @@ class DatabaseSaver {
     );
     Map play = await Isolate.run(() => serializePlaylist(pl));
     DatabaseStreamerService().lastPlaylist.value = play;
+  }
+}
+
+class _LastTrackPositionSaver {
+  static final _LastTrackPositionSaver _instance =
+      _LastTrackPositionSaver._internal();
+  factory _LastTrackPositionSaver() => _instance;
+  _LastTrackPositionSaver._internal();
+
+  int _lastSavedSeconds = 0;
+  DateTime _lastSaved = DateTime.now();
+
+  void init() {
+    Player.player.playedNotifier.addListener(_playedListener);
+  }
+
+  void dispose() {
+    Player.player.playedNotifier.removeListener(_playedListener);
+  }
+
+  final Duration _timeThreshold = const Duration(seconds: 2);
+  void _saveLastPosition() {
+    final timeDiff = DateTime.now().difference(_lastSaved);
+    if (timeDiff < _timeThreshold) return;
+    DatabaseStreamerService().lastTrackPosition.value =
+        Player.player.playedNotifier.value.inSeconds;
+  }
+
+  int _lastCountedSecond = 0;
+  int _totalPlayedSeconds = 0;
+  Duration _lastPosition = Duration.zero;
+  static const int _seekThreshold = 2;
+
+  void _playedListener() async {
+    Duration currentPosition = Player.player.playedNotifier.value;
+    int currentSecond = currentPosition.inSeconds;
+
+    int diff = currentSecond - _lastCountedSecond;
+
+    if (diff > 0 && diff <= _seekThreshold) {
+      _totalPlayedSeconds += diff;
+      _lastCountedSecond = currentSecond;
+      if (_totalPlayedSeconds - _lastSavedSeconds > 15) {
+        _saveLastPosition();
+        _lastSavedSeconds = _totalPlayedSeconds;
+      }
+    } else if (diff > _seekThreshold || diff < 0) {
+      _lastCountedSecond = currentSecond;
+    }
+
+    _lastPosition = currentPosition;
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:quark/services/files.dart';
@@ -68,8 +69,18 @@ class LocalTrack extends PlayerTrack {
     required super.filepath,
     super.cover,
     super.coverByted,
-    // super.cover22,
   });
+
+  static LocalTrack getNew(LocalTrack track) {
+    return LocalTrack(
+      title: track.title,
+      artists: track.artists,
+      albums: track.albums,
+      filepath: track.filepath,
+      cover: track.cover,
+      coverByted: track.coverByted,
+    );
+  }
 }
 
 class YandexMusicTrack extends PlayerTrack {
@@ -83,20 +94,33 @@ class YandexMusicTrack extends PlayerTrack {
     required super.filepath,
     super.cover,
     super.coverByted,
-    // super.cover22,
   });
 
-  static YandexMusicTrack fromYMTtoLocalTrack(Track track) {
-    final path = getTrackPath(track.id);
+  static YandexMusicTrack fromYMToPlayerTrack(Track track) {
+    final path = getTrackPath(track.id).replaceAll('/', Platform.pathSeparator);
     final track2 = YandexMusicTrack(
       track: track,
       title: track.title,
       artists: track.artists.map((toElement) => toElement.title).toList(),
-      albums: track.albums.isNotEmpty ? track.albums.map((toElement) => toElement.title).toList() : ["Unknown album"],
+      albums: track.albums.isNotEmpty
+          ? track.albums.map((toElement) => toElement.title).toList()
+          : ["Unknown album"],
       filepath: path,
     );
     track2.cover = track.coverUri ?? 'none';
     return track2;
+  }
+
+  static YandexMusicTrack getNew(YandexMusicTrack track) {
+    return YandexMusicTrack(
+      title: track.title,
+      artists: track.artists,
+      albums: track.albums,
+      filepath: track.filepath,
+      cover: track.cover,
+      coverByted: track.coverByted,
+      track: track.track,
+    );
   }
 }
 
