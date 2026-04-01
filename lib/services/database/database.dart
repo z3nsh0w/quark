@@ -126,6 +126,11 @@ class DatabaseStreamerService {
     await Player.player.setVolume(volume.value);
   }
 
+  Future<void> reset() async {
+    await Database.clear();
+    await reload();
+  }
+
   void _attachSavers() {
     if (!Database.isInited) {
       Logger(

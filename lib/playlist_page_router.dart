@@ -35,6 +35,16 @@ class _PlaylistPageState extends State<PlaylistPage> {
     await Player.player.pause();
   }
 
+  void init() async {
+
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    init();
+  }
+
   @override
   void dispose() {
     dis();
@@ -51,15 +61,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
     return AnimatedSwitcher(
       duration: Duration(milliseconds: 500),
       child: isAndroid
-          ? AndroidWidget(
-              playlist: widget.playlist,
-              yandexMusic: widget.yandexMusic,
-            )
+          ? AndroidWidget()
           : isCompactState
-          ? size.height < 80 ? MacroPlayer() : MiniPlayerWidget(
-            )
-          : MainPlayer(
-            ),
+          ? size.height < 80
+                ? MacroPlayer()
+                : MiniPlayerWidget()
+          : MainPlayer(),
     );
   }
 }

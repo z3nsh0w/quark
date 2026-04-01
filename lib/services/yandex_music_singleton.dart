@@ -1,14 +1,27 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
+
 import 'package:path/path.dart';
+import 'package:quark/objects/track.dart';
+import 'package:quark/services/cached_images.dart';
+import 'package:quark/services/database/database.dart';
+import 'package:quark/services/files.dart';
 import 'package:quark/services/player/net_player.dart';
 import 'package:quark/services/player/player.dart';
+import 'package:quark/services/tagger.dart';
 import 'package:yandex_music/yandex_music.dart';
 export 'package:yandex_music/yandex_music.dart';
+import 'package:image/image.dart' as img;
 
 abstract class YandexMusicSingleton {
-  static late YandexMusic instance;
+  static YandexMusic instance = YandexMusic(
+    token: DatabaseStreamerService().yandexMusicToken.value,
+  );
   static bool inited = false;
 
   static List<ShortTrack> likedTracks = [];
@@ -95,6 +108,124 @@ abstract class YandexMusicSingleton {
     } catch (e) {
       rethrow;
     }
+  }
+
+  static Future<dynamic> exportPlaytlist(
+    String uuid,
+    Directory directory, {
+    void Function(int)? progressCallback,
+  }) async {
+    // #TODO:support for exporting directly from the cache, bypassing current information
+    final List<String> cachedTracksIds = await getCachedTrackList();
+    try {
+      await directory.create(recursive: true);
+      final Playlist playlist = await instance.playlists.getPlaylistByUuid(
+        uuid,
+      );
+      final int trackCount = playlist.tracks.length;
+      final List<String> processedFilenames = [];
+      for (Track track in playlist.tracks) {
+        if (!(track.available ?? false)) continue;
+        String filename =
+            "${track.artists.isNotEmpty ? "${track.artists.first.title} - " : ""}${track.title.replaceAll("/", "")}";
+        if (processedFilenames.contains(filename)) {
+          filename += "_${track.id}";
+        }
+        filename += '.flac';
+        processedFilenames.add(filename);
+        final File file = File(join(directory.path, filename));
+        try {
+          if (!file.existsSync()) {
+            await file.create(recursive: true);
+          }
+          if (cachedTracksIds.contains(track.id)) {
+            await file.writeAsBytes(
+              await File(getTrackPath(track.id)).readAsBytes(),
+            );
+          } else {
+            await file.writeAsBytes(
+              await instance.tracks.download(
+                track.id,
+                quality: switch (DatabaseStreamerService()
+                    .yandexMusicQuality
+                    .value) {
+                  'lossless' => AudioQuality.lossless,
+                  'nq' => AudioQuality.normal,
+                  'lq' => AudioQuality.low,
+                  'mp3' => AudioQuality.normal,
+                  _ => AudioQuality.normal,
+                },
+              ),
+            );
+          }
+          // TODO;
+          Picture? picture;
+          if (track.coverUri != null) {
+            final Uint8List orig = await ImageCacheService().getImage(
+              "https://${track.coverUri!.replaceAll("%%", "600x600")}",
+            );
+            final image = img.decodeImage(orig);
+            if (image != null) {
+              picture = Picture(
+                Uint8List.fromList(img.encodeJpg(image, quality: 80)),
+                "image/jpeg",
+                PictureType.coverFront
+              );
+            }
+          }
+          await AudioTagger.writeToFile(
+            file.path,
+            AudioTags(
+              title: track.title,
+              album: track.albums.isNotEmpty ? track.albums.first.title : null,
+              artist: track.artists.map((e) => e.title).toList().join(', '),
+              coverData: picture?.bytes,
+              coverMime: "image/jpeg",
+            ),
+          );
+          // updateMetadata(file, (metadata) {
+          //   metadata.setTitle(track.title);
+          //   metadata.setArtist(
+          //     track.artists.map((e) => e.title).toList().join(', '),
+          //   );
+          //   metadata.setAlbum(
+          //     track.albums.isNotEmpty ? track.albums.first.title : null,
+          //   );
+          //   if (picture != null) {
+          //     metadata.setPictures([picture]);
+          //   }
+          // });
+          if (progressCallback != null) {
+            progressCallback(
+              ((playlist.tracks.indexOf(track) + 1) / trackCount * 100).round(),
+            );
+          }
+        } catch (e) {
+          Logger(
+            "YandexMusicSingleton",
+          ).warning("Failed to export track: ${track.id}", e);
+        }
+      }
+    } catch (e) {
+      Logger("YandexMusicSingleton").warning("Failed to export playlist: ", e);
+    }
+  }
+
+  static Future<List<String>> getCachedTrackList() async {
+    final List<PlayerTrack> files = await Files().getFilesFromDirectory(
+      directoryPath: join(ApplicationCacheDirectory.instance.directory.path),
+    );
+    final List<String> result = [];
+    for (PlayerTrack track in files) {
+      if (track.filepath.contains("cisum_xednay_krauq")) {
+        result.add(
+          basename(
+            track.filepath,
+          ).replaceAll("cisum_xednay_krauq", "").replaceAll(".flac", ""),
+        );
+      }
+    }
+    return result;
   }
 
   static Future<dynamic> getStudioAlbums(String artistId) async {

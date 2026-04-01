@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'dart:math';
 import 'dart:async';
@@ -7,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:yandex_music/yandex_music.dart';
 import '../../services/database/database_engine.dart';
 import 'package:quark/services/database/database.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+// import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 class YandexLogin extends StatefulWidget {
   final Function() closeView;
@@ -31,7 +32,7 @@ class _YandexLoginState extends State<YandexLogin> {
 
   late bool webview2 = false;
 
-  InAppWebViewController? webViewController;
+  // InAppWebViewController? webViewController;
 
   YandexMusic yandexMusic = YandexMusic(token: '');
 
@@ -77,17 +78,17 @@ class _YandexLoginState extends State<YandexLogin> {
   }
 
   Future<void> _checkWebView2Inapp() async {
-    try {
-      String? version = await WebViewEnvironment.getAvailableVersion();
-      print(version);
-      setState(() {
-        webview2 = version == null ? false : true;
-      });
-    } catch (e) {
-      setState(() {
-        webview2 = false;
-      });
-    }
+    // try {
+    //   String? version = await WebViewEnvironment.getAvailableVersion();
+    //   print(version);
+    //   setState(() {
+    //     webview2 = version == null ? false : true;
+    //   });
+    // } catch (e) {
+    //   setState(() {
+    //     webview2 = false;
+    //   });
+    // }
   }
 
   @override
@@ -100,7 +101,7 @@ class _YandexLoginState extends State<YandexLogin> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    if (!webview2) {
+    if (!webview2 && !Platform.isAndroid && !Platform.isMacOS) {
       return Center(
         child: Container(
           alignment: AlignmentDirectional.center,
@@ -283,72 +284,72 @@ class _YandexLoginState extends State<YandexLogin> {
               ),
               child: Column(
                 children: [
-                  Expanded(
-                    child: InAppWebView(
-                      initialUrlRequest: URLRequest(
-                        url: WebUri(
-                          'https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d',
-                        ),
-                      ),
-                      initialSettings: InAppWebViewSettings(
-                        javaScriptEnabled: true,
-                      ),
-                      onWebViewCreated: (controller) {
-                        webViewController = controller;
-                      },
-                      onLoadStop: (controller, url) async {
-                        if (url.toString().contains('access_token')) {
-                          try {
-                            String token = url
-                                .toString()
-                                .split('#')[1]
-                                .split('&')[0]
-                                .replaceAll('access_token=', '');
-                            final uri = Uri.parse(
-                              url.toString().replaceFirst('#', '?'),
-                            );
-                            final expiresIn = int.parse(
-                              uri.queryParameters['expires_in']!,
-                            );
+                  // Expanded(
+                  //   child: InAppWebView(
+                  //     initialUrlRequest: URLRequest(
+                  //       url: WebUri(
+                  //         'https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d',
+                  //       ),
+                  //     ),
+                  //     initialSettings: InAppWebViewSettings(
+                  //       javaScriptEnabled: true,
+                  //     ),
+                  //     onWebViewCreated: (controller) {
+                  //       webViewController = controller;
+                  //     },
+                  //     onLoadStop: (controller, url) async {
+                  //       if (url.toString().contains('access_token')) {
+                  //         try {
+                  //           String token = url
+                  //               .toString()
+                  //               .split('#')[1]
+                  //               .split('&')[0]
+                  //               .replaceAll('access_token=', '');
+                  //           final uri = Uri.parse(
+                  //             url.toString().replaceFirst('#', '?'),
+                  //           );
+                  //           final expiresIn = int.parse(
+                  //             uri.queryParameters['expires_in']!,
+                  //           );
 
-                            if (token.length > 3) {
-                              yandexMusic = YandexMusic(token: token);
-                              try {
-                                await yandexMusic.init();
-                              } on YandexMusicException catch (e) {
-                                log.severe(
-                                  "Failed to initialize the YandexMusic package during webview authorization",
-                                  e,
-                                );
-                              }
+                  //           if (token.length > 3) {
+                  //             yandexMusic = YandexMusic(token: token);
+                  //             try {
+                  //               await yandexMusic.init();
+                  //             } on YandexMusicException catch (e) {
+                  //               log.severe(
+                  //                 "Failed to initialize the YandexMusic package during webview authorization",
+                  //                 e,
+                  //               );
+                  //             }
 
-                              String email = await yandexMusic.account
-                                  .getEmail();
-                              String displayName = await yandexMusic.account
-                                  .getDisplayName();
-                              String fullName = await yandexMusic.account
-                                  .getFullName();
-                              String login = await yandexMusic.account
-                                  .getLogin();
-                              final db = DatabaseStreamerService();
-                              db.yandexMusicToken.value = token;
-                              db.yandexMusicLogin.value = login;
-                              db.yandexMusicFullName.value = fullName;
-                              db.yandexMusicDisplayName.value = displayName;
-                              db.yandexMusicUid.value = yandexMusic.accountID;
-                              db.yandexMusicEmail.value = email;
-                              widget.closeView();
-                            }
-                          } catch (ex) {
-                            log.severe(
-                              "Failed to initialize the YandexMusic package during webview authorization",
-                              ex,
-                            );
-                          }
-                        }
-                      },
-                    ),
-                  ),
+                  //             String email = await yandexMusic.account
+                  //                 .getEmail();
+                  //             String displayName = await yandexMusic.account
+                  //                 .getDisplayName();
+                  //             String fullName = await yandexMusic.account
+                  //                 .getFullName();
+                  //             String login = await yandexMusic.account
+                  //                 .getLogin();
+                  //             final db = DatabaseStreamerService();
+                  //             db.yandexMusicToken.value = token;
+                  //             db.yandexMusicLogin.value = login;
+                  //             db.yandexMusicFullName.value = fullName;
+                  //             db.yandexMusicDisplayName.value = displayName;
+                  //             db.yandexMusicUid.value = yandexMusic.accountID;
+                  //             db.yandexMusicEmail.value = email;
+                  //             widget.closeView();
+                  //           }
+                  //         } catch (ex) {
+                  //           log.severe(
+                  //             "Failed to initialize the YandexMusic package during webview authorization",
+                  //             ex,
+                  //           );
+                  //         }
+                  //       }
+                  //     },
+                  //   ),
+                  // ),
                 ],
               ),
             ),

@@ -26,22 +26,21 @@ dependencies:
   animated_expand: ^1.0.2
   interactive_slider: ^0.5.1
   audio_service_mpris: ^0.2.0
-  flutter_inappwebview: ^6.2.0-beta.2
+  # flutter_inappwebview: ^6.2.0-beta.2
+  # flutter_inappwebview: ^6.1.5
   audio_metadata_reader: ^1.4.2
   material_symbols_icons: ^4.2892.0
-  window_manager: ^0.5.1
+  # window_manager: ^0.5.1
   provider: ^6.1.5+1
-  desktop_multi_window: ^0.3.0
   crypto: ^3.0.7
-  # isar: ^3.1.0+1
   animated_digit: ^3.3.2
   animated_text_kit: ^4.3.0
   intl: ^0.20.2
-  # isar_flutter_libs: ^3.1.0+1
   google_fonts: ^6.3.2  
   async: ^2.13.0
   image: ^4.8.0
-
+  auto_size_text: ^3.0.0
+  drift: ^2.32.1
 
 dependency_overrides:
   yandex_music:
@@ -59,8 +58,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  isar_generator: ^3.1.0+1
-  build_runner: ^2.4.13
 
 
 flutter:

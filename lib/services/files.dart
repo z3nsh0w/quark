@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import '/objects/track.dart';
 import 'package:path/path.dart' as path;
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
+// import 'package:audio_metadata_reader/src/metadata/base.dart';
+// export 'package:audio_metadata_reader/src/metadata/base.dart';
 
 class ApplicationCacheDirectory {
   ApplicationCacheDirectory._();
@@ -119,4 +121,5 @@ class Files {
     }
     return [];
   }
+
 }

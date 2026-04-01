@@ -9,7 +9,6 @@ import 'package:quark/objects/track.dart';
 import 'package:logging/logging.dart';
 import 'package:quark/services/cached_images.dart';
 import 'package:quark/services/yandex_music_singleton.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:interactive_slider/interactive_slider.dart';
 
 // Local components&modules
@@ -480,12 +479,12 @@ class _PlaylistPage1State extends State<MiniPlayerWidget>
                                   ),
                                 ),
 
-                                DragToMoveArea(
-                                  child: Icon(
-                                    Icons.drag_handle_rounded,
-                                    color: Colors.grey,
-                                  ),
-                                ),
+                                // DragToMoveArea(
+                                //   child: Icon(
+                                //     Icons.drag_handle_rounded,
+                                //     color: Colors.grey,
+                                //   ),
+                                // ),
                               ],
                             ),
                           ),

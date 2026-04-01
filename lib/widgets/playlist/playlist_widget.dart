@@ -17,7 +17,6 @@ import 'package:path_provider/path_provider.dart';
 
 /// TODO: make GestureDetector on ScrollUp/Down to create smooth playlist scrolling as in the SilkyScroll package
 
-
 Widget playlistSearch(
   TextEditingController searchController,
   Function(String newView) search,
@@ -54,11 +53,23 @@ Widget playlistSearch(
 class PlaylistOverlay extends StatefulWidget {
   final Function(StateIndicatorOperation operation) showOperation;
   final VoidCallback closePlaylist;
+  final double width;
+  final BorderRadiusGeometry borderRadiusGeometry;
+  final bool background;
+  final bool reordable;
+
 
   const PlaylistOverlay({
     super.key,
     required this.showOperation,
     required this.closePlaylist,
+    this.width = 400,
+    this.borderRadiusGeometry = const BorderRadius.only(
+      topRight: Radius.circular(20),
+      bottomRight: Radius.circular(20),
+    ),
+    this.background = true,
+    this.reordable = true
   });
 
   @override
@@ -134,7 +145,8 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
       final searchLower = query.toLowerCase().replaceAll(" ", "").trim();
       if (track.title
           .toLowerCase()
-          .replaceAll(RegExp(r'\s+'), '').replaceAll(" ", "")
+          .replaceAll(RegExp(r'\s+'), '')
+          .replaceAll(" ", "")
           .contains(searchLower)) {
         return true;
       }
@@ -143,7 +155,8 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
         final artistTitle = artist;
         if (artistTitle
             .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), '').replaceAll(" ", "")
+            .replaceAll(RegExp(r'\s+'), '')
+            .replaceAll(" ", "")
             .contains(searchLower)) {
           return true;
         }
@@ -153,7 +166,8 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
         final albumtitle = album;
         if (albumtitle
             .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), '').replaceAll(" ", "")
+            .replaceAll(RegExp(r'\s+'), '')
+            .replaceAll(" ", "")
             .contains(searchLower)) {
           return true;
         }
@@ -320,76 +334,74 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
           }
         },
         child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            topRight: Radius.circular(20),
-            bottomRight: Radius.circular(20),
-          ),
+          borderRadius: widget.borderRadiusGeometry,
           child: Stack(
             children: [
-              AnimatedSwitcher(
-                duration: Duration(
-                  milliseconds:
-                      (750 * DatabaseStreamerService().transitionSpeed.value)
-                          .round(),
-                ),
-                transitionBuilder: (child, animation) =>
-                    FadeTransition(opacity: animation, child: child),
-                layoutBuilder: (currentChild, previousChildren) => SizedBox(
-                  width: 400,
-                  height: MediaQuery.of(context).size.height,
-                  child: Stack(
-                    fit: StackFit.loose,
-                    children: [
-                      ...previousChildren,
-                      if (currentChild != null) currentChild,
-                    ],
+              if (widget.background)
+                AnimatedSwitcher(
+                  duration: Duration(
+                    milliseconds:
+                        (750 * DatabaseStreamerService().transitionSpeed.value)
+                            .round(),
                   ),
-                ),
-                child: SizedBox(
-                  key: ValueKey(Player.player.nowPlayingTrack.filepath),
-                  width: 400,
-                  height: MediaQuery.of(context).size.height,
-                  child: OverflowBox(
-                    maxWidth: MediaQuery.of(context).size.width,
-                    maxHeight: MediaQuery.of(context).size.height,
-                    alignment: Alignment.centerLeft,
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(
-                        Colors.black.withOpacity(0.5),
-                        BlendMode.darken,
+                  transitionBuilder: (child, animation) =>
+                      FadeTransition(opacity: animation, child: child),
+                  layoutBuilder: (currentChild, previousChildren) => SizedBox(
+                    width: 400,
+                    height: MediaQuery.of(context).size.height,
+                    child: Stack(
+                      fit: StackFit.loose,
+                      children: [
+                        ...previousChildren,
+                        if (currentChild != null) currentChild,
+                      ],
+                    ),
+                  ),
+                  child: SizedBox(
+                    key: ValueKey(Player.player.nowPlayingTrack.filepath),
+                    width: widget.width,
+                    height: MediaQuery.of(context).size.height,
+                    child: OverflowBox(
+                      maxWidth: MediaQuery.of(context).size.width,
+                      maxHeight: MediaQuery.of(context).size.height,
+                      alignment: Alignment.centerLeft,
+                      child: ColorFiltered(
+                        colorFilter: ColorFilter.mode(
+                          Colors.black.withOpacity(0.5),
+                          BlendMode.darken,
+                        ),
+                        child:
+                            (Player.player.nowPlayingTrack is LocalTrack &&
+                                !listEquals(
+                                  Player.player.nowPlayingTrack.coverByted,
+                                  Uint8List(0),
+                                ))
+                            ? CachedBlurredImageFromBytes(
+                                key: ValueKey(
+                                  Player.player.nowPlayingTrack.filepath,
+                                ),
+                                bytes: Player.player.nowPlayingTrack.coverByted,
+                                width: MediaQuery.of(context).size.width,
+                                height: MediaQuery.of(context).size.height,
+                                fit: BoxFit.cover,
+                              )
+                            : CachedBlurredNetworkImage(
+                                key: ValueKey(
+                                  Player.player.nowPlayingTrack.cover,
+                                ),
+                                coverUri:
+                                    'https://${Player.player.nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
+                                width: MediaQuery.of(context).size.width,
+                                height: MediaQuery.of(context).size.height,
+                                fit: BoxFit.cover,
+                              ),
                       ),
-                      child:
-                          (Player.player.nowPlayingTrack is LocalTrack &&
-                              !listEquals(
-                                Player.player.nowPlayingTrack.coverByted,
-                                Uint8List(0),
-                              ))
-                          ? CachedBlurredImageFromBytes(
-                              key: ValueKey(
-                                Player.player.nowPlayingTrack.filepath,
-                              ),
-                              bytes: Player.player.nowPlayingTrack.coverByted,
-                              width: MediaQuery.of(context).size.width,
-                              height: MediaQuery.of(context).size.height,
-                              fit: BoxFit.cover,
-                            )
-                          : CachedBlurredNetworkImage(
-                              key: ValueKey(
-                                Player.player.nowPlayingTrack.cover,
-                              ),
-                              coverUri:
-                                  'https://${Player.player.nowPlayingTrack.cover.replaceAll('%%', '300x300')}',
-                              width: MediaQuery.of(context).size.width,
-                              height: MediaQuery.of(context).size.height,
-                              fit: BoxFit.cover,
-                            ),
                     ),
                   ),
                 ),
-              ),
 
               Container(
-                width: 400,
+                width: widget.width,
                 height: MediaQuery.of(context).size.height,
                 decoration: overlayBoxDecoration(),
                 child: Stack(
@@ -437,7 +449,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                 List<Widget> widgets = [
                                   ReorderableDragStartListener(
                                     index: index,
-                                    enabled: _searchController.text.isEmpty,
+                                    enabled: _searchController.text.isEmpty && widget.reordable,
                                     child: PlaylistTileWidget(
                                       index: index,
                                       queued: false,
@@ -542,7 +554,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                               return ReorderableDragStartListener(
                                 key: mainKey,
                                 index: index,
-                                enabled: _searchController.text.isEmpty,
+                                enabled: _searchController.text.isEmpty && widget.reordable,
                                 child: PlaylistTileWidget(
                                   queued: false,
                                   index: index,

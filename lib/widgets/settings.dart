@@ -176,8 +176,8 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
     }
   }
 
-  void restoreDefaults() async {
-    await DatabaseStreamerService().reload();
+  Future<void> restoreDefaults() async {
+    await DatabaseStreamerService().reset();
   }
 
   void setIndicator(bool value) async {
@@ -344,14 +344,14 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () {
+                onTap: () async {
                   if (clicks < 2) {
                     setState(() {
                       restoreText = 'Again';
                       clicks += 1;
                     });
                   } else {
-                    restoreDefaults();
+                    await restoreDefaults();
                     setState(() {
                       restoreText = 'Restore';
                       clicks = 0;
@@ -538,6 +538,32 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
             ButtonPosition.center,
           ),
           SizedBox(height: 1),
+          ValueListenableBuilder(
+            valueListenable:
+                DatabaseStreamerService().originalImageSizeForCoverView,
+            builder: (context, originalSize, child) {
+              return button(
+                'Original cover size',
+                'When viewing an enlarged cover, it will be at its maximum size instead of the standard 1000x1000.',
+                Switch(
+                  value: originalSize,
+                  activeTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+                  inactiveThumbColor: Colors.grey[300],
+                  inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
+                  // activeThumbColor: Colors.white,
+                  onChanged: (a) {
+                    DatabaseStreamerService().originalImageSizeForCoverView.value = a;
+                  },
+                ),
+                maxWidth,
+                rightPadding,
+                ButtonPosition.start,
+              );
+            },
+          ),
+
+          SizedBox(height: 1),
+
           button(
             'Quality',
             "Quality of downloaded tracks.",

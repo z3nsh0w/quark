@@ -17,7 +17,6 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:animated_expand/animated_expand.dart';
 import 'package:interactive_slider/interactive_slider.dart';
 import 'package:quark/services/database/database.dart';
-import 'package:quark/services/database/database_engine.dart';
 import 'package:quark/services/dynamic_window_color_linux.dart';
 import 'package:quark/widgets/players_widgets/slider_widget.dart';
 
@@ -35,7 +34,6 @@ import '../../services/player/net_player.dart';
 import '../../services/yandex_music_singleton.dart';
 import '../yandex_music_integration/yandex_widgets.dart';
 import '../yandex_music_integration/lyrics_playlist_extension.dart';
-import '../yandex_music_integration/my_wave_playlist_extension.dart';
 
 class MainPlayer extends StatefulWidget {
   const MainPlayer({super.key});
@@ -254,7 +252,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                           : CachedImage(
                                               borderRadius: 15,
                                               coverUri:
-                                                  'https://${nowPlayingTrack.cover.replaceAll('%%', '1000x1000')}',
+                                                  'https://${nowPlayingTrack.cover.replaceAll('%%', DatabaseStreamerService().originalImageSizeForCoverView.value ? 'orig' : "1000x1000")}',
                                               height: 270,
                                               width: 270,
                                             ),
@@ -1235,7 +1233,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
             //       ),
             //     ),
             //   ),
-            if (isPlaylistOpened)
+            if (isPlaylistOpened && Player.player.nowPlayingTrack is YandexMusicTrack)
               Positioned(
                 left: 0,
                 top: 50,

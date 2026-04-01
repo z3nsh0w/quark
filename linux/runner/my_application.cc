@@ -39,8 +39,8 @@ static void update_app_styles(MyApplication *self)
         border: none;
         box-shadow: none;
       }
-      headerbar > box.left, 
-      headerbar > box.right, 
+      headerbar > box.left,
+      headerbar > box.right,
       headerbar > box.center {
           min-height: %dpx;
           padding: 0;

@@ -43,6 +43,11 @@ abstract class DynamicWindowColor {
     List<Color> colors, {
     double? transitionSpeed,
   }) async {
+    if (!DatabaseStreamerService().dynamicWindowColor.value ||
+        !Platform.isLinux ||
+        !_inited) {
+      return;
+    }
     if (listEquals(nowColor, colors)) {
       return;
     }
@@ -50,7 +55,6 @@ abstract class DynamicWindowColor {
     // R2 G2 B2 - Center
     // R3 G3 B3 - Right
     // TODO: support for an unlimited number of colors.
-    // TODO: support for changing transition speed
     if (colors.isEmpty) {
       return;
     }
@@ -98,7 +102,7 @@ abstract class DynamicWindowColor {
     }
 
     await _channel.invokeMethod('setHeaderWidth', {
-      "height": size == WindowSize.small ? 2 : 28,
+      "height": size == WindowSize.small ? 2 : 2,
     });
     Logger("DWC").fine("Sended");
   }

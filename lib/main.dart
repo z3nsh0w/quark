@@ -38,6 +38,7 @@ void main() async {
   AudioServiceMpris.registerWith();
   DatabaseStreamerService().init();
   DynamicWindowColor.init();
+
   runApp(const Quark());
 }
 

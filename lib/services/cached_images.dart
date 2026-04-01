@@ -13,7 +13,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:image/image.dart' as img;
-import 'package:quark/services/database/database.dart';
 import 'package:quark/services/files.dart';
 
 class ImageBlurService {
@@ -243,7 +242,7 @@ class _CachedBlurredNetworkImageState extends State<CachedBlurredNetworkImage> {
           );
         }
 
-        if (snapshot.hasError) {
+        if (snapshot.hasError || widget.coverUri == "https://none" || widget.coverUri == "none" || snapshot.connectionState == ConnectionState.waiting) {
           return Container(
             decoration: BoxDecoration(
               color: widget.backgroundColor.withAlpha(widget.alphaChannel),
@@ -251,15 +250,6 @@ class _CachedBlurredNetworkImageState extends State<CachedBlurredNetworkImage> {
             ),
             width: 300,
             height: 300,
-          );
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return SizedBox(
-            width: 300,
-            height: 300,
-            child: CircularProgressIndicator(
-              color: const Color.fromARGB(100, 255, 255, 255),
-            ),
           );
         }
         return SizedBox(width: widget.width, height: widget.height);
@@ -327,7 +317,7 @@ class _CachedBlurredImageFromBytesState
             child: Image.memory(snapshot.data!, fit: widget.fit),
           );
         }
-        if (snapshot.hasError || snapshot.data == null) {
+        if (snapshot.hasError || snapshot.data == null || snapshot.connectionState == ConnectionState.waiting) {
           return Container(
             decoration: BoxDecoration(
               color: widget.backgroundColor.withAlpha(widget.alphaChannel),
@@ -335,15 +325,6 @@ class _CachedBlurredImageFromBytesState
             ),
             width: 300,
             height: 300,
-          );
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return SizedBox(
-            width: 300,
-            height: 300,
-            child: CircularProgressIndicator(
-              color: const Color.fromARGB(100, 255, 255, 255),
-            ),
           );
         }
         return SizedBox(width: widget.width, height: widget.height);
