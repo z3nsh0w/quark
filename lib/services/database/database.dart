@@ -47,6 +47,8 @@ class DatabaseStreamerService {
   final logListenedTracks = ValueNotifier<bool>(false);
   final dynamicWindowColor = ValueNotifier<bool>(true);
   final originalImageSizeForCoverView = ValueNotifier<bool>(false);
+  final playerBackend = ValueNotifier<String>('standart');
+  final justAudioPrefetch = ValueNotifier<bool>(false);
   late final Listenable all = Listenable.merge([
     volume,
     stateIndicator,
@@ -67,37 +69,41 @@ class DatabaseStreamerService {
     yandexMusicDisplayName,
     yandexMusicUid,
     yandexMusicEmail,
+    playerBackend,
+    justAudioPrefetch,
     dynamicWindowColor,
-    originalImageSizeForCoverView
+    originalImageSizeForCoverView,
   ]);
 
   Future<void> reload() async {
     final lp = await Database.get(DatabaseKeys.lastPlaylist.value);
     lastPlaylist.value = lp;
-    final v = await Database.get(DatabaseKeys.volume.value);
-    final s = await Database.get(DatabaseKeys.stateIndicatorState.value);
-    final poa = await Database.get(DatabaseKeys.playlistOpeningArea.value);
-    final ymt = await Database.get(DatabaseKeys.yandexMusicToken.value);
-    final ts = await Database.get(DatabaseKeys.transitionSpeed.value);
-    final yms = await Database.get(DatabaseKeys.yandexMusicSearch.value);
-    final ymq = await Database.get(DatabaseKeys.yandexMusicTrackQuality.value);
-    final rfs = await Database.get(DatabaseKeys.recursiveFilesAdding.value);
-    final ymp = await Database.get(DatabaseKeys.yandexMusicPreload.value);
-    final lt = await Database.get(DatabaseKeys.lastTrack.value);
-    final yml = await Database.get(DatabaseKeys.yandexMusicLogin.value);
-    final ymfn = await Database.get(DatabaseKeys.yandexMusicFullName.value);
-    final ymdn = await Database.get(DatabaseKeys.yandexMusicDisplayName.value);
+    final v =     await Database.get(DatabaseKeys.volume.value);
+    final s =     await Database.get(DatabaseKeys.stateIndicatorState.value);
+    final poa =   await Database.get(DatabaseKeys.playlistOpeningArea.value);
+    final ymt =   await Database.get(DatabaseKeys.yandexMusicToken.value);
+    final ts =    await Database.get(DatabaseKeys.transitionSpeed.value);
+    final yms =   await Database.get(DatabaseKeys.yandexMusicSearch.value);
+    final ymq =   await Database.get(DatabaseKeys.yandexMusicTrackQuality.value);
+    final rfs =   await Database.get(DatabaseKeys.recursiveFilesAdding.value);
+    final ymp =   await Database.get(DatabaseKeys.yandexMusicPreload.value);
+    final lt =    await Database.get(DatabaseKeys.lastTrack.value);
+    final yml =   await Database.get(DatabaseKeys.yandexMusicLogin.value);
+    final ymfn =  await Database.get(DatabaseKeys.yandexMusicFullName.value);
+    final ymdn =  await Database.get(DatabaseKeys.yandexMusicDisplayName.value);
     final ymuid = await Database.get(DatabaseKeys.yandexMusicUid.value);
-    final yme = await Database.get(DatabaseKeys.yandexMusicEmail.value);
-    final tE = await Database.get(DatabaseKeys.yandexMusicTokenExpires.value);
-    final gm = await Database.get(DatabaseKeys.gradientMode.value);
-    final lps = await Database.get(DatabaseKeys.lastPlaylistState.value);
-    final ymp2 = await Database.get(DatabaseKeys.yandexMusicPlaylists.value);
-    final wm = await Database.get(DatabaseKeys.windowManager.value);
-    final llt = await Database.get(DatabaseKeys.logListenedTracks.value);
-    final ltp = await Database.get(DatabaseKeys.lastTrackPosition.value);
-    final dwc = await Database.get(DatabaseKeys.dynamicWindowColor.value);
+    final yme =   await Database.get(DatabaseKeys.yandexMusicEmail.value);
+    final tE =    await Database.get(DatabaseKeys.yandexMusicTokenExpires.value);
+    final gm =    await Database.get(DatabaseKeys.gradientMode.value);
+    final lps =   await Database.get(DatabaseKeys.lastPlaylistState.value);
+    final ymp2 =  await Database.get(DatabaseKeys.yandexMusicPlaylists.value);
+    final wm =    await Database.get(DatabaseKeys.windowManager.value);
+    final llt =   await Database.get(DatabaseKeys.logListenedTracks.value);
+    final ltp =   await Database.get(DatabaseKeys.lastTrackPosition.value);
+    final dwc =   await Database.get(DatabaseKeys.dynamicWindowColor.value);
     final oisfc = await Database.get(DatabaseKeys.originalImageSizeCoverView.value);
+    final pb =    await Database.get(DatabaseKeys.playerBackend.value);
+    final jp =    await Database.get(DatabaseKeys.justAudioPrefetch.value);
 
     gradientMode.value = gm ?? false;
     lastPlaylistState.value = lps ?? false;
@@ -123,6 +129,8 @@ class DatabaseStreamerService {
     lastTrackPosition.value = ltp ?? 0;
     dynamicWindowColor.value = dwc ?? true;
     originalImageSizeForCoverView.value = oisfc ?? false;
+    playerBackend.value = pb ?? "standart";
+    justAudioPrefetch.value = jp ?? false;
     await Player.player.setVolume(volume.value);
   }
 
@@ -168,7 +176,10 @@ class DatabaseStreamerService {
     bind(yandexMusicEmail, DatabaseKeys.yandexMusicEmail);
     bind(lastTrackPosition, DatabaseKeys.lastTrackPosition);
     bind(dynamicWindowColor, DatabaseKeys.dynamicWindowColor);
-    bind(originalImageSizeForCoverView, DatabaseKeys.originalImageSizeCoverView);
+    bind(
+      originalImageSizeForCoverView,
+      DatabaseKeys.originalImageSizeCoverView,
+    );
   }
 
   void _attachListeners() {

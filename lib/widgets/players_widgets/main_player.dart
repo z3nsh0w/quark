@@ -1074,23 +1074,15 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                         Row(
                                           children: [
                                             animatedExpandButton(() async {
-                                              double speed = player
-                                                  .playerInstance
-                                                  .playbackRate;
-                                              await player.playerInstance
-                                                  .setPlaybackRate(
-                                                    speed -= 0.2,
-                                                  );
+                                              double speed = player.speed;
+                                              await player.setSpeed(
+                                                speed -= 0.2,
+                                              );
                                               setState(() {});
                                             }, Symbols.speed_0_75),
                                             animatedExpandButton(() async {
-                                              double speed = player
-                                                  .playerInstance
-                                                  .playbackRate;
-                                              await player.playerInstance
-                                                  .setPlaybackRate(
-                                                    speed += 0.2,
-                                                  );
+                                              double speed = player.speed;
+                                              await player.setSpeed(speed += 0.2);
                                               setState(() {});
                                             }, Symbols.speed_1_2),
                                           ],
@@ -1233,7 +1225,8 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
             //       ),
             //     ),
             //   ),
-            if (isPlaylistOpened && Player.player.nowPlayingTrack is YandexMusicTrack)
+            if (isPlaylistOpened &&
+                Player.player.nowPlayingTrack is YandexMusicTrack)
               Positioned(
                 left: 0,
                 top: 50,

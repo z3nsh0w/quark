@@ -144,6 +144,7 @@ class _MainPageState extends State<MainPage> {
     await Player.player.stop();
     Player.player.isPlaying = false;
     await Player.player.playCustom(trackToPlay);
+    await Player.player.pause();
     if (foundTrack != null) {
       if (Duration(seconds: DatabaseStreamerService().lastTrackPosition.value) <
           Player.player.durationNotifier.value) {

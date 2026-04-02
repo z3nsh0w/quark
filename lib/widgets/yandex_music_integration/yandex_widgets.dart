@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quark/objects/track.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:quark/services/player/net_player.dart';
 import '../../services/yandex_music_singleton.dart';
 import 'package:quark/services/cached_images.dart';
 import 'package:quark/services/player/player.dart';
@@ -1466,6 +1467,7 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                     ),
                   ),
                 ],
+                const SizedBox(width: 5),
                 Tooltip(
                   message: "Export to folder",
                   child: ClipOval(
@@ -1491,6 +1493,66 @@ class _PlaylistInfo extends State<PlaylistInfoWidget> {
                           width: 40,
                           child: Icon(
                             Symbols.download,
+                            color: Colors.white,
+                            size: 21,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Tooltip(
+                  message: "Export to folder",
+                  child: ClipOval(
+                    child: Material(
+                      color: playlistColor.withOpacity(0.2),
+                      child: InkWell(
+                        onTap: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Caching playlist... Please wait.'),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: Color.alphaBlend(
+                                Colors.black.withOpacity(0.6),
+                                playlistColor,
+                              ),
+
+                              behavior: SnackBarBehavior.fixed,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          );
+                          await NetConductor().cacheFiles(
+                            playlist.tracks
+                                .map(
+                                  (e) =>
+                                      YandexMusicTrack.fromYMToPlayerTrack(e),
+                                )
+                                .toList(),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Playlist was sucessfully cached.'),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: Color.alphaBlend(
+                                Colors.black.withOpacity(0.6),
+                                playlistColor,
+                              ),
+
+                              behavior: SnackBarBehavior.fixed,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          );
+                        },
+                        child: SizedBox(
+                          height: 40,
+                          width: 40,
+                          child: Icon(
+                            Symbols.cached,
                             color: Colors.white,
                             size: 21,
                           ),
@@ -2689,7 +2751,9 @@ class _AlbumInfoWidget extends State<AlbumInfoWidget> {
                       if (album.tracks.length > 1) ...[
                         for (List<Track> tracks in album.tracks) ...[
                           Padding(
-                            padding: EdgeInsets.symmetric(horizontal: Platform.isAndroid ? 12 : 24),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: Platform.isAndroid ? 12 : 24,
+                            ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [

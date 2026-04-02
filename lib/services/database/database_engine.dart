@@ -23,6 +23,8 @@ enum DatabaseKeys {
   dynamicWindowColor('dynamic_window_color'),
   backgroundBlurRadius('background_blur_radius'),
   originalImageSizeCoverView('original_image_size_cover_view'),
+  playerBackend('player_backend'),
+  justAudioPrefetch('just_audio_player_prefetch'),
 
   /// ```Boolean```
   /// recursiveFilesAdding

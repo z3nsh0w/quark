@@ -3,10 +3,12 @@ import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
+import 'package:logging/logging.dart';
 import 'package:quark/objects/playlist.dart';
 import 'package:quark/objects/track.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:quark/services/dynamic_window_color_linux.dart';
+import 'package:just_audio/just_audio.dart' as just_audio;
 
 // TODO: LOW LATENCY TRACK CHANGE
 
@@ -59,6 +61,255 @@ class PlaylistInfo {
   }
 }
 
+enum PlayerBackend {
+  /// AudioPlayers package ll be used
+  standart,
+  justAudio,
+  justAudioMediaKit,
+  justAudioVlc,
+}
+
+class _PlayerEngine {
+  _PlayerEngine._internal();
+  factory _PlayerEngine() => _instance;
+  static final _PlayerEngine _instance = _PlayerEngine._internal();
+
+  late PlayerBackend playerBackend;
+
+  just_audio.AudioPlayer? justAudioPlayer;
+  AudioPlayer? audioPlayersPlayer;
+
+  StreamSubscription? _onPlayedChanged;
+  StreamSubscription? _onDurationChanged;
+  StreamSubscription? _onCompleteSubscription;
+
+  Future<void> init({
+    PlayerBackend playerBackend2 = PlayerBackend.standart,
+  }) async {
+    playerBackend = playerBackend2;
+    switch (playerBackend) {
+      case PlayerBackend.justAudio:
+        justAudioPlayer = just_audio.AudioPlayer();
+      case PlayerBackend.justAudioMediaKit:
+        JustAudioMediaKit.ensureInitialized();
+        JustAudioMediaKit.pitch = true;
+        justAudioPlayer = just_audio.AudioPlayer();
+      case PlayerBackend.justAudioVlc:
+        justAudioPlayer = just_audio.AudioPlayer();
+      default:
+        audioPlayersPlayer = AudioPlayer();
+    }
+  }
+
+  Future<void> play(String filePath) async {
+    try {
+      switch (playerBackend) {
+        case PlayerBackend.justAudioMediaKit:
+        case PlayerBackend.justAudioVlc:
+        case PlayerBackend.justAudio:
+          await justAudioPlayer!.setAudioSource(
+            just_audio.AudioSource.file(filePath),
+          );
+          await justAudioPlayer!.play();
+        default:
+          await audioPlayersPlayer!.play(DeviceFileSource(filePath));
+      }
+    } catch (e) {
+      Logger("PlayerEngine").warning("Failed to play an audiofile", e);
+    }
+  }
+
+  Future<void> playNet(String url) async {
+    try {
+      switch (playerBackend) {
+        case PlayerBackend.justAudioMediaKit:
+        case PlayerBackend.justAudioVlc:
+        case PlayerBackend.justAudio:
+          await justAudioPlayer!.setAudioSource(
+            just_audio.AudioSource.uri(Uri.parse(url)),
+          );
+          await justAudioPlayer!.play();
+        default:
+          await audioPlayersPlayer!.play(UrlSource(url));
+      }
+    } catch (e) {
+      Logger("PlayerEngine").warning("Failed to play an networkSource", e);
+    }
+  }
+
+  Future<void> stop() async {
+    try {
+      switch (playerBackend) {
+        case PlayerBackend.justAudioMediaKit:
+        case PlayerBackend.justAudioVlc:
+        case PlayerBackend.justAudio:
+          await justAudioPlayer!.stop();
+        default:
+          await audioPlayersPlayer!.stop();
+      }
+    } catch (e) {
+      Logger("PlayerEngine").warning("Failed to play an networkSource", e);
+    }
+  }
+
+  // Future<void> playPause(bool play) async {
+  //   try {
+  //     switch (playerBackend) {
+  //       case PlayerBackend.justAudioMediaKit:
+  //       case PlayerBackend.justAudioVlc:
+  //       case PlayerBackend.justAudio:
+  //         if (play) await justAudioPlayer!.pause();
+  //         if (!play) await justAudioPlayer!.play();
+  //       default:
+  //         if (play) await audioPlayersPlayer!.pause();
+  //         if (!play) await audioPlayersPlayer!.resume();
+  //     }
+  //   } catch (e) {
+  //     Logger("PlayerEngine").warning("Failed to play an networkSource", e);
+  //   }
+  // }
+
+  Future<void> resume() async {
+    try {
+      switch (playerBackend) {
+        case PlayerBackend.justAudioMediaKit:
+        case PlayerBackend.justAudioVlc:
+        case PlayerBackend.justAudio:
+          await justAudioPlayer!.play();
+        default:
+          await audioPlayersPlayer!.resume();
+      }
+    } catch (e) {
+      Logger("PlayerEngine").warning("Failed to play an networkSource", e);
+    }
+  }
+
+  Future<void> pause() async {
+    try {
+      switch (playerBackend) {
+        case PlayerBackend.justAudioMediaKit:
+        case PlayerBackend.justAudioVlc:
+        case PlayerBackend.justAudio:
+          await justAudioPlayer!.pause();
+        default:
+          await audioPlayersPlayer!.pause();
+      }
+    } catch (e) {
+      Logger("PlayerEngine").warning("Failed to play an networkSource", e);
+    }
+  }
+
+  Future<void> setupListeners(
+    void Function(void) onComplete,
+    void Function(Duration) onDuration,
+    void Function(Duration) onPlayed,
+  ) async {
+    switch (playerBackend) {
+      case PlayerBackend.justAudioMediaKit:
+      case PlayerBackend.justAudioVlc:
+      case PlayerBackend.justAudio:
+        await _onCompleteSubscription?.cancel();
+        await _onDurationChanged?.cancel();
+        await _onPlayedChanged?.cancel();
+
+        _onCompleteSubscription = justAudioPlayer!.playerStateStream
+            .where(
+              (state) =>
+                  state.processingState == just_audio.ProcessingState.completed,
+            )
+            .listen((_) => onComplete(null));
+
+        _onDurationChanged = justAudioPlayer!.durationStream
+            .where((d) => d != null)
+            .cast<Duration>()
+            .listen(onDuration);
+        justAudioPlayer!.currentIndexStream
+            .where((index) => index != null)
+            .distinct()
+            .listen((index) async {
+              if (index! > 0) {
+                await justAudioPlayer!.removeAudioSourceAt(0);
+                onComplete(null);
+              }
+            });
+        _onPlayedChanged = justAudioPlayer!.positionStream.listen(onPlayed);
+
+      default:
+        await _onCompleteSubscription?.cancel();
+        await _onDurationChanged?.cancel();
+        await _onPlayedChanged?.cancel();
+        _onCompleteSubscription = audioPlayersPlayer!.onPlayerComplete.listen(
+          onComplete,
+        );
+        _onDurationChanged = audioPlayersPlayer!.onDurationChanged.listen(
+          onDuration,
+        );
+        _onPlayedChanged = audioPlayersPlayer!.onPositionChanged.listen(
+          onPlayed,
+        );
+    }
+  }
+
+  Future<void> seek(Duration duration) async {
+    switch (playerBackend) {
+      case PlayerBackend.justAudioMediaKit:
+      case PlayerBackend.justAudioVlc:
+      case PlayerBackend.justAudio:
+        await justAudioPlayer!.seek(duration);
+      default:
+        await audioPlayersPlayer!.seek(duration);
+    }
+  }
+
+  Future<void> setVolume(double volume) async {
+    switch (playerBackend) {
+      case PlayerBackend.justAudioMediaKit:
+      case PlayerBackend.justAudioVlc:
+      case PlayerBackend.justAudio:
+        await justAudioPlayer!.setVolume(volume);
+      default:
+        await audioPlayersPlayer!.setVolume(volume);
+    }
+  }
+
+  Future<void> setSpeed(double speed) async {
+    switch (playerBackend) {
+      case PlayerBackend.justAudioMediaKit:
+      case PlayerBackend.justAudioVlc:
+      case PlayerBackend.justAudio:
+        await justAudioPlayer!.setSpeed(speed);
+      default:
+        await audioPlayersPlayer!.setPlaybackRate(speed);
+    }
+  }
+
+  Future<void> precacheNext(String filepath) async {
+    switch (playerBackend) {
+      case PlayerBackend.justAudioMediaKit:
+      case PlayerBackend.justAudioVlc:
+      case PlayerBackend.justAudio:
+        await justAudioPlayer!.addAudioSource(
+          just_audio.AudioSource.file(filepath),
+        );
+      default:
+    }
+  }
+
+  Future<void> dispose() async {
+    switch (playerBackend) {
+      case PlayerBackend.justAudioMediaKit:
+      case PlayerBackend.justAudioVlc:
+      case PlayerBackend.justAudio:
+        await justAudioPlayer!.dispose();
+      default:
+        await audioPlayersPlayer!.dispose();
+    }
+    await _onCompleteSubscription?.cancel();
+    await _onDurationChanged?.cancel();
+    await _onPlayedChanged?.cancel();
+  }
+}
+
 /// A standalone player running in the background, independent of the stream UI
 class Player {
   // SINGLETON INTERNAL REALISATION
@@ -81,9 +332,6 @@ class Player {
   Player({required this.playlist, required this.nowPlayingTrack});
 
   // SETUP NOTIFIERS FOR UI LISTENERS
-  @Deprecated(
-    "Use trackChangeNotifier ```player.trackChangeNotifier.value.track```",
-  )
   final trackNotifier = ValueNotifier<PlayerTrack>(
     LocalTrack(title: '', filepath: '', artists: [], albums: []),
   );
@@ -112,10 +360,12 @@ class Player {
 
   final playerInstance = AudioPlayer();
 
+  double speed = 1.0;
+
   // AudioPlayer class listeners
-  StreamSubscription? _onPlayedChanged;
-  StreamSubscription? _onDurationChanged;
-  StreamSubscription? _onCompleteSubscription;
+  // StreamSubscription? _onPlayedChanged;
+  // StreamSubscription? _onDurationChanged;
+  // StreamSubscription? _onCompleteSubscription;
 
   bool isPlaying = false;
   bool isRepeat = false;
@@ -128,36 +378,51 @@ class Player {
   Queue<PlayerTrack> queue = Queue<PlayerTrack>.from([]);
   PlayerTrack? unQueuedLastTrack;
 
-  Future<void> init() async {
+  Future<void> init({PlayerBackend? backend}) async {
     playlistNotifier.value = playlist;
     unShuffledPlaylist = playlist;
-    setupListeners();
+    final engine = Platform.isAndroid
+        ? PlayerBackend.justAudio
+        : PlayerBackend.justAudioMediaKit;
+    await _PlayerEngine().init(playerBackend2: backend ?? engine);
+    await setupListeners();
   }
 
   void dispose() async {
-    await _onCompleteSubscription?.cancel();
-    await _onDurationChanged?.cancel();
-    await _onPlayedChanged?.cancel();
+    // await _onCompleteSubscription?.cancel();
+    // await _onDurationChanged?.cancel();
+    // await _onPlayedChanged?.cancel();
     await playerInstance.dispose();
   }
 
   Future<void> setupListeners() async {
-    await _onCompleteSubscription?.cancel();
-    await _onDurationChanged?.cancel();
-    await _onPlayedChanged?.cancel();
-    _onCompleteSubscription = playerInstance.onPlayerComplete.listen((
-      event,
-    ) async {
-      await playNext(completed: true);
-    });
+    _PlayerEngine().setupListeners(
+      (event) async {
+        await playNext(completed: true);
+      },
+      (event) {
+        durationNotifier.value = event;
+      },
+      (event) {
+        playedNotifier.value = event;
+      },
+    );
+    // await _onCompleteSubscription?.cancel();
+    // await _onDurationChanged?.cancel();
+    // await _onPlayedChanged?.cancel();
+    // _onCompleteSubscription = playerInstance.onPlayerComplete.listen((
+    //   event,
+    // ) async {
 
-    _onDurationChanged = playerInstance.onDurationChanged.listen((event) {
-      durationNotifier.value = event;
-    });
+    // });
 
-    _onPlayedChanged = playerInstance.onPositionChanged.listen((event) {
-      playedNotifier.value = event;
-    });
+    // _onDurationChanged = playerInstance.onDurationChanged.listen((event) {
+    //   durationNotifier.value = event;
+    // });
+
+    // _onPlayedChanged = playerInstance.onPositionChanged.listen((event) {
+    //   playedNotifier.value = event;
+    // });
   }
 
   Future<Duration> getPosition() async {
@@ -173,9 +438,17 @@ class Player {
   Future<void> _afterFn() async {
     if (Platform.isLinux) {
       // Fixing the bug where changing the source cause the maximum player's volume (1.0 instead previous value)
-      await playerInstance.setVolume(volumeNotifier.value);
-      await playerInstance.setPlaybackRate(playerInstance.playbackRate);
+      await _PlayerEngine().setVolume(volumeNotifier.value);
+      await _PlayerEngine().setSpeed(speed);
     }
+    int nowIndex = playlist.indexWhere((t) => t == nowPlayingTrack);
+    int nextIndex = (isRepeat)
+        ? nowIndex
+        : playlist.length - 1 != nowIndex
+        ? nowIndex + 1
+        : 0;
+    print(nextIndex);
+    await _PlayerEngine().precacheNext(playlist[nextIndex].filepath);
   }
 
   Future<void> playNext({bool? forceNext, bool? completed}) async {
@@ -232,10 +505,11 @@ class Player {
     if (!exists) {
       return;
     }
-    await playerInstance.setSource(DeviceFileSource(nowPlayingTrack.filepath));
-    if (isPlaying) {
-      await playerInstance.play(DeviceFileSource(nowPlayingTrack.filepath));
-    }
+    await _PlayerEngine().play(nowPlayingTrack.filepath);
+    // await playerInstance.setSource(DeviceFileSource(nowPlayingTrack.filepath));
+    // if (isPlaying) {
+    //   await playerInstance.play(DeviceFileSource(nowPlayingTrack.filepath));
+    // }
     await _afterFn();
   }
 
@@ -270,16 +544,16 @@ class Player {
   Future<void> playPause(bool play) async {
     playingNotifier.value = play;
     isPlaying = play ? true : false;
-    play ? await playerInstance.resume() : await playerInstance.pause();
+    play ? await _PlayerEngine().resume() : await _PlayerEngine().pause();
   }
 
   Future<void> setVolume(double volume) async {
     volumeNotifier.value = volume;
-    await playerInstance.setVolume(volume);
+    await _PlayerEngine().setVolume(volume);
   }
 
   Future<void> seek(Duration seek) async {
-    await playerInstance.seek(seek);
+    await _PlayerEngine().seek(seek);
   }
 
   Future<void> updatePlaylist(List<PlayerTrack> newPlaylist) async {
@@ -380,11 +654,9 @@ class Player {
       newTrack: nowPlayingTrack,
       reason: ChangeReason.external,
     );
-    await playerInstance.stop();
-    await playerInstance.setSource(UrlSource(link));
-    if (isPlaying) {
-      await playerInstance.play(UrlSource(link));
-    }
+
+    await _PlayerEngine().stop();
+    await _PlayerEngine().playNet(link);
     await _afterFn();
   }
 
@@ -483,18 +755,23 @@ class Player {
 
   Future<void> pause() async {
     playingNotifier.value = false;
-    await playerInstance.stop();
+    await _PlayerEngine().pause();
   }
 
   Future<void> resume() async {
     playingNotifier.value = true;
     isPlaying = true;
-    await playerInstance.resume();
+    await _PlayerEngine().resume();
   }
 
   Future<void> stop() async {
     playingNotifier.value = false;
     await playerInstance.stop();
+  }
+
+  Future<void> setSpeed(double sp) async {
+    speed = sp;
+    await _PlayerEngine().setSpeed(sp);
   }
 }
 

@@ -13,9 +13,7 @@ import 'package:interactive_slider/interactive_slider.dart';
 
 // Local components&modules
 import '../player_buttons.dart';
-import '/objects/playlist.dart';
 import '../../services/player/player.dart';
-import '../../services/database/database_engine.dart';
 
 class MiniPlayerWidget extends StatefulWidget {
 

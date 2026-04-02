@@ -1,12 +1,10 @@
 // Flutter packages
-import 'dart:io';
 import 'dart:ui';
 import 'dart:math';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path/path.dart' as path;
 import 'package:flutter/foundation.dart';
 import 'package:quark/objects/track.dart';
 import 'package:file_picker/file_picker.dart';
@@ -21,25 +19,20 @@ import 'package:quark/widgets/players_widgets/main_player.dart';
 import 'package:quark/widgets/players_widgets/slider_widget.dart';
 import 'package:quark/widgets/playlist/playlist_widget.dart';
 import 'package:quark/widgets/yandex_music_integration/yandex_widgets.dart';
-import 'package:yandex_music/yandex_music.dart';
 import 'package:quark/services/cached_images.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:animated_expand/animated_expand.dart';
-import 'package:interactive_slider/interactive_slider.dart';
 import 'package:material_symbols_icons/material_symbols_icons.dart';
 
 // Local components&modules
 import '../player_buttons.dart';
-import '/objects/playlist.dart';
 import '/widgets/settings.dart';
 import '/widgets/state_indicator.dart';
 import '../../services/player/player.dart';
 import '../../services/player/net_player.dart';
 
 class AndroidWidget extends StatefulWidget {
-  const AndroidWidget({
-    super.key,
-  });
+  const AndroidWidget({super.key});
 
   @override
   State<AndroidWidget> createState() => _PlaylistPage1State();
@@ -47,12 +40,8 @@ class AndroidWidget extends StatefulWidget {
 
 class _PlaylistPage1State extends State<AndroidWidget>
     with TickerProviderStateMixin {
-  String currentPosition = '0:00';
-  String totalSongDuration = '0:00';
-
   double volume = 0.7;
   double playerSpeed = 1;
-  double songProgress = 0.0;
   double playerPadding = 0.0;
   double transitionSpeed = 1;
   // The distance that will be between icons when animatedExpand is open
@@ -61,17 +50,11 @@ class _PlaylistPage1State extends State<AndroidWidget>
   bool isLiked = false;
   bool isPlaying = false;
   bool settingsView = false;
-  bool isSliderActive = true;
   bool stateIndicator = true;
   bool isRepeatEnable = false;
   bool isShuffleEnable = false;
   bool isPlaylistOpened = false;
-  bool isYandexUploading = false;
-  bool isCompact = false;
 
-  final log = Logger('PlaylistPage');
-
-  List<String> likedTracks = [];
   List<PlayerTrack> yandexUploadingTracks = [];
 
   /// Main playlist
@@ -100,8 +83,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
     255,
     255,
   ).withAlpha(170); // TODO: MAKE ACCENT COLORS AS SETTINGS
-  Color popupTextColor = Colors.white.withAlpha(220);
-  Color albumArtShadowColor = Color.fromARGB(255, 21, 21, 21);
 
   StateIndicatorOperation operation = StateIndicatorOperation.none;
 
@@ -129,13 +110,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
     }
   }
 
-  /// Forced animation playback
-  void playAnimation() async {
-    /// To play the animation, simply reassign the key variable.
-    setState(() {
-      animationInitiator = Uint8List(0);
-    });
-  }
 
   //
   //
@@ -252,60 +226,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
     coverAnimationController.forward();
   }
 
-  //
-  //
-  // Button's && Slider's functions
-  //
-  //
-
-  // void uploadTrack(PlayerTrack trackss) async {
-  //   // #TODO: make a button, by clicking which you can upload all tracks to Yandex music
-  //   setState(() {
-  //     yandexUploadingTracks.add(trackss);
-  //   });
-  //   try {
-  //     if (widget.playlist.kind == 0 ||
-  //         widget.playlist.source != PlaylistSource.yandexMusic) {
-  //       return;
-  //     }
-  //     final fileBytes = await File(trackss.filepath).readAsBytes();
-  //     String id = await widget.yandexMusic.usertracks.uploadUGCTrack(
-  //       widget.playlist.kind,
-  //       fileBytes,
-  //       path.basename(trackss.filepath),
-  //     );
-  //     List<Track> info = await widget.yandexMusic.tracks.getTracks([id]);
-  //     final String trackPath = await getTrackPath(id);
-  //     YandexMusicTrack track = YandexMusicTrack(
-  //       track: info[0],
-  //       title: info[0].title,
-  //       artists: info[0].artists.isNotEmpty
-  //           ? info[0].artists.map((album) => album.title).toList()
-  //           : ['Unknown artist'],
-  //       albums: info[0].albums.isNotEmpty
-  //           ? info[0].albums.map((album) => album.title).toList()
-  //           : ['Unknown album'],
-  //       filepath: trackPath,
-  //     );
-  //     track.cover = info[0].coverUri ?? track.cover;
-  //     final int index = isShuffleEnable
-  //         ? backupPlaylist.indexOf(trackss)
-  //         : currentPlaylist.indexOf(trackss);
-  //     currentPlaylist.remove(trackss);
-  //     backupPlaylist.remove(trackss);
-  //     currentPlaylist.insert(index, track);
-  //     backupPlaylist.insert(index, track);
-  //     await player.updatePlaylist(currentPlaylist);
-  //     if (trackss == nowPlayingTrack) {
-  //       await NetConductor().cacheFiles([track]);
-  //       await NetConductor().playYandex(track);
-  //     }
-  //   } catch (e) {
-  //     print('Failed to load local track to Yandex music. Error: $e');
-  //     showOperation(StateIndicatorOperation.error);
-  //   }
-  // }
-
   /// Reaction on animation edit buttons
   void setAnimationSpeed(double speed) async {
     setState(() {
@@ -337,7 +257,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
       stateIndicator = DatabaseStreamerService().stateIndicator.value;
     });
 
-    playAnimation();
     setAnimationSpeed(transitionSpeed);
   }
 
@@ -398,7 +317,7 @@ class _PlaylistPage1State extends State<AndroidWidget>
     nowPlayingTrack = player.nowPlayingTrack;
     isPlaying = player.isPlaying;
     volume = player.volumeNotifier.value;
-
+    NetConductor().init(player, YandexMusicSingleton.instance);
     // Controllers
 
     coverAnimationController = AnimationController(
@@ -478,9 +397,10 @@ class _PlaylistPage1State extends State<AndroidWidget>
 
   @override
   Widget build(BuildContext context) {
+    final Size screenSize =  MediaQuery.of(context).size;
+    final double availableWidth = screenSize.width - 48 - 0;
+    final double availableHeight = screenSize.height - 48;
 
-    // TODO: SPLIT WIDGETS
-print("1");
     return ClipRect(
       child: AnimatedSwitcher(
         duration: Duration(milliseconds: (750 * transitionSpeed).round()),
@@ -601,20 +521,29 @@ print("1");
                                                     ),
                                                 child: Image.memory(
                                                   nowPlayingTrack.coverByted,
-                                                  height: 350,
-                                                  width: 350,
+                                                  height: min(
+                                                    availableWidth,
+                                                    555,
+                                                  ),
+                                                  width: min(
+                                                    availableWidth,
+                                                    555,
+                                                  ),
                                                 ),
                                               )
                                             : CachedImage(
                                                 borderRadius: 10,
                                                 coverUri:
                                                     'https://${nowPlayingTrack.cover.replaceAll('%%', '600x600')}',
-                                                height: 370,
-                                                width: 370,
+                                                height: min(
+                                                  availableWidth,
+                                                  555,
+                                                ),
+                                                width: min(availableWidth, 555),
                                               ),
                                       ),
 
-                                      const SizedBox(height: 14),
+                                      const SizedBox(height: 19),
 
                                       InkWell(
                                         onTap:
@@ -684,95 +613,94 @@ print("1");
                                           nowPlayingTrack.albums.join(','),
                                           style: GoogleFonts.lexend(
                                             color: const Color.fromARGB(
-                                              200,
+                                              230,
                                               255,
                                               255,
                                               255,
                                             ),
-                                            fontSize: 15,
+                                            fontSize: 17,
                                             decoration: TextDecoration.none,
                                             fontWeight: FontWeight.w100,
                                           ),
                                         ),
                                       ),
+                                      const SizedBox(height: 5),
 
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                InkWell(
-                                                  onTap:
-                                                      (nowPlayingTrack
-                                                              is! YandexMusicTrack ||
-                                                          (nowPlayingTrack
-                                                                  as YandexMusicTrack)
-                                                              .track
-                                                              .artists
-                                                              .isEmpty ||
-                                                          (nowPlayingTrack
-                                                                      as YandexMusicTrack)
-                                                                  .track
-                                                                  .artists[0]
-                                                              is UGCArtist ||
-                                                          (nowPlayingTrack
-                                                                  as YandexMusicTrack)
-                                                              .track
-                                                              .albums
-                                                              .isEmpty)
-                                                      ? null
-                                                      : () async {
-                                                          final track =
-                                                              nowPlayingTrack
-                                                                  as YandexMusicTrack;
+                                      SizedBox(
+                                        width: availableWidth,
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  InkWell(
+                                                    onTap:
+                                                        (nowPlayingTrack
+                                                                is! YandexMusicTrack ||
+                                                            (nowPlayingTrack
+                                                                    as YandexMusicTrack)
+                                                                .track
+                                                                .artists
+                                                                .isEmpty ||
+                                                            (nowPlayingTrack
+                                                                        as YandexMusicTrack)
+                                                                    .track
+                                                                    .artists[0]
+                                                                is UGCArtist ||
+                                                            (nowPlayingTrack
+                                                                    as YandexMusicTrack)
+                                                                .track
+                                                                .albums
+                                                                .isEmpty)
+                                                        ? null
+                                                        : () async {
+                                                            final track =
+                                                                nowPlayingTrack
+                                                                    as YandexMusicTrack;
 
-                                                          try {
-                                                            showOperation(
-                                                              StateIndicatorOperation
-                                                                  .loading,
-                                                            );
+                                                            try {
+                                                              showOperation(
+                                                                StateIndicatorOperation
+                                                                    .loading,
+                                                              );
 
-                                                            final album =
-                                                                await YandexMusicSingleton.getAlbumInfo(
-                                                                  track
-                                                                      .track
-                                                                      .albums[0]
-                                                                      .id,
-                                                                );
-                                                            Navigator.push(
-                                                              context,
-                                                              CupertinoPageRoute(
-                                                                maintainState:
-                                                                    false,
+                                                              final album =
+                                                                  await YandexMusicSingleton.getAlbumInfo(
+                                                                    track
+                                                                        .track
+                                                                        .albums[0]
+                                                                        .id,
+                                                                  );
+                                                              Navigator.push(
+                                                                context,
+                                                                CupertinoPageRoute(
+                                                                  maintainState:
+                                                                      false,
 
-                                                                builder: (builder) =>
-                                                                    AlbumInfoWidget(
-                                                                      album:
-                                                                          album,
-                                                                    ),
-                                                              ),
-                                                            );
-                                                          } catch (e) {
-                                                            showOperation(
-                                                              StateIndicatorOperation
-                                                                  .error,
-                                                            );
-                                                            Logger(
-                                                              'MainPlayer',
-                                                            ).warning(
-                                                              "Failed to get album info. ID: ${track.track.albums[0].id}",
-                                                              e,
-                                                            );
-                                                          }
-                                                        },
-                                                  child: Container(
-                                                    padding:
-                                                        EdgeInsetsGeometry.only(
-                                                          left: 30,
-                                                        ),
-                                                    height: 35,
+                                                                  builder:
+                                                                      (
+                                                                        builder,
+                                                                      ) => AlbumInfoWidget(
+                                                                        album:
+                                                                            album,
+                                                                      ),
+                                                                ),
+                                                              );
+                                                            } catch (e) {
+                                                              showOperation(
+                                                                StateIndicatorOperation
+                                                                    .error,
+                                                              );
+                                                              Logger(
+                                                                'MainPlayer',
+                                                              ).warning(
+                                                                "Failed to get album info. ID: ${track.track.albums[0].id}",
+                                                                e,
+                                                              );
+                                                            }
+                                                          },
                                                     child: Text(
                                                       key:
                                                           ValueKey<PlayerTrack>(
@@ -791,103 +719,101 @@ print("1");
                                                       ),
                                                     ),
                                                   ),
-                                                ),
 
-                                                InkWell(
-                                                  onTap:
-                                                      (nowPlayingTrack
-                                                              is! YandexMusicTrack ||
-                                                          (nowPlayingTrack
-                                                                      as YandexMusicTrack)
-                                                                  .track
-                                                                  .trackSource ==
-                                                              TrackSource.UGC ||
-                                                          (nowPlayingTrack
-                                                                      as YandexMusicTrack)
-                                                                  .track
-                                                                  .artists[0]
-                                                              is UGCArtist)
-                                                      ? null
-                                                      : () async {
-                                                          final track =
-                                                              nowPlayingTrack
-                                                                  as YandexMusicTrack;
+                                                  InkWell(
+                                                    onTap:
+                                                        (nowPlayingTrack
+                                                                is! YandexMusicTrack ||
+                                                            (nowPlayingTrack
+                                                                        as YandexMusicTrack)
+                                                                    .track
+                                                                    .trackSource ==
+                                                                TrackSource
+                                                                    .UGC ||
+                                                            (nowPlayingTrack
+                                                                        as YandexMusicTrack)
+                                                                    .track
+                                                                    .artists[0]
+                                                                is UGCArtist)
+                                                        ? null
+                                                        : () async {
+                                                            final track =
+                                                                nowPlayingTrack
+                                                                    as YandexMusicTrack;
 
-                                                          int val = 0;
+                                                            int val = 0;
 
-                                                          if (track
-                                                                  .track
-                                                                  .artists
-                                                                  .length >
-                                                              1) {
-                                                            final value = await showDialog<int>(
-                                                              context: context,
-                                                              builder: (context) => WarningMessage(
-                                                                messageHeader:
-                                                                    'Choose an artist',
-                                                                messageDiscription:
-                                                                    '',
-                                                                buttons: track
+                                                            if (track
                                                                     .track
                                                                     .artists
-                                                                    .map(
-                                                                      (
-                                                                        toElement,
-                                                                      ) => toElement
-                                                                          .title,
-                                                                    )
-                                                                    .toList(),
-                                                              ),
-                                                            );
+                                                                    .length >
+                                                                1) {
+                                                              final value = await showDialog<int>(
+                                                                context:
+                                                                    context,
+                                                                builder: (context) => WarningMessage(
+                                                                  messageHeader:
+                                                                      'Choose an artist',
+                                                                  messageDiscription:
+                                                                      '',
+                                                                  buttons: track
+                                                                      .track
+                                                                      .artists
+                                                                      .map(
+                                                                        (
+                                                                          toElement,
+                                                                        ) => toElement
+                                                                            .title,
+                                                                      )
+                                                                      .toList(),
+                                                                ),
+                                                              );
 
-                                                            if (value == null)
-                                                              return;
-                                                            val = value;
-                                                          }
+                                                              if (value == null)
+                                                                return;
+                                                              val = value;
+                                                            }
 
-                                                          showOperation(
-                                                            StateIndicatorOperation
-                                                                .loading,
-                                                          );
-                                                          try {
-                                                            final artist =
-                                                                await YandexMusicSingleton.getArtistInfo(
-                                                                  (track.track.artists[val]
-                                                                          as OfficialArtist)
-                                                                      .id,
-                                                                );
-                                                            Navigator.push(
-                                                              context,
-                                                              CupertinoPageRoute(
-                                                                maintainState:
-                                                                    false,
-
-                                                                builder: (builder) =>
-                                                                    ArtistInfoWidget(
-                                                                      artist:
-                                                                          artist!,
-                                                                    ),
-                                                              ),
-                                                            );
-                                                          } catch (e) {
                                                             showOperation(
                                                               StateIndicatorOperation
-                                                                  .error,
+                                                                  .loading,
                                                             );
-                                                            Logger(
-                                                              'MainPlayer',
-                                                            ).warning(
-                                                              "Failed to get album info. ID: ${(track.track.artists[val] as OfficialArtist).id}",
-                                                              e,
-                                                            );
-                                                          }
-                                                        },
+                                                            try {
+                                                              final artist =
+                                                                  await YandexMusicSingleton.getArtistInfo(
+                                                                    (track.track.artists[val]
+                                                                            as OfficialArtist)
+                                                                        .id,
+                                                                  );
+                                                              Navigator.push(
+                                                                context,
+                                                                CupertinoPageRoute(
+                                                                  maintainState:
+                                                                      false,
 
-                                                  child: Container(
-                                                    padding:
-                                                        EdgeInsetsGeometry.only(
-                                                          left: 30,
-                                                        ),
+                                                                  builder:
+                                                                      (
+                                                                        builder,
+                                                                      ) => ArtistInfoWidget(
+                                                                        artist:
+                                                                            artist!,
+                                                                      ),
+                                                                ),
+                                                              );
+                                                            } catch (e) {
+                                                              showOperation(
+                                                                StateIndicatorOperation
+                                                                    .error,
+                                                              );
+                                                              Logger(
+                                                                'MainPlayer',
+                                                              ).warning(
+                                                                "Failed to get album info. ID: ${(track.track.artists[val] as OfficialArtist).id}",
+                                                                e,
+                                                              );
+                                                            }
+                                                          },
+
                                                     child: Text(
                                                       nowPlayingTrack
                                                               .artists
@@ -908,34 +834,34 @@ print("1");
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-
-                                          if (nowPlayingTrack
-                                              is YandexMusicTrack)
-                                            Padding(
-                                              padding: EdgeInsetsGeometry.only(
-                                                top: 30,
-                                                right: 30,
+                                                ],
                                               ),
-                                              child: functionPlayerButtonAndroid(
+                                            ),
+
+                                            if (nowPlayingTrack
+                                                is YandexMusicTrack)
+                                              functionPlayerButtonAndroid(
                                                 Icons.favorite_outlined,
                                                 Icons.favorite_outlined,
-                                                likedTracks.contains(
-                                                  (nowPlayingTrack
-                                                          as YandexMusicTrack)
-                                                      .track
-                                                      .id,
-                                                ),
-                                                () async =>
-                                                    likedTracks.contains(
+                                                YandexMusicSingleton
+                                                    .likedTracksNotifier
+                                                    .value
+                                                    .contains(
                                                       (nowPlayingTrack
                                                               as YandexMusicTrack)
                                                           .track
                                                           .id,
-                                                    )
+                                                    ),
+                                                () async =>
+                                                    YandexMusicSingleton
+                                                        .likedTracksNotifier
+                                                        .value
+                                                        .contains(
+                                                          (nowPlayingTrack
+                                                                  as YandexMusicTrack)
+                                                              .track
+                                                              .id,
+                                                        )
                                                     ? await YandexMusicSingleton.likeTrack(
                                                         (nowPlayingTrack
                                                                 as YandexMusicTrack)
@@ -949,41 +875,15 @@ print("1");
                                                             .id,
                                                       ),
                                               ),
-                                            ),
-
-                                          // if (nowPlayingTrack
-                                          //         is! YandexMusicTrack &&
-                                          //     Player.player.playlistInfo.source ==
-                                          //         PlaylistSource.yandexMusic &&
-                                          //     !yandexUploadingTracks.contains(
-                                          //       nowPlayingTrack,
-                                          //     ))
-                                          //   functionPlayerButtonAndroid(
-                                          //     Icons.cloud_upload,
-                                          //     Symbols.cloud_upload,
-                                          //     false,
-                                          //     () =>
-                                          //         uploadTrack(nowPlayingTrack),
-                                          //   ),
-                                          // if ((nowPlayingTrack
-                                          //             is! YandexMusicTrack &&
-                                          //         widget.playlist.source !=
-                                          //             PlaylistSource
-                                          //                 .yandexMusic) ||
-                                          //     (yandexUploadingTracks.contains(
-                                          //       nowPlayingTrack,
-                                          //     )))
-                                          //   const Spacer(),
-                                        ],
+                                          ],
+                                        ),
                                       ),
 
                                       SizedBox(height: 10),
 
                                       ProgressWidget(
                                         timings: true,
-                                        interactiveWidth:
-                                            MediaQuery.of(context).size.width -
-                                            100,
+                                        interactiveWidth: availableWidth - 60,
                                       ),
 
                                       Row(
@@ -1221,17 +1121,6 @@ print("1");
                   ),
                 ),
               ),
-
-              // Positioned(
-              //   child: PlaylistOverlay(
-              //     closePlaylist: () {},
-              //     width: MediaQuery.of(context).size.width,
-              //     showOperation: showOperation,
-              //     borderRadiusGeometry: const BorderRadius.all(
-              //       Radius.circular(15),
-              //     ),
-              //   ),
-              // ),
               if (stateIndicator)
                 Positioned(
                   top: 15,

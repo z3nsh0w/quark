@@ -30,7 +30,10 @@ class ApplicationCacheDirectory {
 }
 
 class Files {
-  Future<LocalTrack> _getTrackInfo(FileSystemEntity entity) async {
+  Future<LocalTrack> _getTrackInfo(
+    FileSystemEntity entity, {
+    Uint8List? customCover,
+  }) async {
     try {
       final tagsFromFile = readMetadata(File(entity.path), getImage: true);
 
@@ -38,6 +41,9 @@ class Files {
       Uint8List? cover = tagsFromFile.pictures.isNotEmpty
           ? tagsFromFile.pictures.first.bytes
           : null;
+      if (cover == null && customCover != null) {
+        cover = customCover;
+      }
 
       LocalTrack track = LocalTrack(
         title: trackName,
@@ -45,7 +51,6 @@ class Files {
         filepath: entity.path,
         albums: ['Unknown'],
       );
-
       track.coverByted = cover!;
 
       return track;
@@ -75,6 +80,16 @@ class Files {
     required bool recursiveEnable,
   }) async {
     final dir = Directory(path);
+    Uint8List? customCover;
+
+    await for (final entity in dir.list()) {
+      if (entity is File) {
+        if (entity.path.toLowerCase().endsWith("folder.jpg") ||
+            entity.path.toLowerCase().endsWith("cover.jpg")) {
+          customCover = await entity.readAsBytes();
+        }
+      }
+    }
 
     await for (final entity in dir.list()) {
       if (entity is File) {
@@ -87,7 +102,10 @@ class Files {
             entity.path.toLowerCase().endsWith('.alac') ||
             entity.path.toLowerCase().endsWith('.pcm') ||
             entity.path.toLowerCase().endsWith('.m4a')) {
-          final LocalTrack track = await _getTrackInfo(entity);
+          final LocalTrack track = await _getTrackInfo(
+            entity,
+            customCover: customCover,
+          );
           fileNames.add(track);
         }
       }
@@ -121,5 +139,4 @@ class Files {
     }
     return [];
   }
-
 }

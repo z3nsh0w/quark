@@ -41,6 +41,10 @@ dependencies:
   image: ^4.8.0
   auto_size_text: ^3.0.0
   drift: ^2.32.1
+  just_audio: ^0.10.5
+  just_audio_media_kit: ^2.1.0
+  media_kit_libs_windows_audio: ^1.0.9
+  just_audio_windows: ^0.2.2
 
 dependency_overrides:
   yandex_music:
