@@ -45,6 +45,9 @@ dependencies:
   just_audio_media_kit: ^2.1.0
   media_kit_libs_windows_audio: ^1.0.9
   just_audio_windows: ^0.2.2
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
 
 dependency_overrides:
   yandex_music:
@@ -62,6 +65,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  build_runner: ^2.13.1
+  drift_dev: ^2.32.1
 
 
 flutter:

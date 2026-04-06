@@ -10,8 +10,6 @@ import 'package:quark/objects/track.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:just_audio/just_audio.dart' as just_audio;
 
-// TODO: LOW LATENCY TRACK CHANGE
-
 enum ShuffleMode {
   /// Completely randomizes the list.
   full,
@@ -63,10 +61,9 @@ class PlaylistInfo {
 
 enum PlayerBackend {
   /// AudioPlayers package ll be used
-  standart,
+  audioPlayers,
   justAudio,
   justAudioMediaKit,
-  justAudioVlc,
 }
 
 class _PlayerEngine {
@@ -84,7 +81,7 @@ class _PlayerEngine {
   StreamSubscription? _onCompleteSubscription;
 
   Future<void> init({
-    PlayerBackend playerBackend2 = PlayerBackend.standart,
+    PlayerBackend playerBackend2 = PlayerBackend.audioPlayers,
   }) async {
     playerBackend = playerBackend2;
     switch (playerBackend) {
@@ -93,8 +90,6 @@ class _PlayerEngine {
       case PlayerBackend.justAudioMediaKit:
         JustAudioMediaKit.ensureInitialized();
         JustAudioMediaKit.pitch = true;
-        justAudioPlayer = just_audio.AudioPlayer();
-      case PlayerBackend.justAudioVlc:
         justAudioPlayer = just_audio.AudioPlayer();
       default:
         audioPlayersPlayer = AudioPlayer();
@@ -105,7 +100,6 @@ class _PlayerEngine {
     try {
       switch (playerBackend) {
         case PlayerBackend.justAudioMediaKit:
-        case PlayerBackend.justAudioVlc:
         case PlayerBackend.justAudio:
           await justAudioPlayer!.setAudioSource(
             just_audio.AudioSource.file(filePath),
@@ -123,7 +117,6 @@ class _PlayerEngine {
     try {
       switch (playerBackend) {
         case PlayerBackend.justAudioMediaKit:
-        case PlayerBackend.justAudioVlc:
         case PlayerBackend.justAudio:
           await justAudioPlayer!.setAudioSource(
             just_audio.AudioSource.uri(Uri.parse(url)),
@@ -141,7 +134,6 @@ class _PlayerEngine {
     try {
       switch (playerBackend) {
         case PlayerBackend.justAudioMediaKit:
-        case PlayerBackend.justAudioVlc:
         case PlayerBackend.justAudio:
           await justAudioPlayer!.stop();
         default:
@@ -173,7 +165,6 @@ class _PlayerEngine {
     try {
       switch (playerBackend) {
         case PlayerBackend.justAudioMediaKit:
-        case PlayerBackend.justAudioVlc:
         case PlayerBackend.justAudio:
           await justAudioPlayer!.play();
         default:
@@ -188,7 +179,6 @@ class _PlayerEngine {
     try {
       switch (playerBackend) {
         case PlayerBackend.justAudioMediaKit:
-        case PlayerBackend.justAudioVlc:
         case PlayerBackend.justAudio:
           await justAudioPlayer!.pause();
         default:
@@ -206,7 +196,6 @@ class _PlayerEngine {
   ) async {
     switch (playerBackend) {
       case PlayerBackend.justAudioMediaKit:
-      case PlayerBackend.justAudioVlc:
       case PlayerBackend.justAudio:
         await _onCompleteSubscription?.cancel();
         await _onDurationChanged?.cancel();
@@ -253,7 +242,6 @@ class _PlayerEngine {
   Future<void> seek(Duration duration) async {
     switch (playerBackend) {
       case PlayerBackend.justAudioMediaKit:
-      case PlayerBackend.justAudioVlc:
       case PlayerBackend.justAudio:
         await justAudioPlayer!.seek(duration);
       default:
@@ -264,7 +252,6 @@ class _PlayerEngine {
   Future<void> setVolume(double volume) async {
     switch (playerBackend) {
       case PlayerBackend.justAudioMediaKit:
-      case PlayerBackend.justAudioVlc:
       case PlayerBackend.justAudio:
         await justAudioPlayer!.setVolume(volume);
       default:
@@ -275,7 +262,6 @@ class _PlayerEngine {
   Future<void> setSpeed(double speed) async {
     switch (playerBackend) {
       case PlayerBackend.justAudioMediaKit:
-      case PlayerBackend.justAudioVlc:
       case PlayerBackend.justAudio:
         await justAudioPlayer!.setSpeed(speed);
       default:
@@ -286,7 +272,6 @@ class _PlayerEngine {
   Future<void> precacheNext(String filepath) async {
     switch (playerBackend) {
       case PlayerBackend.justAudioMediaKit:
-      case PlayerBackend.justAudioVlc:
       case PlayerBackend.justAudio:
         await justAudioPlayer!.addAudioSource(
           just_audio.AudioSource.file(filepath),
@@ -296,31 +281,29 @@ class _PlayerEngine {
   }
 
   Future<void> dispose() async {
-    switch (playerBackend) {
-      case PlayerBackend.justAudioMediaKit:
-      case PlayerBackend.justAudioVlc:
-      case PlayerBackend.justAudio:
-        await justAudioPlayer!.dispose();
-      default:
-        await audioPlayersPlayer!.dispose();
-    }
     await _onCompleteSubscription?.cancel();
     await _onDurationChanged?.cancel();
     await _onPlayedChanged?.cancel();
+
+    _onCompleteSubscription = null;
+    _onDurationChanged = null;
+    _onPlayedChanged = null;
+
+    if (justAudioPlayer != null) {
+      await justAudioPlayer!.dispose();
+      justAudioPlayer = null;
+    }
+    if (audioPlayersPlayer != null) {
+      await audioPlayersPlayer!.dispose();
+      audioPlayersPlayer = null;
+    }
   }
 }
 
 /// A standalone player running in the background, independent of the stream UI
 class Player {
   // SINGLETON INTERNAL REALISATION
-  Player._internal()
-    : playlist = [],
-      nowPlayingTrack = LocalTrack(
-        title: '',
-        filepath: '',
-        artists: [],
-        albums: [],
-      );
+  Player._internal() : playlist = [], nowPlayingTrack = LocalTrack.getDummy();
 
   static final Player _player = Player._internal();
 
@@ -332,15 +315,10 @@ class Player {
   Player({required this.playlist, required this.nowPlayingTrack});
 
   // SETUP NOTIFIERS FOR UI LISTENERS
-  final trackNotifier = ValueNotifier<PlayerTrack>(
-    LocalTrack(title: '', filepath: '', artists: [], albums: []),
-  );
+  final trackNotifier = ValueNotifier<PlayerTrack>(LocalTrack.getDummy());
 
   final trackChangeNotifier = ValueNotifier<TrackChange>(
-    TrackChange(
-      newTrack: LocalTrack(title: '', filepath: '', artists: [], albums: []),
-      reason: ChangeReason.external,
-    ),
+    TrackChange(newTrack: LocalTrack.getDummy(), reason: ChangeReason.external),
   );
   final playedNotifier = ValueNotifier<Duration>(Duration());
   final durationNotifier = ValueNotifier<Duration>(Duration());
@@ -357,8 +335,6 @@ class Player {
 
   /// It is not recommended to change this value yourself by using ```Player.unShuffledPlaylist = []```.
   late List<PlayerTrack> unShuffledPlaylist;
-
-  final playerInstance = AudioPlayer();
 
   double speed = 1.0;
 
@@ -382,17 +358,17 @@ class Player {
     playlistNotifier.value = playlist;
     unShuffledPlaylist = playlist;
     final engine = Platform.isAndroid
-        ? PlayerBackend.justAudio
+        ? PlayerBackend.audioPlayers
         : PlayerBackend.justAudioMediaKit;
     await _PlayerEngine().init(playerBackend2: backend ?? engine);
     await setupListeners();
   }
 
-  void dispose() async {
+  Future<void> dispose() async {
     // await _onCompleteSubscription?.cancel();
     // await _onDurationChanged?.cancel();
     // await _onPlayedChanged?.cancel();
-    await playerInstance.dispose();
+    await _PlayerEngine().dispose();
   }
 
   Future<void> setupListeners() async {
@@ -407,6 +383,7 @@ class Player {
         playedNotifier.value = event;
       },
     );
+
     // await _onCompleteSubscription?.cancel();
     // await _onDurationChanged?.cancel();
     // await _onPlayedChanged?.cancel();
@@ -425,15 +402,15 @@ class Player {
     // });
   }
 
-  Future<Duration> getPosition() async {
-    Duration? position = await playerInstance.getCurrentPosition();
-    return position ?? Duration();
-  }
+  // Future<Duration> getPosition() async {
+  //   Duration? position = await playerInstance.getCurrentPosition();
+  //   return position ?? Duration();
+  // }
 
-  Future<Duration> getTrackDuration() async {
-    Duration? duration = await playerInstance.getDuration();
-    return duration ?? Duration();
-  }
+  // Future<Duration> getTrackDuration() async {
+  //   Duration? duration = await playerInstance.getDuration();
+  //   return duration ?? Duration();
+  // }
 
   Future<void> _afterFn() async {
     if (Platform.isLinux) {
@@ -447,9 +424,35 @@ class Player {
         : playlist.length - 1 != nowIndex
         ? nowIndex + 1
         : 0;
-    print(nextIndex);
     await _PlayerEngine().precacheNext(playlist[nextIndex].filepath);
   }
+
+  // Future<dynamic> getNextTrack() async {
+  //   if (queue.isNotEmpty) {
+  //     if (queue.isEmpty) {
+  //       if (unQueuedLastTrack != null) {
+  //         int nowIndex = playlist.indexWhere((t) => t == unQueuedLastTrack);
+  //         int nextIndex = (isRepeat)
+  //             ? nowIndex
+  //             : playlist.length - 1 != nowIndex
+  //             ? nowIndex + 1
+  //             : 0;
+  //         return (playlist[nextIndex]);
+  //       }
+  //     } else {
+  //       return queue.first;
+  //     }
+  //   }
+
+  //   int nowIndex = playlist.indexWhere((t) => t == nowPlayingTrack);
+
+  //   int nextIndex = (isRepeat)
+  //       ? nowIndex
+  //       : playlist.length - 1 != nowIndex
+  //       ? nowIndex + 1
+  //       : 0;
+  //   return (playlist[nextIndex]);
+  // }
 
   Future<void> playNext({bool? forceNext, bool? completed}) async {
     if (queue.isNotEmpty) {
@@ -475,7 +478,6 @@ class Player {
             ? ChangeReason.completed
             : ChangeReason.external,
       );
-      await playerInstance.stop();
       await _playIsPlaying();
       return;
     }
@@ -495,7 +497,7 @@ class Player {
           ? ChangeReason.completed
           : ChangeReason.external,
     );
-    await playerInstance.stop();
+    // await playerInstance.stop();
     await _playIsPlaying();
     return;
   }
@@ -505,7 +507,9 @@ class Player {
     if (!exists) {
       return;
     }
-    await _PlayerEngine().play(nowPlayingTrack.filepath);
+    if (isPlaying) {
+      await _PlayerEngine().play(nowPlayingTrack.filepath);
+    }
     // await playerInstance.setSource(DeviceFileSource(nowPlayingTrack.filepath));
     // if (isPlaying) {
     //   await playerInstance.play(DeviceFileSource(nowPlayingTrack.filepath));
@@ -521,7 +525,7 @@ class Player {
         newTrack: nowPlayingTrack,
         reason: ChangeReason.external,
       );
-      await playerInstance.stop();
+      // await playerInstance.stop();
       await _playIsPlaying();
     }
 
@@ -537,7 +541,7 @@ class Player {
       newTrack: nowPlayingTrack,
       reason: ChangeReason.external,
     );
-    await playerInstance.stop();
+    // await playerInstance.stop();
     await _playIsPlaying();
   }
 
@@ -749,7 +753,7 @@ class Player {
       newTrack: nowPlayingTrack,
       reason: ChangeReason.external,
     );
-    await playerInstance.stop();
+    // await playerInstance.stop();
     await _playIsPlaying();
   }
 
@@ -766,7 +770,7 @@ class Player {
 
   Future<void> stop() async {
     playingNotifier.value = false;
-    await playerInstance.stop();
+    await _PlayerEngine().stop();
   }
 
   Future<void> setSpeed(double sp) async {

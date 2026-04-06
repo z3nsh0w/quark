@@ -1,13 +1,11 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:isolate';
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
-
 import '/objects/track.dart';
 import 'package:path/path.dart' as path;
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
-// import 'package:audio_metadata_reader/src/metadata/base.dart';
-// export 'package:audio_metadata_reader/src/metadata/base.dart';
 
 class ApplicationCacheDirectory {
   ApplicationCacheDirectory._();
@@ -30,7 +28,7 @@ class ApplicationCacheDirectory {
 }
 
 class Files {
-  Future<LocalTrack> _getTrackInfo(
+  static Future<LocalTrack> _getTrackInfo(
     FileSystemEntity entity, {
     Uint8List? customCover,
   }) async {
@@ -41,17 +39,24 @@ class Files {
       Uint8List? cover = tagsFromFile.pictures.isNotEmpty
           ? tagsFromFile.pictures.first.bytes
           : null;
-      if (cover == null && customCover != null) {
-        cover = customCover;
-      }
+      cover ??= customCover;
+
+      final CoverType coverType = cover == null
+          ? customCover == null
+                ? CoverType.noCover
+                : CoverType.externalFile
+          : CoverType.builtIn;
 
       LocalTrack track = LocalTrack(
         title: trackName,
         artists: [tagsFromFile.artist ??= 'Unknown'],
         filepath: entity.path,
         albums: ['Unknown'],
+        coverType: coverType,
       );
-      track.coverByted = cover!;
+      if (cover != null) {
+        track.coverByted = cover;
+      }
 
       return track;
     } catch (e) {
@@ -61,20 +66,32 @@ class Files {
         artists: ['Unknown'],
         filepath: entity.path,
         albums: ['Unknown'],
+        coverType: CoverType.noCover,
       );
       return track;
     }
   }
 
-  static AudioMetadata? getFileTags(String path, {bool getImage = false}) {
+  static Future<LocalTrack> _getTrackInfoCumpute(
+    (FileSystemEntity, Uint8List?) args,
+  ) async {
+    return _getTrackInfo(args.$1, customCover: args.$2);
+  }
+
+  static Future<AudioMetadata?> getFileTags(
+    String path, {
+    bool getImage = false,
+  }) async {
     try {
-      return readMetadata(File(path), getImage: getImage);
+      return await Isolate.run(() {
+        return readMetadata(File(path), getImage: getImage);
+      });
     } catch (e) {
       return null;
     }
   }
 
-  Future<void> _scanDirectory({
+  static Future<void> _scanDirectory({
     required String path,
     required List<PlayerTrack> fileNames,
     required bool recursiveEnable,
@@ -98,14 +115,13 @@ class Files {
             entity.path.toLowerCase().endsWith('.flac') ||
             entity.path.toLowerCase().endsWith('.dsf') ||
             entity.path.toLowerCase().endsWith('.aac') ||
-            // entity.path.toLowerCase().endsWith('.ogg') || // NO LONGER SUPPORTED
             entity.path.toLowerCase().endsWith('.alac') ||
             entity.path.toLowerCase().endsWith('.pcm') ||
             entity.path.toLowerCase().endsWith('.m4a')) {
-          final LocalTrack track = await _getTrackInfo(
+          final LocalTrack track = await compute(_getTrackInfoCumpute, (
             entity,
-            customCover: customCover,
-          );
+            customCover,
+          ));
           fileNames.add(track);
         }
       }
@@ -121,17 +137,27 @@ class Files {
     }
   }
 
+  static Future<List<PlayerTrack>> _scanDirectoryCompute(
+    (String, bool?) args,
+  ) async {
+    final List<PlayerTrack> result = [];
+    await _scanDirectory(
+      path: args.$1,
+      fileNames: result,
+      recursiveEnable: args.$2 ?? true,
+    );
+    return result;
+  }
+
   Future<List<PlayerTrack>> getFilesFromDirectory({
     required String directoryPath,
     bool? recursiveEnable,
   }) async {
     try {
-      final List<PlayerTrack> fileNames = [];
-      await _scanDirectory(
-        path: directoryPath,
-        fileNames: fileNames,
-        recursiveEnable: recursiveEnable ?? true,
-      );
+      final fileNames = await compute(_scanDirectoryCompute, (
+        directoryPath,
+        recursiveEnable,
+      ));
 
       return fileNames;
     } catch (e) {

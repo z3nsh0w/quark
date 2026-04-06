@@ -2,10 +2,12 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 import 'dart:async';
+import 'package:quark/services/player/player.dart';
+
 import 'state_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:yandex_music/yandex_music.dart';
-import '../services/database/database_engine.dart';
+import '../services/database/settings_engine.dart';
 import 'package:quark/services/database/database.dart';
 import 'package:quark/services/database/listen_logger.dart';
 import 'package:interactive_slider/interactive_slider.dart';
@@ -147,9 +149,16 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
   bool dynamicWindowColor = true;
   int clicks = 0;
   String restoreText = 'Restore';
+  String audioEngine = 'Restore';
   bool? databaseError;
   InteractiveSliderController transitionSpeedController =
       InteractiveSliderController(1.0);
+  List<String> audioEngineList = ['Standart', 'Just Audio', 'Just Audio MK'];
+  final Map<String, PlayerBackend> backendMap = {
+    'Just Audio MK': PlayerBackend.justAudioMediaKit,
+    'Just Audio': PlayerBackend.justAudio,
+    'Standart': PlayerBackend.audioPlayers,
+  };
 
   void initDatabase() async {
     try {
@@ -160,6 +169,7 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
           DatabaseStreamerService().recursiveFilesAdding.value;
       bool dynamicWindowColor2 =
           DatabaseStreamerService().dynamicWindowColor.value;
+      
       if (!mounted) return;
       setState(() {
         stateIndicatorState = indicator;
@@ -217,6 +227,48 @@ class __LocalSettingsWidget extends State<_LocalSettings> {
               crossAxisAlignment: CrossAxisAlignment.center,
               nameColor: Colors.red,
             ),
+          SizedBox(height: 1),
+          button(
+            'Audio engine',
+            'Recommended for your platform: ${Platform.isAndroid
+                ? "JustAudio"
+                : Platform.isWindows
+                ? "Standart"
+                : "JustAudioMK"}',
+            DropdownButton<String>(
+              dropdownColor: const Color.fromRGBO(44, 44, 44, 0.2),
+              value: audioEngineList.contains(audioEngine)
+                  ? audioEngine
+                  : 'Standart',
+              borderRadius: BorderRadius.all(Radius.circular(5)),
+              elevation: 16,
+              focusColor: const Color.fromARGB(113, 255, 255, 255),
+              style: const TextStyle(color: Color.fromARGB(255, 255, 255, 255)),
+              underline: SizedBox.shrink(),
+              onChanged: (String? value) async {
+                if (value != null) {
+                  DatabaseStreamerService().playerBackend.value = value;
+                  await Player.player.stop();
+                  await Player.player.dispose();
+                  await Player.player.init(backend: backendMap[value]);
+                }
+              },
+              items: audioEngineList.map<DropdownMenuItem<String>>((
+                String value,
+              ) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+            ),
+            maxWidth,
+            rightPadding,
+            databaseError == true
+                ? ButtonPosition.center
+                : ButtonPosition.start,
+          ),
+
           SizedBox(height: 1),
           button(
             'Recursively adding files',
@@ -552,7 +604,10 @@ class __YandexMusicSettingsWidget extends State<_YandexMusicSettings> {
                   inactiveTrackColor: const Color.fromRGBO(77, 77, 77, 0.3),
                   // activeThumbColor: Colors.white,
                   onChanged: (a) {
-                    DatabaseStreamerService().originalImageSizeForCoverView.value = a;
+                    DatabaseStreamerService()
+                            .originalImageSizeForCoverView
+                            .value =
+                        a;
                   },
                 ),
                 maxWidth,
@@ -723,14 +778,36 @@ class __DebugSettingsWidget extends State<_DebugSettings> {
             ),
           ),
           // SizedBox(height: 1),
-          // button(
+          //           InkWell(
+          //   onTap: () async {
+          //     await showDialog(
+          //       context: context,
+          //       builder: (builder) => GestureDetector(
+          //         onTap: () => Navigator.pop(context),
+          //         child: SingleChildScrollView(
+          //           child: SizedBox(
+          //             width: maxWidth,
+          //             height: maxWidth,
+          //             child: Center(
+          //               child: Text(
+          //                 ListenLogger().lastError.toString(),
+          //                 style: TextStyle(color: Colors.white),
+          //                 textAlign: TextAlign.center,
+          //               ),
+          //             ),
+          //           ),
+          //         ),
+          //       ),
+          //     );
+          //   },
+          //   child: button(
           //   'ListenLogger',
           //   'Inited: ${ListenLogger().inited} || Init tries: ${NativeControl().initTries} || LastError: ${ListenLogger().lastError}',
           //   SizedBox.shrink(),
           //   maxWidth,
           //   rightPadding,
           //   ButtonPosition.center,
-          // ),
+          //           )),
           SizedBox(height: 1),
           InkWell(
             onTap: () async {

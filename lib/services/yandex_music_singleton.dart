@@ -115,7 +115,6 @@ abstract class YandexMusicSingleton {
     Directory directory, {
     void Function(int)? progressCallback,
   }) async {
-    // #TODO:support for exporting directly from the cache, bypassing current information
     final List<String> cachedTracksIds = await getCachedTrackList();
     try {
       await directory.create(recursive: true);
@@ -124,6 +123,7 @@ abstract class YandexMusicSingleton {
       );
       final int trackCount = playlist.tracks.length;
       final List<String> processedFilenames = [];
+
       for (Track track in playlist.tracks) {
         if (!(track.available ?? false)) continue;
         String filename =
@@ -158,7 +158,6 @@ abstract class YandexMusicSingleton {
               ),
             );
           }
-          // TODO;
           Picture? picture;
           if (track.coverUri != null) {
             final Uint8List orig = await ImageCacheService().getImage(
@@ -169,7 +168,7 @@ abstract class YandexMusicSingleton {
               picture = Picture(
                 Uint8List.fromList(img.encodeJpg(image, quality: 80)),
                 "image/jpeg",
-                PictureType.coverFront
+                PictureType.coverFront,
               );
             }
           }
@@ -183,21 +182,94 @@ abstract class YandexMusicSingleton {
               coverMime: "image/jpeg",
             ),
           );
-          // updateMetadata(file, (metadata) {
-          //   metadata.setTitle(track.title);
-          //   metadata.setArtist(
-          //     track.artists.map((e) => e.title).toList().join(', '),
-          //   );
-          //   metadata.setAlbum(
-          //     track.albums.isNotEmpty ? track.albums.first.title : null,
-          //   );
-          //   if (picture != null) {
-          //     metadata.setPictures([picture]);
-          //   }
-          // });
           if (progressCallback != null) {
             progressCallback(
               ((playlist.tracks.indexOf(track) + 1) / trackCount * 100).round(),
+            );
+          }
+        } catch (e) {
+          Logger(
+            "YandexMusicSingleton",
+          ).warning("Failed to export track: ${track.id}", e);
+        }
+      }
+    } catch (e) {
+      Logger("YandexMusicSingleton").warning("Failed to export playlist: ", e);
+    }
+  }
+
+  static Future<dynamic> exportTracks(
+    List<Track> tracks,
+    Directory directory, {
+    void Function(int)? progressCallback,
+  }) async {
+    final List<String> cachedTracksIds = await getCachedTrackList();
+    try {
+      await directory.create(recursive: true);
+      final List<String> processedFilenames = [];
+      int now = 0;
+      for (Track track in tracks) {
+        now += 1;
+        if (!(track.available ?? false)) continue;
+        String filename =
+            "$now. ${track.artists.isNotEmpty ? "${track.artists.first.title} - " : ""}${track.title.replaceAll("/", "")}";
+        if (processedFilenames.contains(filename)) {
+          filename += "_${track.id}";
+        }
+        filename += '.flac';
+        processedFilenames.add(filename);
+        final File file = File(join(directory.path, filename));
+        try {
+          if (!file.existsSync()) {
+            await file.create(recursive: true);
+          }
+          if (cachedTracksIds.contains(track.id)) {
+            await file.writeAsBytes(
+              await File(getTrackPath(track.id)).readAsBytes(),
+            );
+          } else {
+            await file.writeAsBytes(
+              await instance.tracks.download(
+                track.id,
+                quality: switch (DatabaseStreamerService()
+                    .yandexMusicQuality
+                    .value) {
+                  'lossless' => AudioQuality.lossless,
+                  'nq' => AudioQuality.normal,
+                  'lq' => AudioQuality.low,
+                  'mp3' => AudioQuality.normal,
+                  _ => AudioQuality.normal,
+                },
+              ),
+            );
+          }
+          Picture? picture;
+          if (track.coverUri != null) {
+            final Uint8List orig = await ImageCacheService().getImage(
+              "https://${track.coverUri!.replaceAll("%%", "600x600")}",
+            );
+            final image = img.decodeImage(orig);
+            if (image != null) {
+              picture = Picture(
+                Uint8List.fromList(img.encodeJpg(image, quality: 80)),
+                "image/jpeg",
+                PictureType.coverFront,
+              );
+            }
+          }
+          await AudioTagger.writeToFile(
+            file.path,
+            AudioTags(
+              title: track.title,
+              album: track.albums.isNotEmpty ? track.albums.first.title : null,
+              artist: track.artists.map((e) => e.title).toList().join(', '),
+              coverData: picture?.bytes,
+              coverMime: "image/jpeg",
+            ),
+          );
+          if (progressCallback != null) {
+            progressCallback(
+              ((tracks.indexOf(track) + 1) / tracks.length * 100).round(),
             );
           }
         } catch (e) {

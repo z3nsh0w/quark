@@ -3,13 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:interactive_slider/interactive_slider.dart';
 import 'package:quark/services/player/player.dart';
 
+enum TimingsAlign {
+  sides,
+  bottom
+}
+
 class ProgressWidget extends StatefulWidget {
   final bool timings;
   final double? interactiveWidth;
+  final TimingsAlign timingsAlign;
   const ProgressWidget({
     super.key,
     required this.timings,
     this.interactiveWidth,
+    this.timingsAlign = TimingsAlign.sides
   });
 
   @override

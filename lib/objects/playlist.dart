@@ -2,6 +2,7 @@ import 'package:quark/objects/track.dart';
 import 'package:yandex_music/src/objects/track.dart';
 
 enum PlaylistSource { yandexMusic, local, spotify }
+
 // #TODO: create a LikedPlaylist variable for the playlist
 class PlayerPlaylist {
   final int kind;
@@ -71,26 +72,10 @@ Future<PlayerPlaylist> deserializePlaylist(Map playlist) async {
 
   for (final element in playlistData['tracks']) {
     if (element['source'] == 'local') {
-      tracks.add(deserializedLocalTrack(element['data']));
+      tracks.add(await deserializedLocalTrack(element['data']));
     } else if (element['source'] == 'yandex_music') {
       Track track = Track(element['data']);
-      String trackPath = await getTrackPath(track.id);
-      YandexMusicTrack out = YandexMusicTrack(
-        filepath: trackPath,
-        title: track.title,
-        albums: track.albums.isNotEmpty
-            ? track.albums
-                  .map((album) => album.title)
-                  .toList()
-            : ['Unknown album'],
-        artists: track.artists
-            .map((album) => album.title)
-            .toList(),
-        track: track,
-      );
-      String? cover = track.coverUri;
-      cover ??= out.cover;
-      out.cover = cover;
+      final YandexMusicTrack out = YandexMusicTrack.fromYMTrack(track);
       tracks.add(out);
     }
   }

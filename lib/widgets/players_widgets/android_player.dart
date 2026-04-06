@@ -12,9 +12,11 @@ import 'package:file_picker/file_picker.dart';
 // Additional packages
 import 'package:logging/logging.dart';
 import 'package:quark/services/database/database.dart';
+import 'package:quark/services/database/listen_logger.dart';
 import 'package:quark/services/files.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:quark/services/yandex_music_singleton.dart';
+import 'package:quark/widgets/listen_stats.dart';
 import 'package:quark/widgets/players_widgets/main_player.dart';
 import 'package:quark/widgets/players_widgets/slider_widget.dart';
 import 'package:quark/widgets/playlist/playlist_widget.dart';
@@ -109,7 +111,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
       });
     }
   }
-
 
   //
   //
@@ -397,7 +398,7 @@ class _PlaylistPage1State extends State<AndroidWidget>
 
   @override
   Widget build(BuildContext context) {
-    final Size screenSize =  MediaQuery.of(context).size;
+    final Size screenSize = MediaQuery.of(context).size;
     final double availableWidth = screenSize.width - 48 - 0;
     final double availableHeight = screenSize.height - 48;
 
@@ -504,8 +505,7 @@ class _PlaylistPage1State extends State<AndroidWidget>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
                                     children: [
-                                      const SizedBox(height: 45),
-
+                                      // const SizedBox(height: 45),
                                       GestureDetector(
                                         onTap: () => toggleCover(),
                                         child:
@@ -545,87 +545,6 @@ class _PlaylistPage1State extends State<AndroidWidget>
 
                                       const SizedBox(height: 19),
 
-                                      InkWell(
-                                        onTap:
-                                            (nowPlayingTrack
-                                                    is! YandexMusicTrack ||
-                                                (nowPlayingTrack
-                                                        as YandexMusicTrack)
-                                                    .track
-                                                    .artists
-                                                    .isEmpty ||
-                                                (nowPlayingTrack
-                                                            as YandexMusicTrack)
-                                                        .track
-                                                        .artists[0]
-                                                    is UGCArtist ||
-                                                (nowPlayingTrack
-                                                        as YandexMusicTrack)
-                                                    .track
-                                                    .albums
-                                                    .isEmpty)
-                                            ? null
-                                            : () async {
-                                                final track =
-                                                    nowPlayingTrack
-                                                        as YandexMusicTrack;
-
-                                                try {
-                                                  showOperation(
-                                                    StateIndicatorOperation
-                                                        .loading,
-                                                  );
-
-                                                  final album =
-                                                      await YandexMusicSingleton.getAlbumInfo(
-                                                        track
-                                                            .track
-                                                            .albums[0]
-                                                            .id,
-                                                      );
-                                                  Navigator.push(
-                                                    context,
-                                                    CupertinoPageRoute(
-                                                      maintainState: false,
-
-                                                      builder: (builder) =>
-                                                          AlbumInfoWidget(
-                                                            album: album,
-                                                          ),
-                                                    ),
-                                                  );
-                                                } catch (e) {
-                                                  showOperation(
-                                                    StateIndicatorOperation
-                                                        .error,
-                                                  );
-                                                  Logger('MainPlayer').warning(
-                                                    "Failed to get album info. ID: ${track.track.albums[0].id}",
-                                                    e,
-                                                  );
-                                                }
-                                              },
-                                        child: // ALBUM TEXT
-                                        Text(
-                                          key: ValueKey<PlayerTrack>(
-                                            nowPlayingTrack,
-                                          ),
-                                          nowPlayingTrack.albums.join(','),
-                                          style: GoogleFonts.lexend(
-                                            color: const Color.fromARGB(
-                                              230,
-                                              255,
-                                              255,
-                                              255,
-                                            ),
-                                            fontSize: 17,
-                                            decoration: TextDecoration.none,
-                                            fontWeight: FontWeight.w100,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 5),
-
                                       SizedBox(
                                         width: availableWidth,
                                         child: Row(
@@ -635,6 +554,97 @@ class _PlaylistPage1State extends State<AndroidWidget>
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
+                                                  InkWell(
+                                                    onTap:
+                                                        (nowPlayingTrack
+                                                                is! YandexMusicTrack ||
+                                                            (nowPlayingTrack
+                                                                    as YandexMusicTrack)
+                                                                .track
+                                                                .artists
+                                                                .isEmpty ||
+                                                            (nowPlayingTrack
+                                                                        as YandexMusicTrack)
+                                                                    .track
+                                                                    .artists[0]
+                                                                is UGCArtist ||
+                                                            (nowPlayingTrack
+                                                                    as YandexMusicTrack)
+                                                                .track
+                                                                .albums
+                                                                .isEmpty)
+                                                        ? null
+                                                        : () async {
+                                                            final track =
+                                                                nowPlayingTrack
+                                                                    as YandexMusicTrack;
+
+                                                            try {
+                                                              showOperation(
+                                                                StateIndicatorOperation
+                                                                    .loading,
+                                                              );
+
+                                                              final album =
+                                                                  await YandexMusicSingleton.getAlbumInfo(
+                                                                    track
+                                                                        .track
+                                                                        .albums[0]
+                                                                        .id,
+                                                                  );
+                                                              Navigator.push(
+                                                                context,
+                                                                CupertinoPageRoute(
+                                                                  maintainState:
+                                                                      false,
+
+                                                                  builder:
+                                                                      (
+                                                                        builder,
+                                                                      ) => AlbumInfoWidget(
+                                                                        album:
+                                                                            album,
+                                                                      ),
+                                                                ),
+                                                              );
+                                                            } catch (e) {
+                                                              showOperation(
+                                                                StateIndicatorOperation
+                                                                    .error,
+                                                              );
+                                                              Logger(
+                                                                'MainPlayer',
+                                                              ).warning(
+                                                                "Failed to get album info. ID: ${track.track.albums[0].id}",
+                                                                e,
+                                                              );
+                                                            }
+                                                          },
+                                                    child: // ALBUM TEXT
+                                                    Text(
+                                                      key:
+                                                          ValueKey<PlayerTrack>(
+                                                            nowPlayingTrack,
+                                                          ),
+                                                      nowPlayingTrack.albums
+                                                          .join(','),
+                                                      style: GoogleFonts.lexend(
+                                                        color:
+                                                            const Color.fromARGB(
+                                                              230,
+                                                              255,
+                                                              255,
+                                                              255,
+                                                            ),
+                                                        fontSize: 17,
+                                                        decoration:
+                                                            TextDecoration.none,
+                                                        fontWeight:
+                                                            FontWeight.w100,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 5),
                                                   InkWell(
                                                     onTap:
                                                         (nowPlayingTrack
@@ -713,7 +723,7 @@ class _PlaylistPage1State extends State<AndroidWidget>
                                                         decoration:
                                                             TextDecoration.none,
                                                         color: Colors.white,
-                                                        fontSize: 25,
+                                                        fontSize: 23,
                                                         fontWeight:
                                                             FontWeight.bold,
                                                       ),
@@ -826,7 +836,7 @@ class _PlaylistPage1State extends State<AndroidWidget>
                                                           TextAlign.start,
                                                       style: GoogleFonts.lexend(
                                                         color: Colors.white,
-                                                        fontSize: 18,
+                                                        fontSize: 17,
                                                         decoration:
                                                             TextDecoration.none,
                                                         fontWeight:
@@ -885,214 +895,311 @@ class _PlaylistPage1State extends State<AndroidWidget>
                                         timings: true,
                                         interactiveWidth: availableWidth - 60,
                                       ),
+                                      SizedBox(height: 10),
 
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          functionPlayerButtonAndroid(
-                                            Icons.shuffle,
-                                            Icons.shuffle_outlined,
-                                            isShuffleEnable,
-                                            () async => isShuffleEnable
-                                                ? await Player.player
-                                                      .unShuffle()
-                                                : await Player.player.shuffle(
-                                                    null,
-                                                  ),
-                                          ),
-                                          const SizedBox(width: 35),
-
-                                          // PREVIOUS btn
-                                          Material(
-                                            color: Colors.transparent,
-                                            borderRadius: BorderRadius.all(
-                                              Radius.circular(30),
+                                      SizedBox(
+                                        width: availableWidth,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            functionPlayerButtonAndroid(
+                                              Icons.shuffle,
+                                              Icons.shuffle_outlined,
+                                              isShuffleEnable,
+                                              () async => isShuffleEnable
+                                                  ? await Player.player
+                                                        .unShuffle()
+                                                  : await Player.player.shuffle(
+                                                      null,
+                                                    ),
                                             ),
 
-                                            child: InkWell(
+                                            const Spacer(),
+                                            Material(
+                                              color: Colors.transparent,
                                               borderRadius: BorderRadius.all(
                                                 Radius.circular(30),
                                               ),
-                                              onTap: () async {
-                                                await Player.player
-                                                    .playPrevious();
-                                              },
 
-                                              child: Container(
-                                                height: 55,
-                                                width: 55,
+                                              child: InkWell(
+                                                borderRadius: BorderRadius.all(
+                                                  Radius.circular(30),
+                                                ),
+                                                onTap: () async {
+                                                  await Player.player
+                                                      .playPrevious();
+                                                },
 
-                                                decoration: buttonDecoration(),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.skip_previous,
-                                                      color: Colors.white,
-                                                      size: 26,
-                                                    ),
-                                                  ],
+                                                child: SizedBox(
+                                                  height: 50,
+                                                  width: 50,
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.skip_previous,
+                                                        color: Colors.white,
+                                                        size: 30,
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
 
-                                          const SizedBox(width: 15),
+                                            const SizedBox(width: 15),
 
-                                          // PLAY btn
-                                          Material(
-                                            color: Colors.transparent,
-                                            borderRadius: BorderRadius.all(
-                                              Radius.circular(50),
-                                            ),
-
-                                            child: InkWell(
+                                            // PLAY btn
+                                            Material(
+                                              color: Colors.transparent,
                                               borderRadius: BorderRadius.all(
                                                 Radius.circular(50),
                                               ),
-                                              onTap: () async {
-                                                await Player.player.playPause(
-                                                  !Player.player.isPlaying,
-                                                );
-                                              },
 
-                                              child: Container(
-                                                height: 65,
-                                                width: 65,
+                                              child: InkWell(
+                                                borderRadius: BorderRadius.all(
+                                                  Radius.circular(50),
+                                                ),
+                                                onTap: () async {
+                                                  await Player.player.playPause(
+                                                    !Player.player.isPlaying,
+                                                  );
+                                                },
 
-                                                decoration: buttonDecoration(),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Icon(
-                                                      isPlaying
-                                                          ? Icons.pause
-                                                          : Icons.play_arrow,
-                                                      color: Colors.white,
+                                                child: Container(
+                                                  height: 60,
+                                                  width: 60,
 
-                                                      size: 32,
-                                                    ),
-                                                  ],
+                                                  decoration:
+                                                      buttonDecoration(),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        isPlaying
+                                                            ? Icons.pause
+                                                            : Icons.play_arrow,
+                                                        color: Colors.white,
+
+                                                        size: 34,
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
 
-                                          const SizedBox(width: 15),
+                                            const SizedBox(width: 15),
 
-                                          // NEXT btn
-                                          Material(
-                                            color: Colors.transparent,
-                                            borderRadius: BorderRadius.all(
-                                              Radius.circular(30),
-                                            ),
-
-                                            child: InkWell(
+                                            // NEXT btn
+                                            Material(
+                                              color: Colors.transparent,
                                               borderRadius: BorderRadius.all(
                                                 Radius.circular(30),
                                               ),
-                                              onTap: () async {
-                                                await Player.player.playNext(
-                                                  forceNext: true,
-                                                );
-                                              },
-                                              child: Container(
-                                                height: 55,
-                                                width: 55,
 
-                                                decoration: buttonDecoration(),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.skip_next,
-                                                      color: Colors.white,
-                                                      size: 26,
+                                              child: InkWell(
+                                                borderRadius: BorderRadius.all(
+                                                  Radius.circular(30),
+                                                ),
+                                                onTap: () async {
+                                                  await Player.player.playNext(
+                                                    forceNext: true,
+                                                  );
+                                                },
+                                                child: SizedBox(
+                                                  height: 50,
+                                                  width: 50,
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.skip_next,
+                                                        color: Colors.white,
+                                                        size: 30,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+
+                                            const Spacer(),
+
+                                            functionPlayerButtonAndroid(
+                                              Icons.repeat_one_outlined,
+                                              Icons.repeat_one_outlined,
+                                              isRepeatEnable,
+                                              () async => isRepeatEnable
+                                                  ? await Player.player
+                                                        .disableRepeat()
+                                                  : await Player.player
+                                                        .enableRepeat(),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      SizedBox(height: 10),
+
+                                      VolumeWidget(
+                                        interactiveWidth: availableWidth + 55,
+                                      ),
+
+                                      // Container(
+                                      //   alignment: Alignment.center,
+                                      //   height: 80,
+                                      //   padding: EdgeInsetsGeometry.only(
+                                      //     top: 5,
+                                      //   ),
+                                      //   child: AnimatedExpand(
+                                      //     duration: Duration(milliseconds: 500),
+                                      //     axis: Axis.vertical,
+                                      //     controller: expandController,
+                                      //     expandedHeader: _expandedHeader,
+                                      //     collapsedHeader: _collapsedHeader,
+                                      //     content: Row(
+                                      //       mainAxisSize: MainAxisSize.min,
+                                      //       children: [
+                                      //         animatedExpandButton(() async {
+                                      //           bool recursiveFilesAdding =
+                                      //               DatabaseStreamerService()
+                                      //                   .recursiveFilesAdding
+                                      //                   .value;
+
+                                      //           String? selectedDirectory =
+                                      //               await FilePicker.platform
+                                      //                   .getDirectoryPath();
+                                      //           if (selectedDirectory != null) {
+                                      //             List<PlayerTrack>
+                                      //             result = await Files()
+                                      //                 .getFilesFromDirectory(
+                                      //                   directoryPath:
+                                      //                       selectedDirectory,
+                                      //                   recursiveEnable:
+                                      //                       recursiveFilesAdding,
+                                      //                 );
+                                      //             if (result.isNotEmpty) {
+                                      //               currentPlaylist.addAll(
+                                      //                 result,
+                                      //               );
+                                      //               backupPlaylist.addAll(
+                                      //                 result,
+                                      //               );
+                                      //               await player.updatePlaylist(
+                                      //                 currentPlaylist,
+                                      //               );
+                                      //             }
+                                      //           }
+                                      //         }, Symbols.create_new_folder),
+
+                                      //         animatedExpandButton(
+                                      //           () => setState(() {
+                                      //             settingsView = true;
+                                      //           }),
+                                      //           Icons.settings,
+                                      //         ),
+                                      //         animatedExpandButton(() async {
+                                      //           await Player.player.stop();
+                                      //         }, Icons.exit_to_app),
+                                      //       ],
+                                      //     ),
+                                      //   ),
+                                      // ),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Material(
+                                            color: Colors.transparent,
+
+                                            child: InkWell(
+                                              borderRadius: BorderRadius.all(
+                                                Radius.circular(3),
+                                              ),
+                                              onTap: () async {},
+
+                                              child: SizedBox(
+                                                child: Padding(
+                                                  padding:
+                                                      EdgeInsetsGeometry.symmetric(
+                                                        horizontal: 30,
+                                                        vertical: 5,
+                                                      ),
+                                                  child: Text(
+                                                    "Lyrics",
+                                                    style: TextStyle(
+                                                      color: Colors.white
+                                                          .withAlpha(125),
                                                     ),
-                                                  ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
+                                          Material(
+                                            color: Colors.transparent,
 
-                                          const SizedBox(width: 35),
+                                            child: InkWell(
+                                              borderRadius: BorderRadius.all(
+                                                Radius.circular(3),
+                                              ),
+                                              onTap: () async {},
 
-                                          functionPlayerButtonAndroid(
-                                            Icons.repeat_one_outlined,
-                                            Icons.repeat_one_outlined,
-                                            isRepeatEnable,
-                                            () async => isRepeatEnable
-                                                ? await Player.player
-                                                      .disableRepeat()
-                                                : await Player.player
-                                                      .enableRepeat(),
+                                              child: SizedBox(
+                                                child: Padding(
+                                                  padding:
+                                                      EdgeInsetsGeometry.symmetric(
+                                                        horizontal: 30,
+                                                        vertical: 5,
+                                                      ),
+                                                  child: Text(
+                                                    "Queue",
+                                                    style: TextStyle(
+                                                      color: Colors.white
+                                                          .withAlpha(125),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          Material(
+                                            color: Colors.transparent,
+
+                                            child: InkWell(
+                                              borderRadius: BorderRadius.all(
+                                                Radius.circular(3),
+                                              ),
+                                              onTap: () async {},
+
+                                              child: SizedBox(
+                                                child: Padding(
+                                                  padding:
+                                                      EdgeInsetsGeometry.symmetric(
+                                                        horizontal: 30,
+                                                        vertical: 5,
+                                                      ),
+                                                  child: Text(
+                                                    "Stats",
+                                                    style: TextStyle(
+                                                      color: Colors.white
+                                                          .withAlpha(125),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ],
-                                      ),
-
-                                      Container(
-                                        alignment: Alignment.center,
-                                        height: 80,
-                                        padding: EdgeInsetsGeometry.only(
-                                          top: 5,
-                                        ),
-                                        child: AnimatedExpand(
-                                          duration: Duration(milliseconds: 500),
-                                          axis: Axis.vertical,
-                                          controller: expandController,
-                                          expandedHeader: _expandedHeader,
-                                          collapsedHeader: _collapsedHeader,
-                                          content: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              animatedExpandButton(() async {
-                                                bool recursiveFilesAdding =
-                                                    DatabaseStreamerService()
-                                                        .recursiveFilesAdding
-                                                        .value;
-
-                                                String? selectedDirectory =
-                                                    await FilePicker.platform
-                                                        .getDirectoryPath();
-                                                if (selectedDirectory != null) {
-                                                  List<PlayerTrack>
-                                                  result = await Files()
-                                                      .getFilesFromDirectory(
-                                                        directoryPath:
-                                                            selectedDirectory,
-                                                        recursiveEnable:
-                                                            recursiveFilesAdding,
-                                                      );
-                                                  if (result.isNotEmpty) {
-                                                    currentPlaylist.addAll(
-                                                      result,
-                                                    );
-                                                    backupPlaylist.addAll(
-                                                      result,
-                                                    );
-                                                    await player.updatePlaylist(
-                                                      currentPlaylist,
-                                                    );
-                                                  }
-                                                }
-                                              }, Symbols.create_new_folder),
-
-                                              animatedExpandButton(
-                                                () => setState(() {
-                                                  settingsView = true;
-                                                }),
-                                                Icons.settings,
-                                              ),
-                                              animatedExpandButton(() async {
-                                                await Player.player.stop();
-                                              }, Icons.exit_to_app),
-                                            ],
-                                          ),
-                                        ),
                                       ),
                                     ],
                                   ),

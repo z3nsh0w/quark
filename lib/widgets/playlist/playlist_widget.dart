@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:quark/services/database/database.dart';
@@ -58,7 +57,6 @@ class PlaylistOverlay extends StatefulWidget {
   final bool background;
   final bool reordable;
 
-
   const PlaylistOverlay({
     super.key,
     required this.showOperation,
@@ -69,7 +67,7 @@ class PlaylistOverlay extends StatefulWidget {
       bottomRight: Radius.circular(20),
     ),
     this.background = true,
-    this.reordable = true
+    this.reordable = true,
   });
 
   @override
@@ -193,7 +191,6 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
         searchCancel = CancelToken();
 
         try {
-          var directory = await getApplicationCacheDirectory();
           final SearchResult result = await YandexMusicSingleton.instance.search
               .search(
                 query,
@@ -213,18 +210,7 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
             results.insert(0, result.bestTrack!);
           }
           for (var track in result.tracks) {
-            YandexMusicTrack tr = YandexMusicTrack(
-              filepath: '${directory.path}/cisum_xednay_krauq${track.id}.flac',
-              title: track.title,
-              albums: track.albums.isNotEmpty
-                  ? track.albums.map((album) => album.title).toList()
-                  : ['Unknown album'],
-              artists: track.artists.map((album) => album.title).toList(),
-              track: track,
-            );
-            String? cover = track.coverUri;
-            cover ??= tr.cover;
-            tr.cover = cover;
+            final tr = YandexMusicTrack.fromYMTrack(track);
             filtered.add(tr);
           }
 
@@ -263,24 +249,13 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
     try {
       _searchController.text = 'Similar: ${playlistView[index].title}';
       List<PlayerTrack> filtered = [];
-      var directory = await getApplicationCacheDirectory();
       var result = await YandexMusicSingleton.instance.tracks.getSimilar(
         (playlistView[index] as YandexMusicTrack).track.id,
       );
 
       for (Track track in result) {
-        YandexMusicTrack tr = YandexMusicTrack(
-          filepath: '${directory.path}/cisum_xednay_krauq${track.id}.flac',
-          title: track.title,
-          albums: track.albums.isNotEmpty
-              ? track.albums.map((album) => album.title).toList()
-              : ['Unknown album'],
-          artists: track.artists.map((album) => album.title).toList(),
-          track: track,
-        );
-        String? cover = track.coverUri;
-        cover ??= tr.cover;
-        tr.cover = cover;
+        final tr = YandexMusicTrack.fromYMTrack(track);
+
         filtered.add(tr);
       }
       setState(() {
@@ -449,7 +424,9 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                                 List<Widget> widgets = [
                                   ReorderableDragStartListener(
                                     index: index,
-                                    enabled: _searchController.text.isEmpty && widget.reordable,
+                                    enabled:
+                                        _searchController.text.isEmpty &&
+                                        widget.reordable,
                                     child: PlaylistTileWidget(
                                       index: index,
                                       queued: false,
@@ -554,7 +531,9 @@ class _PlaylistOverlayState extends State<PlaylistOverlay> {
                               return ReorderableDragStartListener(
                                 key: mainKey,
                                 index: index,
-                                enabled: _searchController.text.isEmpty && widget.reordable,
+                                enabled:
+                                    _searchController.text.isEmpty &&
+                                    widget.reordable,
                                 child: PlaylistTileWidget(
                                   queued: false,
                                   index: index,

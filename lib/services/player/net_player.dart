@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
+
 import 'player.dart';
 import 'package:async/async.dart';
 import 'package:logging/logging.dart';
-import '../database/database_engine.dart';
+import '../database/settings_engine.dart';
 import 'package:quark/objects/track.dart';
 import 'package:yandex_music/yandex_music.dart';
 import 'package:quark/services/database/database.dart';
@@ -29,6 +31,20 @@ class NetConductor {
   List<String> caching = [];
   PlayerTrack? _lastTrack;
 
+  /// Returns a list of files that are not cached on disk
+  // static Future<List<PlayerTrack>> checkCacheExists(
+  //   List<PlayerTrack> tracks,
+  // ) async {
+  //   final List<PlayerTrack> result = [];
+  //   for (PlayerTrack track in tracks) {
+  //     if (!await File(track.filepath).exists()) {
+  //       result.add(track);
+  //     }
+  //   }
+
+  //   return result;
+  // }
+
   void init(Player player, YandexMusic yandex) async {
     if (_isInitialized) {
       return;
@@ -54,7 +70,6 @@ class NetConductor {
   }
 
   void _onTrackChanged() async {
-
     final track = _player.trackNotifier.value;
 
     if (track == _lastTrack || _isLoading) return;
@@ -79,16 +94,16 @@ class NetConductor {
   Future<void> _getLinkAndPlay(PlayerTrack track) async {
     if (_operation?.isCanceled ?? false) return;
     final quality = DatabaseStreamerService().yandexMusicQuality.value;
-            AudioQuality downloadQuality = switch (quality) {
-        'lossless' => AudioQuality.lossless,
-        'nq' => AudioQuality.normal,
-        'lq' => AudioQuality.low,
-        'mp3' => AudioQuality.normal,
-        _ => AudioQuality.normal,
-      };
+    AudioQuality downloadQuality = switch (quality) {
+      'lossless' => AudioQuality.lossless,
+      'nq' => AudioQuality.normal,
+      'lq' => AudioQuality.low,
+      'mp3' => AudioQuality.normal,
+      _ => AudioQuality.normal,
+    };
     final link = await _yandex.tracks.getDownloadLink(
       (track as YandexMusicTrack).track.id,
-      quality:  downloadQuality
+      quality: downloadQuality,
     );
     if (_operation?.isCanceled ?? true) return;
     await _player.playNetTrack(link, track);
@@ -96,7 +111,7 @@ class NetConductor {
 
   /// Top function for caching tracks in storage
   Future<void> cacheFiles([List<PlayerTrack>? tracks]) async {
-        if (disabledCaching) {
+    if (disabledCaching) {
       return;
     }
     if (tracks == null) {
@@ -116,35 +131,38 @@ class NetConductor {
     }
     for (PlayerTrack track in tracks) {
       if (track is! LocalTrack) {
-        _cacheFileInBackground(track);
+        if (caching.contains(track.filepath)) {
+          continue;
+        }
+        final quality = DatabaseStreamerService().yandexMusicQuality.value;
+        AudioQuality downloadQuality = switch (quality) {
+          'lossless' => AudioQuality.lossless,
+          'nq' => AudioQuality.normal,
+          'lq' => AudioQuality.low,
+          'mp3' => AudioQuality.normal,
+          _ => AudioQuality.normal,
+        };
+        await _cacheFileInBackground((track, _yandex, downloadQuality));
+        caching.add(track.filepath);
       }
     }
   }
 
-  Future<void> _cacheFileInBackground(PlayerTrack track) async {
-    if (caching.contains(track.filepath)) {
-      return;
-    }
+  static Future<void> _cacheFileInBackground(
+    (PlayerTrack, YandexMusic, AudioQuality) data,
+  ) async {
+    final track = data.$1;
+    final instance = data.$2;
+    final quality = data.$3;
     if (track is YandexMusicTrack) {
-    final quality = DatabaseStreamerService().yandexMusicQuality.value;
-      AudioQuality downloadQuality = switch (quality) {
-        'lossless' => AudioQuality.lossless,
-        'nq' => AudioQuality.normal,
-        'lq' => AudioQuality.low,
-        'mp3' => AudioQuality.normal,
-        _ => AudioQuality.normal,
-      };
-      caching.add(track.filepath);
       try {
         final exists = await File(track.filepath).exists();
         if (!exists) {
-          // try {
-          final download = await _yandex.tracks.download(
+          final download = await instance.tracks.download(
             track.track.id,
-            quality: downloadQuality,
+            quality: quality,
           );
-          await File(track.filepath).parent.create(recursive: true);
-          await File(track.filepath).writeAsBytes(download);
+          await compute(writeFile, (track.filepath, download));
         }
       } catch (e) {
         Logger(
@@ -152,5 +170,10 @@ class NetConductor {
         ).severe('An error has occured while caching online track', e);
       }
     }
+  }
+
+  static Future<void> writeFile((String, Uint8List) data) async {
+    await File(data.$1).parent.create(recursive: true);
+    await File(data.$1).writeAsBytes(data.$2);
   }
 }

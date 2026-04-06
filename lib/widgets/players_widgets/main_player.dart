@@ -301,7 +301,7 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
         path.basename(trackss.filepath),
       );
       List<Track> info = await YandexMusicSingleton.getTracks([id]);
-      YandexMusicTrack track = YandexMusicTrack.fromYMToPlayerTrack(info[0]);
+      YandexMusicTrack track = YandexMusicTrack.fromYMTrack(info[0]);
       await player.removeTrack(trackss);
       if (trackss == nowPlayingTrack) {
         await NetConductor().cacheFiles([track]);
@@ -571,6 +571,21 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                     ),
             ),
 
+            // VideoWidget(
+            //   url:
+            //       "https://rr4---sn-ajixh5-55.googlevideo.com/videoplayback?expire=1775336886&ei=VinRaaXGNYiQ77MP8ayogAY&ip=82.25.161.83&id=o-AKo6NaBWOao8fC3aw0UYRKORrMN3vnyI7KHtF6My-CU3&itag=18&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=236&met=1775315286%2C&mh=-l&mm=31%2C29&mn=sn-ajixh5-55%2Csn-5goeen7y&ms=au%2Crdu&mv=m&mvi=4&pl=24&rms=au%2Cau&initcwndbps=1002500&bui=AUUZDGLynsw1H065rGwgmmaSoYPRRx824-7iJiuI2Rdq65fsqbuhM92cwMx2GXMzWPakhSrV9_g-cPPM&spc=jlWavVj8Z0rricKnhqJNovA-nljfFS2jQ0L-YvCjZIbW3B9KEEvh&vprv=1&svpuc=1&mime=video%2Fmp4&rqh=1&cnr=14&ratebypass=yes&dur=4928.969&lmt=1743539395753934&mt=1775314890&fvip=3&fexp=51565115%2C51565681&c=ANDROID_VR&txp=5438534&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Crqh%2Ccnr%2Cratebypass%2Cdur%2Clmt&sig=AHEqNM4wRQIgDSKRSnJWlqBwHz03gGHBZwWtGjZ8JYSMqcW-gdVwG7ICIQDQQOHH6AutyFTNvwkISrVWQhzHlwUkaXtGTy54pnNw4w%3D%3D&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhALNIzFmU-9Jpf93f4sdM3DSpB-r81Hut-ge6g2XjkkWpAiEA2TEu_hO7m4j719_i60E_rs0-jMzBwRZN93-qZLLhzgY%3D",
+            // ),
+
+            // Positioned.fill(
+            //       child: ClipRect(
+            //         child: BackdropFilter(
+            //           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            //           child: Container(
+            //             color: Colors.black.withAlpha(100),
+            //           ),
+            //         ),
+            //       ),
+            //     ),
             SizedBox(
               height: MediaQuery.of(context).size.height,
               width: MediaQuery.of(context).size.width,
@@ -1082,7 +1097,9 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                             }, Symbols.speed_0_75),
                                             animatedExpandButton(() async {
                                               double speed = player.speed;
-                                              await player.setSpeed(speed += 0.2);
+                                              await player.setSpeed(
+                                                speed += 0.2,
+                                              );
                                               setState(() {});
                                             }, Symbols.speed_1_2),
                                           ],
@@ -1134,7 +1151,6 @@ class _MainPlayerState extends State<MainPlayer> with TickerProviderStateMixin {
                                         Icons.settings,
                                       ),
                                       animatedExpandButton(() async {
-                                        await Player.player.stop();
                                         Navigator.pop(context);
                                       }, Icons.exit_to_app),
                                     ],
@@ -1479,3 +1495,34 @@ class _WarningMessage extends State<WarningMessage> {
     );
   }
 }
+
+// class VideoWidget extends StatefulWidget {
+//   final String url;
+//   const VideoWidget({super.key, required this.url});
+
+//   @override
+//   State<VideoWidget> createState() => _VideoWidgetState();
+// }
+
+// class _VideoWidgetState extends State<VideoWidget> {
+//   late final player = mk.Player();
+//   late final controller = mkv.VideoController(player);
+
+//   @override
+//   void initState() {
+//     super.initState();
+//     player.open(mk.Media(widget.url));
+//     player.setVolume(0);
+//   }
+
+//   @override
+//   void dispose() {
+//     player.dispose();
+//     super.dispose();
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return mkv.Video(controller: controller, fit: BoxFit.cover);
+//   }
+// }

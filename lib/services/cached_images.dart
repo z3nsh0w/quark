@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:image/image.dart' as img;
+import 'package:quark/objects/track.dart';
 import 'package:quark/services/files.dart';
 
 class ImageBlurService {
@@ -333,6 +334,8 @@ class _CachedBlurredImageFromBytesState
   }
 }
 
+
+
 class CachedImage extends StatelessWidget {
   final String coverUri;
   final double height;
@@ -595,3 +598,43 @@ class MemoryBytesImageProvider extends ImageProvider<MemoryBytesImageProvider> {
   String toString() =>
       '${objectRuntimeType(this, 'MemoryBytesImageProvider')}(${describeIdentity(bytes)}, scale: $scale)';
 }
+
+
+Widget dummyCover(double width, double height) {
+  return Container(
+            decoration: BoxDecoration(
+              color: const ui.Color.fromARGB(255, 81, 81, 81),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            width: width,
+            height: height,
+            child: Icon(
+              Symbols.music_note,
+              color: const ui.Color.fromARGB(255, 149, 149, 149),
+              size: width < 100 ? 16 : 42,
+            ),
+          );
+}
+
+// class CoverImage extends StatelessWidget {
+//   final PlayerTrack track;
+//   final double height;
+//   final double width;
+//   const CoverImage({super.key, required this.track, required this.height, required this.width});
+
+
+//   @override
+//   Widget build(BuildContext context) {
+//     switch (track.coverType) {
+//       case CoverType.noCover:
+//         return dummyCover(width, height);
+//       case CoverType.url:
+//         return CachedImage(coverUri: track.cover, height: height, width: width,);
+//       case CoverType.externalFile:
+//         return FutureBuilder(future: future, builder: builder)
+        
+      
+//     }
+//     return SizedBox();
+//   }
+// }

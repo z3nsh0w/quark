@@ -101,7 +101,7 @@ Widget functionPlayerButtonAndroid(
                 color: isEnable
                     ? Color.fromRGBO(255, 255, 255, 1)
                     : Color.fromRGBO(255, 255, 255, 0.5),
-                size: 20,
+                size: 24,
               ),
             ),
           ],

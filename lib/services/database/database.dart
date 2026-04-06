@@ -1,6 +1,7 @@
+import 'dart:io';
 import 'dart:isolate';
 
-import 'database_engine.dart';
+import 'settings_engine.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:quark/objects/playlist.dart';
@@ -131,7 +132,7 @@ class DatabaseStreamerService {
     originalImageSizeForCoverView.value = oisfc ?? false;
     playerBackend.value = pb ?? "standart";
     justAudioPrefetch.value = jp ?? false;
-    await Player.player.setVolume(volume.value);
+    await Player.player.setVolume(Platform.isAndroid ? 1.0 : volume.value);
   }
 
   Future<void> reset() async {

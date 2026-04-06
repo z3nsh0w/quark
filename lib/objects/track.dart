@@ -4,32 +4,31 @@ import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:quark/services/files.dart';
 import 'package:yandex_music/src/objects/track.dart';
 
-// TODO:
-// enum CoverSource {
-//   uri,
-//   bytes,
-//   no
-// }
+enum CoverType {
+  url("url"),
+  builtIn("builtIn"),
+  externalFile("external"),
+  noCover("noCover");
 
-// abstract class TrackCover {
-//   final CoverSource source;
+  final String value;
 
-//   const TrackCover({required this.source});
-// }
+  const CoverType(this.value);
 
-// class UriCover extends TrackCover {
-//   final String uri;
-//   const UriCover({required this.uri, required super.source});
-// }
-
-// class BytedCover extends TrackCover {
-//   final Uint8List bytes;
-//   const BytedCover({required this.bytes, required super.source});
-// }
-
-// class NoCover extends TrackCover {
-//   const NoCover({required super.source});
-// }
+  static CoverType parseString(String string) {
+    switch (string) {
+      case "url":
+        return CoverType.url;
+      case "buildIn":
+        return CoverType.builtIn;
+      case "external":
+        return CoverType.externalFile;
+      case "noCover":
+        return CoverType.noCover;
+      default:
+        return CoverType.builtIn;
+    }
+  }
+}
 
 abstract class PlayerTrack {
   final String title;
@@ -38,17 +37,16 @@ abstract class PlayerTrack {
   final String filepath;
   String cover;
   Uint8List coverByted = Uint8List(0);
+  CoverType coverType;
 
   PlayerTrack({
     required this.title,
     required this.artists,
     required this.albums,
     required this.filepath,
-    // this.cover =
-    // 'raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/nocover.png',
+    required this.coverType,
     this.cover = 'none',
     Uint8List? coverByted,
-    // this.cover22 = const NoCover(source: CoverSource.no)
   }) : coverByted = coverByted ?? Uint8List(0);
 
   static PlayerTrack getDummy() {
@@ -57,6 +55,7 @@ abstract class PlayerTrack {
       artists: ['Unknown artist'],
       filepath: '',
       title: 'Unknown',
+      coverType: CoverType.noCover
     );
   }
 }
@@ -67,10 +66,12 @@ class LocalTrack extends PlayerTrack {
     required super.artists,
     required super.albums,
     required super.filepath,
+    required super.coverType,
     super.cover,
     super.coverByted,
   });
 
+  /// Allows you to create a new runtime with the same data of the original class object
   static LocalTrack getNew(LocalTrack track) {
     return LocalTrack(
       title: track.title,
@@ -79,6 +80,16 @@ class LocalTrack extends PlayerTrack {
       filepath: track.filepath,
       cover: track.cover,
       coverByted: track.coverByted,
+      coverType: track.coverType,
+    );
+  }
+  static LocalTrack getDummy() {
+    return LocalTrack(
+      albums: ['Unknown album'],
+      artists: ['Unknown artist'],
+      filepath: '',
+      title: 'Unknown',
+      coverType: CoverType.noCover
     );
   }
 }
@@ -92,11 +103,12 @@ class YandexMusicTrack extends PlayerTrack {
     required super.artists,
     required super.albums,
     required super.filepath,
+    required super.coverType,
     super.cover,
     super.coverByted,
   });
 
-  static YandexMusicTrack fromYMToPlayerTrack(Track track) {
+  static YandexMusicTrack fromYMTrack(Track track) {
     final path = getTrackPath(track.id).replaceAll('/', Platform.pathSeparator);
     final track2 = YandexMusicTrack(
       track: track,
@@ -106,11 +118,13 @@ class YandexMusicTrack extends PlayerTrack {
           ? track.albums.map((toElement) => toElement.title).toList()
           : ["Unknown album"],
       filepath: path,
+      coverType: CoverType.url,
     );
     track2.cover = track.coverUri ?? 'none';
     return track2;
   }
 
+  /// Allows you to create a new runtime with the same data of the original class object
   static YandexMusicTrack getNew(YandexMusicTrack track) {
     return YandexMusicTrack(
       title: track.title,
@@ -120,6 +134,7 @@ class YandexMusicTrack extends PlayerTrack {
       cover: track.cover,
       coverByted: track.coverByted,
       track: track.track,
+      coverType: track.coverType,
     );
   }
 }
@@ -136,82 +151,17 @@ Map<String, dynamic> serializedLocalTrack(PlayerTrack track) {
     'filepath': track.filepath,
     'cover': track.cover,
     'coverByted': Uint8List(0),
+    "coverType": track.coverType.value
   };
 }
 
-// Map<String, dynamic> serializedLastTrack(
-//   PlayerTrack track2Serialize,
-//   PlayerPlaylist playlist,
-// ) {
-//   Map<String, dynamic> track = {};
-//   if (track2Serialize is YandexMusicTrack) {
-//     track = {
-//       'source': 'yandex_music',
-//       'playlist_kind': playlist.kind,
-//       'data': track2Serialize.track.raw,
-//     };
-//   } else if (track2Serialize is LocalTrack) {
-//     track = {'source': 'local', 'data': serializedLocalTrack(track2Serialize)};
-//   }
-//   return track;
-// }
-// Map<String, dynamic> _deepConvertMap(dynamic map) {
-//   if (map is! Map) return {};
 
-//   return map.map((key, value) {
-//     dynamic convertedValue = value;
-
-//     if (value is Map) {
-//       convertedValue = _deepConvertMap(value);
-//     } else if (value is List) {
-//       convertedValue = value.map((item) {
-//         if (item is Map) {
-//           return _deepConvertMap(item);
-//         }
-//         return item;
-//       }).toList();
-//     }
-
-//     return MapEntry(key.toString(), convertedValue);
-//   });
-// }
-
-// Future<PlayerTrack?> deserializedLastTrack(
-//   Map<String, dynamic> trackData,
-// ) async {
-//   trackData = _deepConvertMap(trackData);
-//   PlayerTrack? trackOut;
-//   if (trackData['source'] == 'local') {
-//     trackOut = deserializedLocalTrack(trackData['data']);
-//   } else if (trackData['source'] == 'yandex_music') {
-//     Track track = Track(trackData['data']);
-//     String trackPath = await getTrackPath(track.id);
-//     YandexMusicTrack out = YandexMusicTrack(
-//       filepath: trackPath,
-//       title: track.title,
-//       albums: track.albums.isNotEmpty
-//           ? track.albums.map((album) => album.title ?? 'Unknown album').toList()
-//           : ['Unknown album'],
-//       artists: track.artists
-//           .map((album) => album.title ?? 'Unknown album')
-//           .toList(),
-//       track: track,
-//     );
-//     String? cover = track.coverUri;
-//     cover ??= out.cover;
-//     out.cover = cover;
-//     trackOut = out;
-//   }
-//   return trackOut;
-// }
-
-LocalTrack deserializedLocalTrack(Map<String, dynamic> trackData) {
+Future<LocalTrack> deserializedLocalTrack(
+  Map<String, dynamic> trackData,
+) async {
   List<String> artists = List<String>.from(trackData['artists']);
   List<String> albums = List<String>.from(trackData['albums']);
-  AudioMetadata? metadata = Files.getFileTags(
-    trackData['filepath'],
-    getImage: true,
-  );
+  AudioMetadata? metadata = null;
   Uint8List? cover;
   if (metadata != null) {
     cover = metadata.pictures.isNotEmpty
@@ -226,5 +176,6 @@ LocalTrack deserializedLocalTrack(Map<String, dynamic> trackData) {
     filepath: trackData['filepath'],
     cover: trackData['cover'],
     coverByted: cover,
+    coverType: CoverType.parseString(trackData['coverType'])
   );
 }

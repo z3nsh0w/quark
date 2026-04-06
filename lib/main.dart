@@ -9,6 +9,7 @@ import 'package:logging/logging.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:quark/services/database/database.dart';
 import 'package:audio_service_mpris/audio_service_mpris.dart';
+import 'package:quark/services/database/listen_logger.dart';
 import 'package:quark/services/dynamic_window_color_linux.dart';
 
 // Local files
@@ -18,7 +19,7 @@ import '/widgets/settings.dart';
 import '/objects/playlist.dart';
 import '/playlist_page_router.dart';
 import '/services/player/player.dart';
-import 'services/database/database_engine.dart';
+import 'services/database/settings_engine.dart';
 import '/services/yandex_music_singleton.dart';
 import '/services/native_controls/native_control.dart';
 import '/widgets/yandex_music_integration/yandex_login.dart';
@@ -38,6 +39,7 @@ void main() async {
   AudioServiceMpris.registerWith();
   DatabaseStreamerService().init();
   DynamicWindowColor.init();
+  // await ListenLogger().init();
 
   runApp(const Quark());
 }
@@ -141,10 +143,8 @@ class _MainPageState extends State<MainPage> {
 
     final trackToPlay = foundTrack ?? playlist.tracks[0];
 
-    await Player.player.stop();
-    Player.player.isPlaying = false;
-    await Player.player.playCustom(trackToPlay);
     await Player.player.pause();
+    await Player.player.playCustom(trackToPlay);
     if (foundTrack != null) {
       if (Duration(seconds: DatabaseStreamerService().lastTrackPosition.value) <
           Player.player.durationNotifier.value) {

@@ -111,7 +111,7 @@ class _YandexPlaylistsState extends State<YandexPlaylists> {
 
                                 for (Track track in playlistTracks) {
                                   output.add(
-                                    YandexMusicTrack.fromYMToPlayerTrack(track),
+                                    YandexMusicTrack.fromYMTrack(track),
                                   );
                                 }
                                 output.removeWhere(
