@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_windows
+  flutter_inappwebview_windows
   just_audio_windows
   media_kit_libs_windows_audio
   media_kit_libs_windows_video

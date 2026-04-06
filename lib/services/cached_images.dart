@@ -185,6 +185,23 @@ class ImageCacheService {
   }
 }
 
+
+class ImageService {
+  static Future<Uint8List> loadBuiltIn(String filepath) async {
+    final result = await Files.getTrackInfo((filepath, null));
+    return result.coverByted;
+  }
+
+  static Future<Uint8List> loadAnother(String filepath) async {
+    try {
+      final result = await File(filepath).readAsBytes();
+      return result;
+    } catch (e) {
+      return Uint8List(0);
+    }
+  }
+}
+
 class CachedBlurredNetworkImage extends StatefulWidget {
   final String coverUri;
   final double height;
@@ -243,7 +260,10 @@ class _CachedBlurredNetworkImageState extends State<CachedBlurredNetworkImage> {
           );
         }
 
-        if (snapshot.hasError || widget.coverUri == "https://none" || widget.coverUri == "none" || snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.hasError ||
+            widget.coverUri == "https://none" ||
+            widget.coverUri == "none" ||
+            snapshot.connectionState == ConnectionState.waiting) {
           return Container(
             decoration: BoxDecoration(
               color: widget.backgroundColor.withAlpha(widget.alphaChannel),
@@ -318,7 +338,9 @@ class _CachedBlurredImageFromBytesState
             child: Image.memory(snapshot.data!, fit: widget.fit),
           );
         }
-        if (snapshot.hasError || snapshot.data == null || snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.hasError ||
+            snapshot.data == null ||
+            snapshot.connectionState == ConnectionState.waiting) {
           return Container(
             decoration: BoxDecoration(
               color: widget.backgroundColor.withAlpha(widget.alphaChannel),
@@ -333,8 +355,6 @@ class _CachedBlurredImageFromBytesState
     );
   }
 }
-
-
 
 class CachedImage extends StatelessWidget {
   final String coverUri;
@@ -599,42 +619,44 @@ class MemoryBytesImageProvider extends ImageProvider<MemoryBytesImageProvider> {
       '${objectRuntimeType(this, 'MemoryBytesImageProvider')}(${describeIdentity(bytes)}, scale: $scale)';
 }
 
-
 Widget dummyCover(double width, double height) {
   return Container(
-            decoration: BoxDecoration(
-              color: const ui.Color.fromARGB(255, 81, 81, 81),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            width: width,
-            height: height,
-            child: Icon(
-              Symbols.music_note,
-              color: const ui.Color.fromARGB(255, 149, 149, 149),
-              size: width < 100 ? 16 : 42,
-            ),
-          );
+    decoration: BoxDecoration(
+      color: const ui.Color.fromARGB(255, 81, 81, 81),
+      borderRadius: BorderRadius.circular(15),
+    ),
+    width: width,
+    height: height,
+    child: Icon(
+      Symbols.music_note,
+      color: const ui.Color.fromARGB(255, 149, 149, 149),
+      size: width < 100 ? 16 : 42,
+    ),
+  );
 }
 
-// class CoverImage extends StatelessWidget {
-//   final PlayerTrack track;
-//   final double height;
-//   final double width;
-//   const CoverImage({super.key, required this.track, required this.height, required this.width});
+class CoverImage extends StatelessWidget {
+  final PlayerTrack track;
+  final double height;
+  final double width;
+  const CoverImage({
+    super.key,
+    required this.track,
+    required this.height,
+    required this.width,
+  });
 
-
-//   @override
-//   Widget build(BuildContext context) {
-//     switch (track.coverType) {
-//       case CoverType.noCover:
-//         return dummyCover(width, height);
-//       case CoverType.url:
-//         return CachedImage(coverUri: track.cover, height: height, width: width,);
-//       case CoverType.externalFile:
-//         return FutureBuilder(future: future, builder: builder)
-        
-      
-//     }
-//     return SizedBox();
-//   }
-// }
+  @override
+  Widget build(BuildContext context) {
+    switch (track.coverType) {
+      case CoverType.noCover:
+        return dummyCover(width, height);
+      case CoverType.url:
+        return CachedImage(coverUri: track.cover, height: height, width: width);
+      case CoverType.externalFile:
+        return SizedBox();
+      case CoverType.builtIn:
+        return SizedBox();
+    }
+  }
+}

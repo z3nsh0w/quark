@@ -29,11 +29,11 @@ class ApplicationCacheDirectory {
 
 class Files {
   static Future<LocalTrack> _getTrackInfo(
-    FileSystemEntity entity, {
+    String paths, {
     Uint8List? customCover,
   }) async {
     try {
-      final tagsFromFile = readMetadata(File(entity.path), getImage: true);
+      final tagsFromFile = readMetadata(File(paths), getImage: true);
 
       String trackName = tagsFromFile.title ??= 'Unknown';
       Uint8List? cover = tagsFromFile.pictures.isNotEmpty
@@ -50,7 +50,7 @@ class Files {
       LocalTrack track = LocalTrack(
         title: trackName,
         artists: [tagsFromFile.artist ??= 'Unknown'],
-        filepath: entity.path,
+        filepath: paths,
         albums: ['Unknown'],
         coverType: coverType,
       );
@@ -60,11 +60,11 @@ class Files {
 
       return track;
     } catch (e) {
-      String trackName = path.basename(path.normalize(entity.path));
+      String trackName = path.basename(path.normalize(paths));
       LocalTrack track = LocalTrack(
         title: trackName,
         artists: ['Unknown'],
-        filepath: entity.path,
+        filepath: paths,
         albums: ['Unknown'],
         coverType: CoverType.noCover,
       );
@@ -72,8 +72,8 @@ class Files {
     }
   }
 
-  static Future<LocalTrack> _getTrackInfoCumpute(
-    (FileSystemEntity, Uint8List?) args,
+  static Future<LocalTrack> getTrackInfo(
+    (String, Uint8List?) args,
   ) async {
     return _getTrackInfo(args.$1, customCover: args.$2);
   }
@@ -118,8 +118,8 @@ class Files {
             entity.path.toLowerCase().endsWith('.alac') ||
             entity.path.toLowerCase().endsWith('.pcm') ||
             entity.path.toLowerCase().endsWith('.m4a')) {
-          final LocalTrack track = await compute(_getTrackInfoCumpute, (
-            entity,
+          final LocalTrack track = await compute(getTrackInfo, (
+            entity.path,
             customCover,
           ));
           fileNames.add(track);

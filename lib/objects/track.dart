@@ -83,6 +83,7 @@ class LocalTrack extends PlayerTrack {
       coverType: track.coverType,
     );
   }
+  
   static LocalTrack getDummy() {
     return LocalTrack(
       albums: ['Unknown album'],

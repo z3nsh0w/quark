@@ -26,7 +26,7 @@ dependencies:
   animated_expand: ^1.0.2
   interactive_slider: ^0.5.1
   audio_service_mpris: ^0.2.0
-  # flutter_inappwebview: ^6.2.0-beta.2
+  flutter_inappwebview: ^6.2.0-beta.2
   # flutter_inappwebview: ^6.1.5
   audio_metadata_reader: ^1.4.2
   material_symbols_icons: ^4.2892.0
