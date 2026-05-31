@@ -1,56 +1,113 @@
-<h1 align="center">quark</h1>  
+# Quark
+
+Quark — это легковесный и современный кроссплатформенный аудиоплеер с открытым исходным кодом, написанный на Flutter. Приложение позволяет воспроизводить локальные аудиофайлы, настраивать скорость прослушивания и интегрируется со стриминговыми сервисами (Яндекс Музыка, Spotify, YouTube Music, SoundCloud).
+
+## Функциональные возможности
+
+- Локальное воспроизведение:
+  - Поддержка большинства современных аудиоформатов.
+  - Регулировка скорости воспроизведения (ускорение и замедление аудиозаписей).
+  - Сканирование локальных папок с поддержкой рекурсивного поиска файлов.
+- Интеграция с музыкальными сервисами:
+  - Яндекс Музыка: поддержка библиотеки (лайки, плейлисты, рекомендации), выбор качества стриминга (Lossless, 256 kbps, 64 kbps), кэширование, экспорт треков и плейлистов в формате FLAC с автоматическим заполнением ID3-тегов и обложек.
+  - Spotify: импорт и синхронизация пользовательских плейлистов.
+  - YouTube / YouTube Music: поиск треков, извлечение аудиопотоков и воспроизведение плейлистов.
+  - SoundCloud: интеграция для стриминга аудио.
+- Интерфейс и кастомизация:
+  - Эффект размытия (glassmorphism) заднего фона и элементов управления.
+  - Динамическая адаптация цветовой гаммы интерфейса под обложку текущего трека или тему операционной системы.
+  - Полная локализация интерфейса на 10 языков.
+
+## Установка и запуск
+
+Приложение можно запустить из готовых сборок или скомпилировать самостоятельно из исходного кода.
+
+### Использование готовых сборок
+
+1. Скачайте последнюю версию приложения для вашей операционной системы из раздела релизов (Releases) на GitHub.
+2. Следуйте инструкциям для вашей платформы:
+
+#### Windows
+- Распакуйте архив в удобную папку и запустите `quark.exe`.
+- Требования и зависимости:
+  - Необходим установленный пакет Microsoft Visual C++ Runtime (vcredist.exe).
+  - Для корректной работы WebView-авторизации на Windows версий ниже 10 1809 установите Microsoft Edge WebView2 Runtime.
+  - Рекомендуется установка MSVC для исключения сбоев при авторизации.
+
+#### Linux
+- Распакуйте архив, сделайте исполняемым файл `quark` и запустите его.
+- Требования и зависимости:
+  - Требуется наличие системных библиотек `libgtk-4-1+` или `libqt6gui6`.
+
+#### macOS
+- Скачайте `.dmg` файл или архив с `.app`, переместите Quark в папку «Программы» (Applications).
+- При первом запуске может потребоваться подтвердить запуск неподписанного приложения в разделе «Системные настройки» -> «Конфиденциальность и безопасность».
+
+#### Android
+- Скачайте установочный `.apk` файл.
+- Разрешите установку из неизвестных источников в настройках безопасности вашего устройства и запустите установку пакета.
+
+---
+
+### Сборка из исходного кода
+
+Для самостоятельной сборки приложения требуется установленный Flutter SDK (версии не ниже 3.10.0) и настроенная среда разработки.
+
+1. Склонируйте репозиторий:
+   ```bash
+   git clone https://github.com/z3nsh0w/quark.git
+   cd quark
+   ```
+2. Установите зависимости проекта:
+   ```bash
+   flutter pub get
+   ```
+3. Выберите инструкции в соответствии с вашей целевой платформой:
+
+#### Сборка под Windows
+1. Установите Visual Studio с рабочей нагрузкой «Разработка классических приложений на C++».
+2. Запустите сборку:
+   ```bash
+   flutter build windows
+   ```
+3. Готовый бинарный файл будет находиться по пути: `build/windows/runner/Release/`
+
+#### Сборка под Linux
+1. Установите необходимые для компиляции библиотеки. Например, для Ubuntu/Debian:
+   ```bash
+   sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev libgtk-4-dev libadwaita-1-dev
+   ```
+2. Запустите сборку:
+   ```bash
+   flutter build linux
+   ```
+3. Собранное приложение будет находиться по пути: `build/linux/x64/release/bundle/`
+
+#### Сборка под macOS
+1. Установите актуальную версию Xcode и Xcode Command Line Tools.
+2. Запустите сборку:
+   ```bash
+   flutter build macos
+   ```
+3. Готовое приложение будет находиться по пути: `build/macos/Build/Products/Release/`
+
+#### Сборка под Android
+1. Установите Android Studio и настройте Android SDK.
+2. Запустите сборку APK-файла:
+   ```bash
+   flutter build apk
+   ```
+3. Готовый установочный файл будет находиться по пути: `build/app/outputs/flutter-apk/app-release.apk`
+
+## Скриншоты
 
 <p align="center">
-  <img width="322" height="322" src="https://raw.githubusercontent.com/z3nsh0w/QUARK/refs/heads/main/assets/icon512.png" alt="quark Logo">
+  <img src="https://raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/player.png" alt="Интерфейс плеера Quark" width="45%">
+  <img src="https://raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/player_main_menu.png" alt="Главное меню плеера" width="45%">
 </p>
 
-<h1 align="center">
-  <strong>Lightweight, multifunctional and beautiful audio player</strong>
-</h1>
+## Разработчики
+- z3nsh0w (https://github.com/z3nsh0w)
+- aror (https://github.com/Aror1)
 
-<div align="center">
-
-![Release](https://img.shields.io/github/v/release/z3nsh0w/QUARK?style=flat-square)
-![Downloads](https://img.shields.io/github/downloads/z3nsh0w/QUARK/total?style=flat-square)
-![License](https://img.shields.io/github/license/z3nsh0w/QUARK?style=flat-square)
-
-</div>
-
-## Features
-
-- **Beautiful Design**
-- **Yandex Music Integration**
-- **Universal Audio Formats Support**
-- **Slowing down/Speed up tracks (Linux only)**
-- **Synchronization of local and Yandex tracks**
-
-### ⚠ Important Notes
-
-> [!WARNING]
-> 
-> **Windows**
-> 
-> If you do not have a freshly installed system and you have multiple programs installed, you most likely already have all of these packages installed.
-> 
-> + To use player you must to install [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) (vcredist.exe).
-> 
-> + To use WebView authorization on Windows version below 10 1809, you need install [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/), otherwise you will have to enter the Yandex Music token manually.
->
-> + You may also install [MSVC](https://aka.ms/vc14/vc_redist.x64.exe). Otherwise, the application may crash without an error during authorization.
->
-> **Linux**
-> + Requires `libgtk-4-1+` or `libqt6gui6` (usually pre-installed on popular distributions)
-
-## Screenshots
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/player.png" alt="quark main player view" width="45%">
-  <img src="https://raw.githubusercontent.com/z3nsh0w/quark/refs/heads/main/assets/player_main_menu.png" alt="quark menu" width="45%">
-</p>
-
-
-### Made by PDG
-- [@z3nsh0w](https://github.com/z3nsh0w)
-- [@aror](https://github.com/Aror1)
-
-**This project is licensed under MIT license. See the `LICENSE` file for details.**
+Лицензия проекта: MIT. Подробности находятся в файле LICENSE.
